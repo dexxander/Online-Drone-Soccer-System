@@ -1,128 +1,147 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { Radio, ShieldCheck, Timer, Trophy, Users, Gauge } from "lucide-react";
 
 export const Route = createFileRoute("/")({
-  component: Index,
+  head: () => ({
+    meta: [
+      { title: "Drone Soccer League Control — Tournament Management" },
+      {
+        name: "description",
+        content:
+          "Run drone soccer competitions end to end: team registration, admin approvals, referee match control and a real-time live scoreboard.",
+      },
+      { property: "og:title", content: "Drone Soccer League Control" },
+      {
+        property: "og:description",
+        content: "Registration, approvals, referee controls and a real-time scoreboard for drone soccer leagues.",
+      },
+    ],
+  }),
+  component: Landing,
 });
 
-function Index() {
+const features = [
+  {
+    icon: Users,
+    title: "Team & player registration",
+    body: "Coaches submit rosters through a guided portal; entries land in the admin queue as pending.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Admin oversight",
+    body: "Approve or reject teams and players from professional data tables with live counters.",
+  },
+  {
+    icon: Gauge,
+    title: "Referee match control",
+    body: "Start, pause, resume and end matches with large scoring and penalty controls.",
+  },
+  {
+    icon: Radio,
+    title: "Real-time scoreboard",
+    body: "Broadcast-ready display that syncs instantly across tabs and screens — no refresh.",
+  },
+];
+
+function Landing() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans">
-      
-      {/* Navigation Bar */}
-      <nav className="w-full bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <span className="text-2xl font-bold text-blue-600 dark:text-blue-500 tracking-tight">DroneSoccer</span>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Link to="/login" className="text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-medium text-sm transition-colors">Log In</Link>
-              <Link to="/register" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm">Register Team</Link>
-            </div>
-          </div>
+    <div className="min-h-screen bg-surface">
+      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+          <Link to="/" className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
+              DS
+            </span>
+            <span className="leading-tight">
+              <span className="block text-sm font-bold">Drone Soccer</span>
+              <span className="block text-xs text-muted-foreground">League Control</span>
+            </span>
+          </Link>
+          <nav className="flex items-center gap-2">
+            <Link
+              to="/scoreboard"
+              className="hidden rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground sm:block"
+            >
+              Live scoreboard
+            </Link>
+            <Link
+              to="/login"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              Sign in
+            </Link>
+            <Link
+              to="/register"
+              className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Get started
+            </Link>
+          </nav>
         </div>
-      </nav>
+      </header>
 
-      {/* Hero Section */}
-      <main className="flex-grow">
-        <div className="relative bg-white dark:bg-slate-900 overflow-hidden">
-          <div className="max-w-7xl mx-auto">
-            <div className="relative z-10 pb-8 bg-white dark:bg-slate-900 sm:pb-16 md:pb-20 lg:max-w-2xl lg:w-full lg:pb-28 xl:pb-32 pt-20 px-4 sm:px-6 lg:px-8">
-              <div className="sm:text-center lg:text-left">
-                <h1 className="text-4xl tracking-tight font-extrabold text-slate-900 dark:text-white sm:text-5xl md:text-6xl">
-                  <span className="block xl:inline">The Future of</span>{' '}
-                  <span className="block text-blue-600 dark:text-blue-500">Competitive Sports</span>
-                </h1>
-                <p className="mt-3 text-base text-slate-500 dark:text-slate-400 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
-                  Manage your teams, follow live tournaments, and track real-time drone soccer scores on our unified competition platform.
-                </p>
-                <div className="mt-5 sm:mt-8 flex flex-col sm:flex-row sm:justify-center lg:justify-start gap-4">
-                  <Link to="/scoreboard" className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:text-lg md:px-8 shadow-sm transition-all hover:shadow-md">
-                    Live Scoreboard
-                  </Link>
-                  <Link to="/matches" className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 md:py-4 md:text-lg md:px-8 shadow-sm transition-all hover:shadow-md">
-                    Referee Dashboard
-                  </Link>
-                  <Link to="/dashboard" className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-slate-300 dark:border-slate-700 text-base font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 md:py-4 md:text-lg md:px-8 transition-colors">
-                    Dashboard
-                  </Link>
-                </div>
+      <main>
+        <section className="mx-auto w-full max-w-6xl px-6 pb-16 pt-20">
+          <span className="inline-flex items-center gap-2 rounded-full border border-accent-border bg-accent px-3 py-1 text-xs font-semibold text-primary">
+            <Trophy className="size-3.5" /> National Championship · Season 4
+          </span>
+          <h1 className="mt-6 max-w-3xl text-4xl font-bold leading-[1.1] tracking-tight text-foreground sm:text-6xl">
+            Competition software for the drone soccer arena.
+          </h1>
+          <p className="mt-5 max-w-2xl text-lg text-muted-foreground">
+            One control plane for registrations, approvals, referee decisions and the live audience
+            display — with real-time sync built in from the first whistle.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Link
+              to="/register-team"
+              className="rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lift transition-colors hover:bg-primary/90"
+            >
+              Register your team
+            </Link>
+            <Link
+              to="/scoreboard"
+              className="rounded-xl border border-border bg-background px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+            >
+              Open live scoreboard
+            </Link>
+          </div>
+
+          <dl className="mt-14 grid gap-4 sm:grid-cols-3">
+            {[
+              { k: "Registered clubs", v: "128", i: Users },
+              { k: "Matches officiated", v: "1,940", i: Timer },
+              { k: "Arena displays synced", v: "24", i: Radio },
+            ].map((s) => (
+              <div key={s.k} className="rounded-xl border border-border bg-background p-5 shadow-card">
+                <s.i className="size-4 text-primary" />
+                <dd className="mt-3 text-3xl font-bold tabular-nums">{s.v}</dd>
+                <dt className="mt-1 text-sm text-muted-foreground">{s.k}</dt>
               </div>
+            ))}
+          </dl>
+        </section>
+
+        <section className="border-t border-border bg-background py-16">
+          <div className="mx-auto w-full max-w-6xl px-6">
+            <h2 className="text-2xl font-bold tracking-tight">Everything a league day needs</h2>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2">
+              {features.map((f) => (
+                <div key={f.title} className="rounded-xl border border-border p-6">
+                  <f.icon className="size-5 text-primary" />
+                  <h3 className="mt-4 text-base font-semibold">{f.title}</h3>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{f.body}</p>
+                </div>
+              ))}
             </div>
           </div>
-          {/* Decorative Background */}
-          <div className="lg:absolute lg:inset-y-0 lg:right-0 lg:w-1/2 bg-slate-100 dark:bg-slate-800 hidden lg:flex items-center justify-center">
-            <div className="text-slate-300 dark:text-slate-700">
-               <svg className="w-64 h-64" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-               </svg>
-            </div>
-          </div>
-        </div>
-
-        {/* Public Content - Standings & Matches (Mocks) */}
-        <div className="bg-slate-50 dark:bg-slate-950 py-16 sm:py-24">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="text-center mb-16">
-              <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white sm:text-4xl">
-                Tournament Highlights
-              </h2>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              
-              {/* Mock Standings */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 pb-4 mb-4">Current Standings</h3>
-                <div className="space-y-3">
-                  {[
-                    { team: "Aero Strikers", pts: 12, gd: "+8" },
-                    { team: "Phantom Drones", pts: 9, gd: "+3" },
-                    { team: "Velocity FC", pts: 7, gd: "-1" },
-                  ].map((row, i) => (
-                    <div key={i} className="flex justify-between items-center p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-lg transition-colors border border-transparent hover:border-slate-100 dark:hover:border-slate-800">
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold text-slate-400 w-4">{i+1}</span>
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{row.team}</span>
-                      </div>
-                      <div className="flex gap-4 text-sm">
-                        <span className="text-slate-500">GD: {row.gd}</span>
-                        <span className="font-bold text-blue-600 dark:text-blue-400">{row.pts} pts</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Mock Matches */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-6">
-                <h3 className="text-lg font-bold text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-800 pb-4 mb-4">Upcoming Matches</h3>
-                <div className="space-y-4">
-                  {[
-                    { t1: "Aero Strikers", t2: "Velocity FC", time: "Today, 14:00" },
-                    { t1: "Phantom Drones", t2: "Sky Hawks", time: "Tomorrow, 09:30" },
-                  ].map((match, i) => (
-                    <div key={i} className="flex flex-col p-4 bg-slate-50 dark:bg-slate-900/50 rounded-lg border border-slate-100 dark:border-slate-800">
-                      <div className="text-xs font-medium text-blue-600 dark:text-blue-500 mb-2">{match.time}</div>
-                      <div className="flex justify-between items-center">
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{match.t1}</span>
-                        <span className="text-slate-400 font-bold mx-2">VS</span>
-                        <span className="font-medium text-slate-900 dark:text-slate-100">{match.t2}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
+        </section>
       </main>
-      
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-8">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-slate-500 dark:text-slate-400">
-          &copy; 2026 Online Drone Soccer Management System. All rights reserved.
-        </div>
+
+      <footer className="border-t border-border py-8">
+        <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
+          Drone Soccer League Control — prototype build. Data is stored locally and synced across tabs.
+        </p>
       </footer>
     </div>
   );
