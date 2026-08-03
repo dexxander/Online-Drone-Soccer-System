@@ -6,6 +6,7 @@ export const COL = {
   tournaments: "tournaments",
   scores: "scores",
   marks: "marks",
+  penalties: "penalties",
   standings: "standings",
   announcements: "announcements",
   notifications: "notifications",

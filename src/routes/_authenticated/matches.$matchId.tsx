@@ -1,421 +1,451 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { orderBy, where } from "firebase/firestore";
-import { ArrowLeft, Plus } from "lucide-react";
-import { PageHeader, MatchStatusBadge } from "@/components/primitives";
-import { DataState, ErrorState, LoadingState } from "@/components/states";
-import { ConfirmDialog, FormRow, useConfirm } from "@/components/confirm-dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useCollectionData, useDocumentData } from "@/lib/hooks";
 import { COL } from "@/lib/collections";
-import { createDocument, deleteDocument, updateDocument, writeAudit } from "@/lib/db";
-import { completeMatch } from "@/lib/tournament-service";
-import type { Mark, Match, Player, Team } from "@/lib/types";
+import { createDocument, deleteDocument, updateDocument } from "@/lib/db";
+import type { Mark, Match, Penalty, Team } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
-import { firebaseErrorMessage, formatDateTime, fromDateTimeInput, toDateTimeInput } from "@/lib/format";
 import { toast } from "sonner";
+import { ConfirmDialog, useConfirm } from "@/components/confirm-dialog";
 
 export const Route = createFileRoute("/_authenticated/matches/$matchId")({
-  head: () => ({
-    meta: [
-      { title: "Match centre — Drone Soccer League Control" },
-      {
-        name: "description",
-        content: "Live drone soccer match control: record marks, manage state and finalise scores.",
-      },
-      { property: "og:title", content: "Match centre — Drone Soccer League Control" },
-      {
-        property: "og:description",
-        content: "Live drone soccer match control: record marks, manage state and finalise scores.",
-      },
-    ],
-  }),
-  component: MatchDetailPage,
+  component: MatchControlDashboard,
 });
 
-function MatchDetailPage() {
+function MatchControlDashboard() {
   const { matchId } = Route.useParams();
   const { profile } = useAuth();
-  const canScore = profile?.role === "admin" || profile?.role === "referee";
-
+  
   const match = useDocumentData<Match>(COL.matches, matchId);
   const teams = useCollectionData<Team>(COL.teams, () => [orderBy("name")]);
-  const players = useCollectionData<Player>(COL.players, () => []);
-  const marks = useCollectionData<Mark>(
-    COL.marks,
-    () => [where("matchId", "==", matchId)],
-    [matchId],
-  );
+  const marks = useCollectionData<Mark>(COL.marks, () => [where("matchId", "==", matchId)], [matchId]);
+  const penalties = useCollectionData<Penalty>(COL.penalties, () => [where("matchId", "==", matchId), where("status", "==", "active")], [matchId]);
 
-  const [markOpen, setMarkOpen] = useState(false);
-  const [markTeam, setMarkTeam] = useState("");
-  const [markPlayer, setMarkPlayer] = useState("none");
-  const [markMinute, setMarkMinute] = useState("1");
-  const [markNote, setMarkNote] = useState("");
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState("");
-  const [venue, setVenue] = useState("");
   const [busy, setBusy] = useState(false);
-  const finalise = useConfirm<Match>();
-  const removeMark = useConfirm<Mark>();
+  const [timer, setTimer] = useState(105); // Default 1:45
+  
+  // Penalty Log State
+  const [selectedEntity, setSelectedEntity] = useState<string | null>(null);
+  const [selectedInfraction, setSelectedInfraction] = useState<string | null>(null);
 
-  if (match.loading) return <LoadingState label="Loading match…" />;
-  if (match.error) return <ErrorState message={match.error} />;
-  if (!match.data)
-    return (
-      <ErrorState
-        message="This match no longer exists."
-        action={
-          <Button asChild variant="outline">
-            <Link to="/matches">Back to matches</Link>
-          </Button>
-        }
-      />
-    );
+  const emergencyStop = useConfirm<Match>();
 
   const m = match.data;
-  const locked = m.status === "completed" || m.status === "cancelled";
 
-  async function setStatus(status: Match["status"]) {
+  // Sync Timer from Backend on load or resume
+  useEffect(() => {
+    if (m?.timeRemaining !== undefined) {
+      setTimer(m.timeRemaining);
+    }
+  }, [m?.timeRemaining]);
+
+  // Local Timer Loop
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (m?.status === "live" && timer > 0) {
+      interval = setInterval(() => {
+        setTimer((t) => t - 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [m?.status, timer]);
+
+  if (match.loading) return <div className="p-8 text-center">Loading match data...</div>;
+  if (!m) return <div className="p-8 text-center text-red-500">Match not found.</div>;
+
+  const teamA = teams.data.find(t => t.id === m.teamAId);
+  const teamB = teams.data.find(t => t.id === m.teamBId);
+
+  const formatTime = (seconds: number) => {
+    const min = Math.floor(seconds / 60);
+    const sec = seconds % 60;
+    return `${min.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  const setStatus = async (status: Match["status"]) => {
     setBusy(true);
     try {
-      await updateDocument(COL.matches, matchId, { status });
-      toast.success(`Match marked ${status}`);
-    } catch (error) {
-      toast.error(firebaseErrorMessage(error));
-    } finally {
-      setBusy(false);
+      await updateDocument(COL.matches, matchId, { 
+        status, 
+        timeRemaining: timer // Save time when changing status
+      });
+      toast.success(`Match ${status}`);
+    } catch (e: any) {
+      toast.error(e.message);
     }
-  }
+    setBusy(false);
+  };
 
-  async function addMark() {
-    if (!markTeam) {
-      toast.error("Choose which team scored.");
-      return;
-    }
-    const minute = Number(markMinute);
-    if (!Number.isFinite(minute) || minute < 0 || minute > 200) {
-      toast.error("Enter a valid minute.");
-      return;
-    }
+  const nextPeriod = async () => {
     setBusy(true);
     try {
-      const player = players.data.find((p) => p.id === markPlayer);
+      await updateDocument(COL.matches, matchId, { 
+        currentPeriod: (m.currentPeriod || 1) + 1,
+        timeRemaining: 105 // Reset timer for new period
+      });
+      toast.success("Advanced to next period");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+    setBusy(false);
+  };
+
+  const addPoint = async (teamId: string, isTeamA: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
       await createDocument(COL.marks, {
         matchId,
         tournamentId: m.tournamentId,
-        teamId: markTeam,
-        playerId: markPlayer === "none" ? null : markPlayer,
-        playerName: player?.fullName ?? null,
+        teamId,
         points: 1,
-        minute,
-        note: markNote.trim() || null,
-        createdBy: profile!.id,
+        minute: Math.floor((105 - timer) / 60),
+        createdBy: profile?.id,
       });
-      const isA = markTeam === m.teamAId;
       await updateDocument(COL.matches, matchId, {
-        scoreA: m.scoreA + (isA ? 1 : 0),
-        scoreB: m.scoreB + (isA ? 0 : 1),
-        status: m.status === "scheduled" ? "live" : m.status,
+        scoreA: m.scoreA + (isTeamA ? 1 : 0),
+        scoreB: m.scoreB + (isTeamA ? 0 : 1),
       });
-      toast.success("Mark recorded");
-      setMarkOpen(false);
-      setMarkNote("");
-    } catch (error) {
-      toast.error(firebaseErrorMessage(error));
-    } finally {
-      setBusy(false);
+      toast.success("Point added");
+    } catch (e: any) {
+      toast.error(e.message);
     }
-  }
+    setBusy(false);
+  };
+
+  const removePoint = async (teamId: string, isTeamA: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const teamMarks = marks.data.filter(mk => mk.teamId === teamId);
+      if (teamMarks.length === 0) {
+        toast.error("No points to remove for this team");
+        setBusy(false);
+        return;
+      }
+      const lastMark = teamMarks.sort((a, b) => b.minute - a.minute)[0];
+      if (!lastMark) {
+        setBusy(false);
+        return;
+      }
+      await deleteDocument(COL.marks, lastMark.id);
+      
+      await updateDocument(COL.matches, matchId, {
+        scoreA: Math.max(0, m.scoreA - (isTeamA ? 1 : 0)),
+        scoreB: Math.max(0, m.scoreB - (isTeamA ? 0 : 1)),
+      });
+      toast.success("Point removed");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+    setBusy(false);
+  };
+
+  const logPenalty = async (infraction: string) => {
+    if (!selectedEntity) {
+      toast.error("Select an entity first");
+      return;
+    }
+    setBusy(true);
+    try {
+      const isRed = selectedEntity.startsWith('R');
+      const teamId = isRed ? m.teamAId : m.teamBId;
+      
+      await createDocument(COL.penalties, {
+        matchId,
+        tournamentId: m.tournamentId,
+        teamId: teamId!,
+        entity: selectedEntity,
+        infraction,
+        status: "active",
+        durationSeconds: 30,
+      });
+      toast.success("Penalty logged");
+      setSelectedEntity(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+    setBusy(false);
+  };
+
+  const clearPenalty = async (penaltyId: string) => {
+    setBusy(true);
+    try {
+      await updateDocument(COL.penalties, penaltyId, { status: "cleared" });
+      toast.success("Penalty cleared");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+    setBusy(false);
+  };
 
   return (
-    <>
-      <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
-        <Link to="/matches">
-          <ArrowLeft className="mr-2 size-4" />
-          All matches
-        </Link>
-      </Button>
-
-      <PageHeader
-        eyebrow={m.tournamentName ?? "Fixture"}
-        title={`${m.teamAName ?? "TBD"} vs ${m.teamBName ?? "TBD"}`}
-        description={`${formatDateTime(m.scheduledAt)}${m.venue ? ` · ${m.venue}` : ""}`}
-        actions={<MatchStatusBadge status={m.status} />}
-      />
-
-      <div className="panel flex flex-col items-center gap-2 p-8">
-        <div className="flex w-full max-w-xl items-center justify-between gap-6">
-          <p className="flex-1 text-right font-display text-lg font-semibold">
-            {m.teamAName ?? "TBD"}
-          </p>
-          <p className="scoreline text-5xl">
-            {m.scoreA} <span className="text-muted-foreground">–</span> {m.scoreB}
-          </p>
-          <p className="flex-1 font-display text-lg font-semibold">{m.teamBName ?? "TBD"}</p>
+    <div className="font-body-md text-on-surface bg-background antialiased min-h-screen flex flex-col pt-16 pb-12 md:pb-0">
+      
+      {/* TopNavBar */}
+      <header className="bg-surface-container-highest dark:bg-surface-container-high fixed top-0 w-full z-50 border-b border-outline-variant dark:border-outline flex justify-between items-center px-6 h-16">
+        <div className="flex items-center gap-6">
+          <Link to="/matches" className="text-primary hover:text-primary-container mr-2">
+            <span className="material-symbols-outlined text-[24px]">arrow_back</span>
+          </Link>
+          <h1 className="font-headline-md text-xl font-bold text-primary dark:text-primary-fixed-dim">
+            AeroStrike Master Control
+          </h1>
         </div>
-        {canScore ? (
-          <div className="mt-4 flex flex-wrap justify-center gap-2">
-            <Button
-              disabled={busy || locked || !m.teamAId || !m.teamBId}
-              onClick={() => {
-                setMarkTeam(m.teamAId ?? "");
-                setMarkPlayer("none");
-                setMarkOpen(true);
-              }}
-            >
-              <Plus className="mr-2 size-4" />
-              Record mark
-            </Button>
-            {m.status === "scheduled" ? (
-              <Button variant="outline" disabled={busy} onClick={() => setStatus("live")}>
-                Start match
-              </Button>
-            ) : null}
-            {!locked ? (
-              <Button variant="outline" disabled={busy} onClick={() => finalise.ask(m)}>
-                Finalise result
-              </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              onClick={() => {
-                setScheduledAt(toDateTimeInput(m.scheduledAt));
-                setVenue(m.venue ?? "");
-                setScheduleOpen(true);
-              }}
-            >
-              Schedule
-            </Button>
-            {!locked ? (
-              <Button variant="ghost" disabled={busy} onClick={() => setStatus("cancelled")}>
-                Cancel match
-              </Button>
-            ) : null}
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => emergencyStop.ask(m)}
+            disabled={busy}
+            className="bg-secondary-container hover:bg-secondary text-on-secondary font-label-md text-xs px-6 py-2 rounded uppercase tracking-wider transition-colors flex items-center gap-2 shadow-lg"
+          >
+            <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>warning</span>
+            Emergency Stop
+          </button>
+        </div>
+      </header>
+
+      {/* Main Content Area */}
+      <main className="flex-1 w-full mx-auto px-4 md:px-6 py-8 max-w-[1920px]">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* Column 1: Match Status & Timer (Left) */}
+          <div className="lg:col-span-3 flex flex-col gap-6">
+            <div className="glass-panel rounded-xl p-6 flex flex-col items-center">
+              <h2 className="font-headline-md text-xl font-bold text-on-surface mb-2">
+                Match #{m.slot} - {m.round}
+              </h2>
+              <div className="flex items-center gap-3 mb-8">
+                <div className={`w-3 h-3 rounded-full ${m.status === 'live' ? 'bg-primary-container animate-pulse' : 'bg-outline'}`}></div>
+                <span className={`font-label-md text-xs uppercase tracking-widest ${m.status === 'live' ? 'text-primary' : 'text-on-surface'}`}>
+                  {m.status}
+                </span>
+              </div>
+              <div className="w-full text-center mb-8 bg-surface-container-low p-6 rounded-xl border border-outline-variant">
+                <div className="font-label-md text-xs text-on-surface-variant uppercase tracking-widest mb-2">Time Remaining</div>
+                <div className="font-headline-xl text-6xl leading-none font-bold tabular-nums text-on-surface">
+                  {formatTime(timer)}
+                </div>
+              </div>
+              <div className="flex gap-4 w-full mb-8">
+                <button 
+                  disabled={busy || m.status !== 'live'}
+                  onClick={() => setStatus('paused')}
+                  className="flex-1 bg-surface border-2 border-outline-variant hover:border-primary text-on-surface font-label-md text-sm py-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[32px]">pause</span>
+                  Pause
+                </button>
+                <button 
+                  disabled={busy || m.status === 'live' || m.status === 'completed'}
+                  onClick={() => setStatus('live')}
+                  className="flex-1 bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary font-label-md text-sm py-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-[32px]" style={{ fontVariationSettings: "'FILL' 1" }}>play_arrow</span>
+                  Resume
+                </button>
+              </div>
+              <h4 className="font-label-sm text-xs text-on-surface-variant uppercase tracking-widest mb-4 w-full text-left border-b border-outline-variant pb-2">Period Controls</h4>
+              <div className="flex flex-col gap-3 w-full">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="font-label-md text-sm text-on-surface">Current Period</span>
+                  <span className="font-headline-md text-lg font-bold text-primary">{m.currentPeriod || 1} / 3</span>
+                </div>
+                <button 
+                  disabled={busy} onClick={nextPeriod}
+                  className="w-full bg-surface border border-outline-variant hover:border-primary text-on-surface font-label-md text-sm py-3 rounded transition-colors flex items-center justify-center gap-2"
+                >
+                  Next Period
+                  <span className="material-symbols-outlined">skip_next</span>
+                </button>
+                <button 
+                  disabled={busy || m.status === 'completed'} onClick={() => setStatus('completed')}
+                  className="w-full bg-surface border border-outline-variant hover:border-error text-on-surface hover:text-error font-label-md text-sm py-3 rounded transition-colors flex items-center justify-center gap-2 mt-2"
+                >
+                  End Match Early
+                </button>
+              </div>
+            </div>
           </div>
-        ) : null}
-      </div>
 
-      <section className="panel overflow-hidden">
-        <header className="border-b border-border px-5 py-4">
-          <h2 className="font-display text-sm font-bold uppercase tracking-wider">
-            Marks ({marks.data.length})
-          </h2>
-        </header>
-        <DataState
-          loading={marks.loading}
-          error={marks.error}
-          empty={marks.data.length === 0}
-          emptyTitle="No marks recorded"
-          emptyDescription="Referees record each scoring event as the match runs."
-        >
-          <ul className="divide-y divide-border">
-            {[...marks.data]
-              .sort((a, b) => a.minute - b.minute)
-              .map((mk) => {
-                const team = teams.data.find((t) => t.id === mk.teamId);
-                return (
-                  <li key={mk.id} className="flex items-center gap-3 px-5 py-3">
-                    <span className="w-12 font-mono text-sm text-muted-foreground">
-                      {mk.minute}'
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium">{team?.name ?? "Unknown team"}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {mk.playerName ?? "Unattributed"}
-                        {mk.note ? ` · ${mk.note}` : ""}
-                      </p>
-                    </div>
-                    {canScore && !locked ? (
-                      <Button variant="ghost" size="sm" onClick={() => removeMark.ask(mk)}>
-                        Remove
-                      </Button>
-                    ) : null}
-                  </li>
-                );
-              })}
-          </ul>
-        </DataState>
-      </section>
+          {/* Column 2: Scoring & Quick Log (Center) */}
+          <div className="lg:col-span-6 flex flex-col gap-6">
+            
+            {/* Main Scoreboard */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              
+              {/* Team A */}
+              <div className="glass-panel rounded-xl p-8 flex flex-col items-center justify-center relative overflow-hidden group border-2 border-primary">
+                <div className="absolute inset-0 bg-primary opacity-5"></div>
+                <h3 className="font-headline-lg text-2xl font-bold text-on-surface z-10 mb-2 truncate max-w-full">
+                  {m.teamAName || 'Team A'}
+                </h3>
+                <div className="font-headline-xl text-[100px] leading-none font-bold tabular-nums text-primary mb-8 z-10">
+                  {m.scoreA}
+                </div>
+                <div className="flex gap-4 z-10 w-full">
+                  <button 
+                    disabled={busy || !m.teamAId} onClick={() => removePoint(m.teamAId!, true)}
+                    className="flex-1 bg-surface border-2 border-outline-variant hover:border-primary text-on-surface font-label-md text-sm py-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[32px]">remove</span>
+                    -1
+                  </button>
+                  <button 
+                    disabled={busy || !m.teamAId} onClick={() => addPoint(m.teamAId!, true)}
+                    className="flex-[2] bg-primary-container hover:bg-primary text-on-primary-container hover:text-on-primary font-label-md text-sm py-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[32px]">add</span>
+                    +1 Point
+                  </button>
+                </div>
+              </div>
 
-      {/* Record mark */}
-      <Dialogish open={markOpen} onOpenChange={setMarkOpen} title="Record a mark">
-        <div className="space-y-4">
-          <FormRow label="Scoring team">
-            <Select value={markTeam} onValueChange={setMarkTeam}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select team" />
-              </SelectTrigger>
-              <SelectContent>
-                {m.teamAId ? <SelectItem value={m.teamAId}>{m.teamAName}</SelectItem> : null}
-                {m.teamBId ? <SelectItem value={m.teamBId}>{m.teamBName}</SelectItem> : null}
-              </SelectContent>
-            </Select>
-          </FormRow>
-          <FormRow label="Pilot">
-            <Select value={markPlayer} onValueChange={setMarkPlayer}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">Unattributed</SelectItem>
-                {players.data
-                  .filter((p) => p.teamId === markTeam)
-                  .map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      #{p.jerseyNumber} {p.fullName}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
-          </FormRow>
-          <FormRow label="Minute">
-            <Input
-              type="number"
-              min={0}
-              value={markMinute}
-              onChange={(e) => setMarkMinute(e.target.value)}
-            />
-          </FormRow>
-          <FormRow label="Note" hint="Optional referee note">
-            <Textarea value={markNote} onChange={(e) => setMarkNote(e.target.value)} rows={2} />
-          </FormRow>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setMarkOpen(false)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button onClick={addMark} disabled={busy}>
-              Record mark
-            </Button>
+              {/* Team B */}
+              <div className="glass-panel rounded-xl p-8 flex flex-col items-center justify-center relative overflow-hidden group border-2 border-tertiary">
+                <div className="absolute inset-0 bg-tertiary opacity-5"></div>
+                <h3 className="font-headline-lg text-2xl font-bold text-on-surface z-10 mb-2 truncate max-w-full">
+                  {m.teamBName || 'Team B'}
+                </h3>
+                <div className="font-headline-xl text-[100px] leading-none font-bold tabular-nums text-tertiary mb-8 z-10">
+                  {m.scoreB}
+                </div>
+                <div className="flex gap-4 z-10 w-full">
+                  <button 
+                    disabled={busy || !m.teamBId} onClick={() => removePoint(m.teamBId!, false)}
+                    className="flex-1 bg-surface border-2 border-outline-variant hover:border-tertiary text-on-surface font-label-md text-sm py-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-1 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[32px]">remove</span>
+                    -1
+                  </button>
+                  <button 
+                    disabled={busy || !m.teamBId} onClick={() => addPoint(m.teamBId!, false)}
+                    className="flex-[2] bg-tertiary-container hover:bg-tertiary text-on-tertiary-container hover:text-on-tertiary font-label-md text-sm py-4 rounded-lg transition-colors flex flex-col items-center justify-center gap-1 shadow-md disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-[32px]">add</span>
+                    +1 Point
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Logging */}
+            <div className="glass-panel rounded-xl p-8 flex-1 flex flex-col bg-surface-container-lowest">
+              <h3 className="font-headline-md text-xl font-bold text-on-surface flex items-center gap-2 mb-6 border-b border-outline-variant pb-4">
+                <span className="material-symbols-outlined text-primary text-[28px]">gavel</span>
+                Quick Penalty Log
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* Step 1: Entity Select */}
+                <div>
+                  <label className="block font-label-sm text-xs text-on-surface-variant uppercase mb-4 tracking-widest">
+                    1. Select Target Entity
+                  </label>
+                  <div className="grid grid-cols-4 gap-3">
+                    {['R1', 'R2', 'R3', 'R4'].map(r => (
+                      <button 
+                        key={r}
+                        onClick={() => setSelectedEntity(r)}
+                        className={`bg-surface border-2 py-4 rounded-lg transition-colors tabular-nums font-bold ${selectedEntity === r ? 'border-primary text-primary bg-primary-container' : 'border-outline-variant hover:border-primary text-on-surface'}`}
+                      >
+                        {r}
+                      </button>
+                    ))}
+                    {['B1', 'B2', 'B3', 'B4'].map(b => (
+                      <button 
+                        key={b}
+                        onClick={() => setSelectedEntity(b)}
+                        className={`bg-surface border-2 py-4 rounded-lg transition-colors tabular-nums font-bold mt-2 ${selectedEntity === b ? 'border-tertiary text-tertiary bg-tertiary-container' : 'border-outline-variant hover:border-tertiary text-on-surface'}`}
+                      >
+                        {b}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Step 2: Infraction Select */}
+                <div>
+                  <label className="block font-label-sm text-xs text-on-surface-variant uppercase mb-4 tracking-widest">
+                    2. Select Infraction
+                  </label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {['Illegal Block', 'Boundary Violation', 'Unsafe Operation'].map(infraction => (
+                      <button 
+                        key={infraction}
+                        disabled={busy || !selectedEntity}
+                        onClick={() => logPenalty(infraction)}
+                        className="w-full text-left bg-surface border-2 border-outline-variant hover:border-secondary hover:bg-surface-container-low text-on-surface text-sm px-6 py-4 rounded-lg transition-colors flex justify-between items-center shadow-sm disabled:opacity-50"
+                      >
+                        {infraction}
+                        <span className="material-symbols-outlined text-outline-variant">chevron_right</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3: Active Logs & Telemetry (Right) */}
+          <div className="lg:col-span-3 flex flex-col gap-6">
+            
+            {/* Active Penalties List */}
+            <div className="glass-panel rounded-xl p-6 flex-1 flex flex-col max-h-[600px]">
+              <h3 className="font-headline-md text-xl font-bold text-on-surface flex items-center gap-2 mb-4 border-b border-outline-variant pb-2">
+                <span className="material-symbols-outlined text-secondary">warning</span>
+                Active Penalties
+              </h3>
+              <div className="overflow-y-auto pr-2 space-y-3 flex-1">
+                {penalties.data.length === 0 ? (
+                  <div className="text-sm text-on-surface-variant text-center py-8">No active penalties.</div>
+                ) : (
+                  penalties.data.map(p => {
+                    const isRed = p.entity.startsWith('R');
+                    return (
+                      <div key={p.id} className="bg-surface-container-low border border-outline-variant rounded p-3 flex justify-between items-center group">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className={`font-label-md font-bold ${isRed ? 'text-primary' : 'text-tertiary'}`}>
+                              {p.entity}
+                            </span>
+                            <span className="text-[10px] bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded font-mono uppercase">
+                              Active
+                            </span>
+                          </div>
+                          <div className="text-sm text-on-surface-variant">{p.infraction}</div>
+                        </div>
+                        <button 
+                          onClick={() => clearPenalty(p.id)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-on-surface-variant hover:text-primary transition-opacity"
+                          title="Clear Penalty"
+                        >
+                          <span className="material-symbols-outlined text-lg">check_circle</span>
+                        </button>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+
+            {/* Telemetry Removed per request */}
           </div>
         </div>
-      </Dialogish>
-
-      {/* Schedule */}
-      <Dialogish open={scheduleOpen} onOpenChange={setScheduleOpen} title="Schedule match">
-        <div className="space-y-4">
-          <FormRow label="Kick-off">
-            <Input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-            />
-          </FormRow>
-          <FormRow label="Venue">
-            <Input value={venue} onChange={(e) => setVenue(e.target.value)} placeholder="Arena 1" />
-          </FormRow>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setScheduleOpen(false)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button
-              disabled={busy}
-              onClick={async () => {
-                setBusy(true);
-                try {
-                  await updateDocument(COL.matches, matchId, {
-                    scheduledAt: fromDateTimeInput(scheduledAt),
-                    venue: venue.trim() || null,
-                  });
-                  toast.success("Schedule saved");
-                  setScheduleOpen(false);
-                } catch (error) {
-                  toast.error(firebaseErrorMessage(error));
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              Save
-            </Button>
-          </div>
-        </div>
-      </Dialogish>
+      </main>
 
       <ConfirmDialog
-        open={finalise.open}
-        onOpenChange={finalise.setOpen}
-        destructive={false}
-        title="Finalise this result?"
-        description={`Final score ${m.scoreA}–${m.scoreB}. The winner advances in the bracket and standings are recalculated.`}
-        confirmLabel="Finalise"
+        open={emergencyStop.open}
+        onOpenChange={emergencyStop.setOpen}
+        title="Emergency Stop"
+        description="Are you sure you want to stop this match immediately? This will cancel the match."
+        confirmLabel="Stop Match"
+        destructive={true}
         onConfirm={async () => {
-          try {
-            await completeMatch(m, m.scoreA, m.scoreB, teams.data, profile!.id);
-            await writeAudit({
-              actorId: profile!.id,
-              actorEmail: profile!.email,
-              action: "complete",
-              entity: "matches",
-              entityId: m.id,
-              details: `${m.scoreA}-${m.scoreB}`,
-            });
-            toast.success("Result recorded and bracket advanced");
-          } catch (error) {
-            toast.error(firebaseErrorMessage(error));
-          }
+          if (!emergencyStop.target) return;
+          await setStatus('cancelled');
         }}
       />
-
-      <ConfirmDialog
-        open={removeMark.open}
-        onOpenChange={removeMark.setOpen}
-        title="Remove this mark?"
-        description="The scoreline is adjusted immediately."
-        confirmLabel="Remove mark"
-        onConfirm={async () => {
-          const mk = removeMark.target;
-          if (!mk) return;
-          try {
-            await deleteDocument(COL.marks, mk.id);
-            const isA = mk.teamId === m.teamAId;
-            await updateDocument(COL.matches, matchId, {
-              scoreA: Math.max(0, m.scoreA - (isA ? 1 : 0)),
-              scoreB: Math.max(0, m.scoreB - (isA ? 0 : 1)),
-            });
-            toast.success("Mark removed");
-          } catch (error) {
-            toast.error(firebaseErrorMessage(error));
-          }
-        }}
-      />
-    </>
-  );
-}
-
-/** Small dialog wrapper to keep this file readable. */
-function Dialogish({
-  open,
-  onOpenChange,
-  title,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  if (!open) return null;
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-foreground/40 p-4">
-      <div className="panel w-full max-w-md p-6">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-bold">{title}</h2>
-          <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            Close
-          </Button>
-        </div>
-        {children}
-      </div>
     </div>
   );
 }

@@ -51,7 +51,7 @@ export interface Player {
   updatedAt?: number;
 }
 
-export const MATCH_STATUSES = ["scheduled", "live", "completed", "cancelled"] as const;
+export const MATCH_STATUSES = ["scheduled", "live", "paused", "completed", "cancelled"] as const;
 export type MatchStatus = (typeof MATCH_STATUSES)[number];
 
 export interface Match {
@@ -67,6 +67,8 @@ export interface Match {
   scoreA: number;
   scoreB: number;
   status: MatchStatus;
+  currentPeriod?: number;
+  timeRemaining?: number; // in seconds
   winnerId?: string | null;
   refereeId?: string | null;
   venue?: string | null;
@@ -112,6 +114,18 @@ export interface Mark {
   minute: number;
   note?: string | null;
   createdBy?: string;
+  createdAt?: number;
+}
+
+export interface Penalty {
+  id: string;
+  matchId: string;
+  tournamentId: string;
+  teamId: string;
+  entity: string; // e.g. R1, B2
+  infraction: string; // e.g. Illegal Block
+  status: "active" | "cleared";
+  durationSeconds?: number;
   createdAt?: number;
 }
 
