@@ -36,11 +36,14 @@ function Index() {
                 <p className="mt-3 text-base text-slate-500 dark:text-slate-400 sm:mt-5 sm:text-lg sm:max-w-xl sm:mx-auto md:mt-5 md:text-xl lg:mx-0">
                   Manage your teams, follow live tournaments, and track real-time drone soccer scores on our unified competition platform.
                 </p>
-                <div className="mt-5 sm:mt-8 sm:flex sm:justify-center lg:justify-start gap-4">
-                  <Link to="/scoreboard" className="w-full flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:text-lg md:px-10 shadow-sm transition-all hover:shadow-md">
+                <div className="mt-5 sm:mt-8 flex flex-col sm:flex-row sm:justify-center lg:justify-start gap-4">
+                  <Link to="/scoreboard" className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 md:py-4 md:text-lg md:px-8 shadow-sm transition-all hover:shadow-md">
                     Live Scoreboard
                   </Link>
-                  <Link to="/dashboard" className="w-full flex items-center justify-center px-8 py-3 border border-slate-300 dark:border-slate-700 text-base font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 md:py-4 md:text-lg md:px-10 transition-colors">
+                  <Link to="/matches" className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-transparent text-base font-medium rounded-md text-white bg-red-600 hover:bg-red-700 md:py-4 md:text-lg md:px-8 shadow-sm transition-all hover:shadow-md">
+                    Referee Dashboard
+                  </Link>
+                  <Link to="/dashboard" className="w-full sm:w-auto flex items-center justify-center px-8 py-3 border border-slate-300 dark:border-slate-700 text-base font-medium rounded-md text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 md:py-4 md:text-lg md:px-8 transition-colors">
                     Dashboard
                   </Link>
                 </div>
