@@ -10,6 +10,7 @@ import { useEffect } from "react";
 
 import { AuthProvider } from "../lib/auth";
 import { Toaster } from "../components/ui/sonner";
+import { RoleSwitcher } from "../components/RoleSwitcher";
 
 
 function NotFoundComponent() {
@@ -88,6 +89,7 @@ function RootComponent() {
       <AuthProvider>
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
+        <RoleSwitcher />
         <Toaster richColors position="top-right" />
       </AuthProvider>
     </QueryClientProvider>
