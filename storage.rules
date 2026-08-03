@@ -1,0 +1,16 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /{allPaths=**} {
+      // Anyone can read images/logos
+      allow read: if true;
+      // Only authenticated users can upload
+      allow write: if isAuthenticated();
+    }
+  }
+}
