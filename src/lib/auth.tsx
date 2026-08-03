@@ -56,6 +56,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const fb = getFirebase();
     if (!fb) {
       setUser({ uid: "mock-uid", email: "admin@test.com", emailVerified: true } as User);
+      setProfile({
+        id: "mock-uid",
+        email: "admin@test.com",
+        displayName: "Mock Admin",
+        role: "admin",
+        disabled: false,
+        teamId: null,
+        createdAt: 0,
+        updatedAt: 0,
+      });
       setInitializing(false);
       return;
     }
