@@ -1,181 +1,88 @@
-export const ROLES = ["admin", "referee", "coach", "player", "viewer"] as const;
-export type Role = (typeof ROLES)[number];
+export type EntityStatus = "pending" | "approved" | "rejected";
 
-export const ROLE_LABELS: Record<Role, string> = {
-  admin: "Administrator",
-  referee: "Referee",
-  coach: "Coach",
-  player: "Player",
-  viewer: "Viewer",
-};
+export type UserRole = "admin" | "referee" | "coach";
 
-export interface UserProfile {
+export interface AuthUser {
   id: string;
+  name: string;
   email: string;
-  displayName: string;
-  role: Role;
-  teamId?: string | null;
-  phone?: string | null;
-  disabled?: boolean;
-  createdAt?: number;
-  updatedAt?: number;
+  role: UserRole;
+  token: string;
 }
+
+export interface Player {
+  id: string;
+  teamId: string;
+  name: string;
+  number: number;
+  position: PlayerPosition;
+  status: EntityStatus;
+  createdAt: number;
+}
+
+export type PlayerPosition = "Striker" | "Defender" | "Goalkeeper" | "Flex";
 
 export interface Team {
   id: string;
   name: string;
-  shortName: string;
-  city?: string;
-  coachId?: string | null;
-  coachName?: string | null;
-  logoUrl?: string | null;
-  contactEmail?: string | null;
-  active: boolean;
-  createdAt?: number;
-  updatedAt?: number;
+  category: TeamCategory;
+  coachName: string;
+  contactEmail: string;
+  contactPhone: string;
+  status: EntityStatus;
+  createdAt: number;
+  /** Auth user id of the coach who submitted this team, when signed in. */
+  ownerId?: string;
 }
 
-export const PLAYER_POSITIONS = ["striker", "defender", "goalkeeper"] as const;
-export type PlayerPosition = (typeof PLAYER_POSITIONS)[number];
+export type TeamCategory = "Junior" | "Youth" | "Collegiate" | "Open";
 
-export interface Player {
+export type PenaltyType = "Minor" | "Major" | "Technical";
+
+export interface Penalty {
   id: string;
-  fullName: string;
-  teamId: string;
-  jerseyNumber: number;
-  position: PlayerPosition;
-  droneId?: string | null;
-  userId?: string | null;
-  studentId?: string | null;
-  dateOfBirth?: number | null;
-  active: boolean;
-  createdAt?: number;
-  updatedAt?: number;
-  removedAt?: number | null;
+  matchId: string;
+  side: "A" | "B";
+  type: PenaltyType;
+  createdAt: number;
 }
 
-export const MATCH_STATUSES = ["scheduled", "live", "completed", "cancelled"] as const;
-export type MatchStatus = (typeof MATCH_STATUSES)[number];
+export type MatchStatus = "scheduled" | "live" | "paused" | "finished";
 
 export interface Match {
   id: string;
-  tournamentId: string;
-  tournamentName?: string;
-  round: number;
-  slot: number;
-  teamAId: string | null;
-  teamBId: string | null;
-  teamAName?: string | null;
-  teamBName?: string | null;
+  tournamentName: string;
+  teamAName: string;
+  teamBName: string;
   scoreA: number;
   scoreB: number;
   status: MatchStatus;
-  winnerId?: string | null;
-  refereeId?: string | null;
-  venue?: string | null;
-  scheduledAt?: number | null;
-  createdAt?: number;
-  updatedAt?: number;
+  /** Accumulated milliseconds before the current running segment. */
+  elapsedMs: number;
+  /** Timestamp when the current running segment began, or null when stopped. */
+  runningSince: number | null;
+  penalties: Penalty[];
 }
 
-export const TOURNAMENT_STATUSES = [
-  "draft",
-  "registration",
-  "in_progress",
-  "completed",
-] as const;
-export type TournamentStatus = (typeof TOURNAMENT_STATUSES)[number];
+export type MatchEventType =
+  | "match_started"
+  | "match_paused"
+  | "match_resumed"
+  | "match_ended"
+  | "score_changed"
+  | "penalty_issued";
 
-export interface Tournament {
-  id: string;
-  name: string;
-  season?: string;
-  description?: string;
-  location?: string;
-  imageUrl?: string | null;
-  status: TournamentStatus;
-  startDate?: number | null;
-  endDate?: number | null;
-  teamIds: string[];
-  rounds: number;
-  championTeamId?: string | null;
-  createdAt?: number;
-  updatedAt?: number;
-}
-
-/** A single scoring event ("mark") inside a match. */
-export interface Mark {
+export interface MatchEvent {
   id: string;
   matchId: string;
-  tournamentId: string;
-  teamId: string;
-  playerId?: string | null;
-  playerName?: string | null;
-  points: number;
-  minute: number;
-  note?: string | null;
-  createdBy?: string;
-  createdAt?: number;
+  type: MatchEventType;
+  message: string;
+  createdAt: number;
 }
 
-/** Final score snapshot written when a match completes. */
-export interface ScoreRecord {
-  id: string;
-  matchId: string;
-  tournamentId: string;
-  teamAId: string | null;
-  teamBId: string | null;
-  scoreA: number;
-  scoreB: number;
-  winnerId: string | null;
-  recordedBy?: string;
-  createdAt?: number;
-}
-
-export interface Standing {
-  id: string; // `${tournamentId}_${teamId}`
-  tournamentId: string;
-  teamId: string;
-  teamName: string;
-  played: number;
-  won: number;
-  lost: number;
-  drawn: number;
-  goalsFor: number;
-  goalsAgainst: number;
-  points: number;
-  updatedAt?: number;
-}
-
-export interface Announcement {
-  id: string;
-  title: string;
-  body: string;
-  audience: Role | "all";
-  pinned: boolean;
-  authorId?: string;
-  authorName?: string;
-  createdAt?: number;
-  updatedAt?: number;
-}
-
-export interface Notification {
-  id: string;
-  userId: string;
-  title: string;
-  body: string;
-  read: boolean;
-  link?: string | null;
-  createdAt?: number;
-}
-
-export interface AuditLog {
-  id: string;
-  actorId: string;
-  actorEmail: string;
-  action: string;
-  entity: string;
-  entityId: string;
-  details?: string;
-  createdAt?: number;
+export interface AppState {
+  teams: Team[];
+  players: Player[];
+  match: Match;
+  events: MatchEvent[];
 }

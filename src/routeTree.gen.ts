@@ -10,36 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as RefereeRouteImport } from './routes/referee'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as RegisterTeamRouteImport } from './routes/register-team'
 import { Route as ScoreboardRouteImport } from './routes/scoreboard'
-import { Route as VerifyEmailRouteImport } from './routes/verify-email'
-import { Route as AuthenticatedAnnouncementsRouteImport } from './routes/_authenticated/announcements'
-import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
-import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
-import { Route as AuthenticatedPlayersRouteImport } from './routes/_authenticated/players'
-import { Route as AuthenticatedTeamSetupRouteImport } from './routes/_authenticated/team-setup'
-import { Route as AuthenticatedMatchesIndexRouteImport } from './routes/_authenticated/matches.index'
-import { Route as AuthenticatedMatchesMatchIdRouteImport } from './routes/_authenticated/matches.$matchId'
-import { Route as AuthenticatedTeamsIndexRouteImport } from './routes/_authenticated/teams.index'
-import { Route as AuthenticatedTeamsTeamIdRouteImport } from './routes/_authenticated/teams.$teamId'
-import { Route as AuthenticatedTournamentsIndexRouteImport } from './routes/_authenticated/tournaments.index'
-import { Route as AuthenticatedTournamentsTournamentIdRouteImport } from './routes/_authenticated/tournaments.$tournamentId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -47,9 +32,19 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RefereeRoute = RefereeRouteImport.update({
+  id: '/referee',
+  path: '/referee',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RegisterTeamRoute = RegisterTeamRouteImport.update({
+  id: '/register-team',
+  path: '/register-team',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScoreboardRoute = ScoreboardRouteImport.update({
@@ -57,202 +52,73 @@ const ScoreboardRoute = ScoreboardRouteImport.update({
   path: '/scoreboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const VerifyEmailRoute = VerifyEmailRouteImport.update({
-  id: '/verify-email',
-  path: '/verify-email',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedAnnouncementsRoute =
-  AuthenticatedAnnouncementsRouteImport.update({
-    id: '/announcements',
-    path: '/announcements',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
-  id: '/dashboard',
-  path: '/dashboard',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedNotificationsRoute =
-  AuthenticatedNotificationsRouteImport.update({
-    id: '/notifications',
-    path: '/notifications',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedPlayersRoute = AuthenticatedPlayersRouteImport.update({
-  id: '/players',
-  path: '/players',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedTeamSetupRoute = AuthenticatedTeamSetupRouteImport.update({
-  id: '/team-setup',
-  path: '/team-setup',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedMatchesIndexRoute =
-  AuthenticatedMatchesIndexRouteImport.update({
-    id: '/matches/',
-    path: '/matches/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedMatchesMatchIdRoute =
-  AuthenticatedMatchesMatchIdRouteImport.update({
-    id: '/matches/$matchId',
-    path: '/matches/$matchId',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedTeamsIndexRoute = AuthenticatedTeamsIndexRouteImport.update({
-  id: '/teams/',
-  path: '/teams/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const AuthenticatedTeamsTeamIdRoute =
-  AuthenticatedTeamsTeamIdRouteImport.update({
-    id: '/teams/$teamId',
-    path: '/teams/$teamId',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedTournamentsIndexRoute =
-  AuthenticatedTournamentsIndexRouteImport.update({
-    id: '/tournaments/',
-    path: '/tournaments/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedTournamentsTournamentIdRoute =
-  AuthenticatedTournamentsTournamentIdRouteImport.update({
-    id: '/tournaments/$tournamentId',
-    path: '/tournaments/$tournamentId',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/forgot-password': typeof ForgotPasswordRoute
+  '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/referee': typeof RefereeRoute
   '/register': typeof RegisterRoute
+  '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
-  '/verify-email': typeof VerifyEmailRoute
-  '/announcements': typeof AuthenticatedAnnouncementsRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
-  '/notifications': typeof AuthenticatedNotificationsRoute
-  '/players': typeof AuthenticatedPlayersRoute
-  '/team-setup': typeof AuthenticatedTeamSetupRoute
-  '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
-  '/teams/$teamId': typeof AuthenticatedTeamsTeamIdRoute
-  '/tournaments/$tournamentId': typeof AuthenticatedTournamentsTournamentIdRoute
-  '/matches/': typeof AuthenticatedMatchesIndexRoute
-  '/teams/': typeof AuthenticatedTeamsIndexRoute
-  '/tournaments/': typeof AuthenticatedTournamentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/forgot-password': typeof ForgotPasswordRoute
+  '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/referee': typeof RefereeRoute
   '/register': typeof RegisterRoute
+  '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
-  '/verify-email': typeof VerifyEmailRoute
-  '/announcements': typeof AuthenticatedAnnouncementsRoute
-  '/dashboard': typeof AuthenticatedDashboardRoute
-  '/notifications': typeof AuthenticatedNotificationsRoute
-  '/players': typeof AuthenticatedPlayersRoute
-  '/team-setup': typeof AuthenticatedTeamSetupRoute
-  '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
-  '/teams/$teamId': typeof AuthenticatedTeamsTeamIdRoute
-  '/tournaments/$tournamentId': typeof AuthenticatedTournamentsTournamentIdRoute
-  '/matches': typeof AuthenticatedMatchesIndexRoute
-  '/teams': typeof AuthenticatedTeamsIndexRoute
-  '/tournaments': typeof AuthenticatedTournamentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
-  '/forgot-password': typeof ForgotPasswordRoute
+  '/admin': typeof AdminRoute
   '/login': typeof LoginRoute
+  '/referee': typeof RefereeRoute
   '/register': typeof RegisterRoute
+  '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
-  '/verify-email': typeof VerifyEmailRoute
-  '/_authenticated/announcements': typeof AuthenticatedAnnouncementsRoute
-  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
-  '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
-  '/_authenticated/players': typeof AuthenticatedPlayersRoute
-  '/_authenticated/team-setup': typeof AuthenticatedTeamSetupRoute
-  '/_authenticated/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
-  '/_authenticated/teams/$teamId': typeof AuthenticatedTeamsTeamIdRoute
-  '/_authenticated/tournaments/$tournamentId': typeof AuthenticatedTournamentsTournamentIdRoute
-  '/_authenticated/matches/': typeof AuthenticatedMatchesIndexRoute
-  '/_authenticated/teams/': typeof AuthenticatedTeamsIndexRoute
-  '/_authenticated/tournaments/': typeof AuthenticatedTournamentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/forgot-password'
+    | '/admin'
     | '/login'
+    | '/referee'
     | '/register'
+    | '/register-team'
     | '/scoreboard'
-    | '/verify-email'
-    | '/announcements'
-    | '/dashboard'
-    | '/notifications'
-    | '/players'
-    | '/team-setup'
-    | '/matches/$matchId'
-    | '/teams/$teamId'
-    | '/tournaments/$tournamentId'
-    | '/matches/'
-    | '/teams/'
-    | '/tournaments/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/forgot-password'
+    | '/admin'
     | '/login'
+    | '/referee'
     | '/register'
+    | '/register-team'
     | '/scoreboard'
-    | '/verify-email'
-    | '/announcements'
-    | '/dashboard'
-    | '/notifications'
-    | '/players'
-    | '/team-setup'
-    | '/matches/$matchId'
-    | '/teams/$teamId'
-    | '/tournaments/$tournamentId'
-    | '/matches'
-    | '/teams'
-    | '/tournaments'
   id:
     | '__root__'
     | '/'
-    | '/_authenticated'
-    | '/forgot-password'
+    | '/admin'
     | '/login'
+    | '/referee'
     | '/register'
+    | '/register-team'
     | '/scoreboard'
-    | '/verify-email'
-    | '/_authenticated/announcements'
-    | '/_authenticated/dashboard'
-    | '/_authenticated/notifications'
-    | '/_authenticated/players'
-    | '/_authenticated/team-setup'
-    | '/_authenticated/matches/$matchId'
-    | '/_authenticated/teams/$teamId'
-    | '/_authenticated/tournaments/$tournamentId'
-    | '/_authenticated/matches/'
-    | '/_authenticated/teams/'
-    | '/_authenticated/tournaments/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
-  ForgotPasswordRoute: typeof ForgotPasswordRoute
+  AdminRoute: typeof AdminRoute
   LoginRoute: typeof LoginRoute
+  RefereeRoute: typeof RefereeRoute
   RegisterRoute: typeof RegisterRoute
+  RegisterTeamRoute: typeof RegisterTeamRoute
   ScoreboardRoute: typeof ScoreboardRoute
-  VerifyEmailRoute: typeof VerifyEmailRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -264,18 +130,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated': {
-      id: '/_authenticated'
-      path: ''
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedRouteRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/forgot-password': {
-      id: '/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof ForgotPasswordRouteImport
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -285,11 +144,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/referee': {
+      id: '/referee'
+      path: '/referee'
+      fullPath: '/referee'
+      preLoaderRoute: typeof RefereeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
       fullPath: '/register'
       preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/register-team': {
+      id: '/register-team'
+      path: '/register-team'
+      fullPath: '/register-team'
+      preLoaderRoute: typeof RegisterTeamRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scoreboard': {
@@ -299,134 +172,28 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScoreboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/verify-email': {
-      id: '/verify-email'
-      path: '/verify-email'
-      fullPath: '/verify-email'
-      preLoaderRoute: typeof VerifyEmailRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/announcements': {
-      id: '/_authenticated/announcements'
-      path: '/announcements'
-      fullPath: '/announcements'
-      preLoaderRoute: typeof AuthenticatedAnnouncementsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/dashboard': {
-      id: '/_authenticated/dashboard'
-      path: '/dashboard'
-      fullPath: '/dashboard'
-      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/notifications': {
-      id: '/_authenticated/notifications'
-      path: '/notifications'
-      fullPath: '/notifications'
-      preLoaderRoute: typeof AuthenticatedNotificationsRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/players': {
-      id: '/_authenticated/players'
-      path: '/players'
-      fullPath: '/players'
-      preLoaderRoute: typeof AuthenticatedPlayersRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/team-setup': {
-      id: '/_authenticated/team-setup'
-      path: '/team-setup'
-      fullPath: '/team-setup'
-      preLoaderRoute: typeof AuthenticatedTeamSetupRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/matches/': {
-      id: '/_authenticated/matches/'
-      path: '/matches'
-      fullPath: '/matches/'
-      preLoaderRoute: typeof AuthenticatedMatchesIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/matches/$matchId': {
-      id: '/_authenticated/matches/$matchId'
-      path: '/matches/$matchId'
-      fullPath: '/matches/$matchId'
-      preLoaderRoute: typeof AuthenticatedMatchesMatchIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/teams/': {
-      id: '/_authenticated/teams/'
-      path: '/teams'
-      fullPath: '/teams/'
-      preLoaderRoute: typeof AuthenticatedTeamsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/teams/$teamId': {
-      id: '/_authenticated/teams/$teamId'
-      path: '/teams/$teamId'
-      fullPath: '/teams/$teamId'
-      preLoaderRoute: typeof AuthenticatedTeamsTeamIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/tournaments/': {
-      id: '/_authenticated/tournaments/'
-      path: '/tournaments'
-      fullPath: '/tournaments/'
-      preLoaderRoute: typeof AuthenticatedTournamentsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/tournaments/$tournamentId': {
-      id: '/_authenticated/tournaments/$tournamentId'
-      path: '/tournaments/$tournamentId'
-      fullPath: '/tournaments/$tournamentId'
-      preLoaderRoute: typeof AuthenticatedTournamentsTournamentIdRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
   }
 }
 
-interface AuthenticatedRouteRouteChildren {
-  AuthenticatedAnnouncementsRoute: typeof AuthenticatedAnnouncementsRoute
-  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
-  AuthenticatedPlayersRoute: typeof AuthenticatedPlayersRoute
-  AuthenticatedTeamSetupRoute: typeof AuthenticatedTeamSetupRoute
-  AuthenticatedMatchesMatchIdRoute: typeof AuthenticatedMatchesMatchIdRoute
-  AuthenticatedTeamsTeamIdRoute: typeof AuthenticatedTeamsTeamIdRoute
-  AuthenticatedTournamentsTournamentIdRoute: typeof AuthenticatedTournamentsTournamentIdRoute
-  AuthenticatedMatchesIndexRoute: typeof AuthenticatedMatchesIndexRoute
-  AuthenticatedTeamsIndexRoute: typeof AuthenticatedTeamsIndexRoute
-  AuthenticatedTournamentsIndexRoute: typeof AuthenticatedTournamentsIndexRoute
-}
-
-const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
-  AuthenticatedAnnouncementsRoute: AuthenticatedAnnouncementsRoute,
-  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
-  AuthenticatedPlayersRoute: AuthenticatedPlayersRoute,
-  AuthenticatedTeamSetupRoute: AuthenticatedTeamSetupRoute,
-  AuthenticatedMatchesMatchIdRoute: AuthenticatedMatchesMatchIdRoute,
-  AuthenticatedTeamsTeamIdRoute: AuthenticatedTeamsTeamIdRoute,
-  AuthenticatedTournamentsTournamentIdRoute:
-    AuthenticatedTournamentsTournamentIdRoute,
-  AuthenticatedMatchesIndexRoute: AuthenticatedMatchesIndexRoute,
-  AuthenticatedTeamsIndexRoute: AuthenticatedTeamsIndexRoute,
-  AuthenticatedTournamentsIndexRoute: AuthenticatedTournamentsIndexRoute,
-}
-
-const AuthenticatedRouteRouteWithChildren =
-  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
-  ForgotPasswordRoute: ForgotPasswordRoute,
+  AdminRoute: AdminRoute,
   LoginRoute: LoginRoute,
+  RefereeRoute: RefereeRoute,
   RegisterRoute: RegisterRoute,
+  RegisterTeamRoute: RegisterTeamRoute,
   ScoreboardRoute: ScoreboardRoute,
-  VerifyEmailRoute: VerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
