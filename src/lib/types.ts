@@ -31,6 +31,8 @@ export interface Team {
   contactPhone: string;
   status: EntityStatus;
   createdAt: number;
+  /** Auth user id of the coach who submitted this team, when signed in. */
+  ownerId?: string;
 }
 
 export type TeamCategory = "Junior" | "Youth" | "Collegiate" | "Open";
