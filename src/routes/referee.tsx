@@ -1,6 +1,6 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Play, Pause, RotateCcw, Square, Minus, Plus, ExternalLink } from "lucide-react";
-import { DashboardLayout } from "@/components/DashboardLayout";
+import { createFileRoute } from "@tanstack/react-router";
+import { Play, Pause, RotateCcw, Square, Minus, Plus } from "lucide-react";
+import { RefereeLayout } from "@/components/RefereeLayout";
 import { Panel } from "@/components/ui-kit";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import type { PenaltyType } from "@/lib/types";
@@ -26,24 +26,15 @@ function RefereePage() {
   const live = match.status === "live";
 
   return (
-    <DashboardLayout roleLabel="Referee">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-            Match control
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight">{match.tournamentName}</h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Every action broadcasts instantly to all connected scoreboards.
-          </p>
-        </div>
-        <Link
-          to="/scoreboard"
-          target="_blank"
-          className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-4 py-2 text-sm font-semibold hover:bg-muted"
-        >
-          <ExternalLink className="size-4" /> Open scoreboard
-        </Link>
+    <RefereeLayout>
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Match control
+        </p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">{match.tournamentName}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Every action broadcasts instantly to all connected scoreboards.
+        </p>
       </div>
 
       <hr className="my-6 border-border" />
@@ -173,7 +164,7 @@ function RefereePage() {
           </Panel>
         </div>
       </div>
-    </DashboardLayout>
+    </RefereeLayout>
   );
 }
 

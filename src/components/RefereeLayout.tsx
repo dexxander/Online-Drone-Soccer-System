@@ -1,43 +1,26 @@
-import { Link, useRouterState } from "@tanstack/react-router";
-import {
-  LayoutGrid,
-  Trophy,
-  Shield,
-  User,
-  Megaphone,
-  Bell,
-  Users,
-  ScrollText,
-  Monitor,
-} from "lucide-react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import { Swords, Monitor, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
+import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
   label: string;
-  to?: "/admin" | "/referee" | "/register-team";
-  icon: typeof LayoutGrid;
+  to: "/referee";
+  icon: typeof Swords;
 };
 
-const nav: NavItem[] = [
-  { label: "Dashboard", to: "/admin", icon: LayoutGrid },
-  { label: "Tournaments", icon: Trophy },
-  { label: "Teams", to: "/register-team", icon: Shield },
-  { label: "Players", icon: User },
-  { label: "Announcements", icon: Megaphone },
-  { label: "Notifications", icon: Bell },
-  { label: "Users", icon: Users },
-  { label: "Audit log", icon: ScrollText },
-];
+const nav: NavItem[] = [{ label: "Match control", to: "/referee", icon: Swords }];
 
-export function DashboardLayout({
-  children,
-  roleLabel = "Administrator",
-}: {
-  children: ReactNode;
-  roleLabel?: string;
-}) {
+export function RefereeLayout({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+  const user = auth.current();
+
+  const signOut = () => {
+    auth.logout();
+    navigate({ to: "/login" });
+  };
 
   return (
     <div className="min-h-screen bg-surface">
@@ -49,36 +32,27 @@ export function DashboardLayout({
             </span>
             <span className="leading-tight">
               <span className="block text-sm font-bold text-foreground">Drone Soccer</span>
-              <span className="block text-xs text-muted-foreground">League Control</span>
+              <span className="block text-xs text-muted-foreground">Referee Console</span>
             </span>
           </Link>
           <nav className="flex-1 space-y-1 p-3">
             {nav.map((item) => {
               const active = pathname === item.to;
               const classes = cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                 active
                   ? "bg-accent text-primary"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               );
-              const inner = (
-                <>
+              return (
+                <Link key={item.label} to={item.to} className={classes}>
                   <item.icon className="size-[18px]" strokeWidth={1.8} />
                   {item.label}
-                </>
-              );
-              return item.to ? (
-                <Link key={item.label} to={item.to} className={classes}>
-                  {inner}
                 </Link>
-              ) : (
-                <span key={item.label} className={cn(classes, "cursor-default opacity-70")}>
-                  {inner}
-                </span>
               );
             })}
           </nav>
-          <div className="p-3">
+          <div className="space-y-1 p-3">
             <Link
               to="/scoreboard"
               target="_blank"
@@ -87,6 +61,13 @@ export function DashboardLayout({
               <Monitor className="size-[18px]" strokeWidth={1.8} />
               Open scoreboard
             </Link>
+            <button
+              onClick={signOut}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="size-[18px]" strokeWidth={1.8} />
+              Sign out
+            </button>
           </div>
         </aside>
 
@@ -99,9 +80,16 @@ export function DashboardLayout({
               <span className="text-sm font-bold">Drone Soccer</span>
             </Link>
             <div className="hidden lg:block" />
-            <span className="rounded-md border border-accent-border bg-accent px-3 py-1 text-xs font-medium text-primary">
-              {roleLabel}
-            </span>
+            <div className="flex items-center gap-3">
+              {user?.name && (
+                <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
+                  {user.name}
+                </span>
+              )}
+              <span className="rounded-md border border-accent-border bg-accent px-3 py-1 text-xs font-medium text-primary">
+                Referee
+              </span>
+            </div>
           </header>
           <main className="flex-1 px-6 py-8">
             <div className="mx-auto w-full max-w-6xl">{children}</div>
