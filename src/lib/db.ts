@@ -30,7 +30,7 @@ function toMillis(value: unknown): number | undefined {
 
 export function normalize<T>(id: string, data: DocumentData): T {
   const out: DocumentData = { ...data, id };
-  for (const key of ["createdAt", "updatedAt", "scheduledAt", "startDate", "endDate"]) {
+  for (const key of ["createdAt", "updatedAt", "scheduledAt", "startDate", "endDate", "dateOfBirth", "removedAt"]) {
     if (key in out) out[key] = toMillis(out[key]) ?? out[key] ?? null;
   }
   return out as T;

@@ -46,9 +46,12 @@ export interface Player {
   position: PlayerPosition;
   droneId?: string | null;
   userId?: string | null;
+  studentId?: string | null;
+  dateOfBirth?: number | null;
   active: boolean;
   createdAt?: number;
   updatedAt?: number;
+  removedAt?: number | null;
 }
 
 export const MATCH_STATUSES = ["scheduled", "live", "completed", "cancelled"] as const;

@@ -35,7 +35,7 @@ import {
 } from "@/components/ui/table";
 import { useCollectionData, useFiltered } from "@/lib/hooks";
 import { COL } from "@/lib/collections";
-import { createDocument, deleteDocument, updateDocument, writeAudit } from "@/lib/db";
+import { createDocument, updateDocument, writeAudit } from "@/lib/db";
 import { PLAYER_POSITIONS, type Player, type PlayerPosition, type Team } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import { firebaseErrorMessage } from "@/lib/format";
@@ -65,6 +65,8 @@ const schema = z.object({
   jerseyNumber: z.coerce.number().int().min(0).max(99),
   position: z.enum(PLAYER_POSITIONS),
   droneId: z.string().trim().max(40).optional(),
+  studentId: z.string().trim().max(40).optional(),
+  dateOfBirth: z.string().optional(),
 });
 
 type FormState = {
@@ -73,6 +75,8 @@ type FormState = {
   jerseyNumber: string;
   position: PlayerPosition;
   droneId: string;
+  studentId: string;
+  dateOfBirth: string;
   active: boolean;
 };
 
@@ -82,6 +86,8 @@ const EMPTY: FormState = {
   jerseyNumber: "1",
   position: "striker",
   droneId: "",
+  studentId: "",
+  dateOfBirth: "",
   active: true,
 };
 
@@ -136,6 +142,8 @@ function PlayersPage() {
       jerseyNumber: String(p.jerseyNumber),
       position: p.position,
       droneId: p.droneId ?? "",
+      studentId: p.studentId ?? "",
+      dateOfBirth: p.dateOfBirth ? new Date(p.dateOfBirth).toISOString().slice(0, 10) : "",
       active: p.active,
     });
     setErrors({});
@@ -168,6 +176,8 @@ function PlayersPage() {
       jerseyNumber: parsed.data.jerseyNumber,
       position: parsed.data.position,
       droneId: form.droneId.trim() || null,
+      studentId: form.studentId.trim() || null,
+      dateOfBirth: form.dateOfBirth ? new Date(form.dateOfBirth).getTime() : null,
       active: form.active,
     };
     try {
@@ -303,7 +313,7 @@ function PlayersPage() {
       </div>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>{editing ? "Edit player" : "Add player"}</DialogTitle>
             <DialogDescription>Pilots must have a unique jersey number per team.</DialogDescription>
@@ -371,6 +381,23 @@ function PlayersPage() {
                 onChange={(e) => setForm((f) => ({ ...f, droneId: e.target.value }))}
               />
             </FormRow>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormRow label="Student ID" htmlFor="studentId" hint="Optional school reference">
+                <Input
+                  id="studentId"
+                  value={form.studentId}
+                  onChange={(e) => setForm((f) => ({ ...f, studentId: e.target.value }))}
+                />
+              </FormRow>
+              <FormRow label="Date of birth" htmlFor="dateOfBirth" hint="Optional">
+                <Input
+                  id="dateOfBirth"
+                  type="date"
+                  value={form.dateOfBirth}
+                  onChange={(e) => setForm((f) => ({ ...f, dateOfBirth: e.target.value }))}
+                />
+              </FormRow>
+            </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <p className="text-sm font-medium">Active on roster</p>
               <Switch
@@ -394,21 +421,24 @@ function PlayersPage() {
         open={confirm.open}
         onOpenChange={confirm.setOpen}
         title={`Remove ${confirm.target?.fullName ?? "player"}?`}
-        description="The player is permanently removed from the league roster."
+        description="The player is taken off the active roster. Their match history and stats are kept."
         confirmLabel="Remove player"
         onConfirm={async () => {
           if (!confirm.target) return;
           try {
-            await deleteDocument(COL.players, confirm.target.id);
+            await updateDocument(COL.players, confirm.target.id, {
+              active: false,
+              removedAt: Date.now(),
+            });
             await writeAudit({
               actorId: profile!.id,
               actorEmail: profile!.email,
-              action: "delete",
+              action: "remove",
               entity: "players",
               entityId: confirm.target.id,
               details: confirm.target.fullName,
             });
-            toast.success("Player removed");
+            toast.success("Player removed from roster");
           } catch (error) {
             toast.error(firebaseErrorMessage(error));
           }

@@ -14,11 +14,13 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
+import { Route as ScoreboardRouteImport } from './routes/scoreboard'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AuthenticatedAnnouncementsRouteImport } from './routes/_authenticated/announcements'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedNotificationsRouteImport } from './routes/_authenticated/notifications'
 import { Route as AuthenticatedPlayersRouteImport } from './routes/_authenticated/players'
+import { Route as AuthenticatedTeamSetupRouteImport } from './routes/_authenticated/team-setup'
 import { Route as AuthenticatedMatchesIndexRouteImport } from './routes/_authenticated/matches.index'
 import { Route as AuthenticatedMatchesMatchIdRouteImport } from './routes/_authenticated/matches.$matchId'
 import { Route as AuthenticatedTeamsIndexRouteImport } from './routes/_authenticated/teams.index'
@@ -50,6 +52,11 @@ const RegisterRoute = RegisterRouteImport.update({
   path: '/register',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScoreboardRoute = ScoreboardRouteImport.update({
+  id: '/scoreboard',
+  path: '/scoreboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
   path: '/verify-email',
@@ -75,6 +82,11 @@ const AuthenticatedNotificationsRoute =
 const AuthenticatedPlayersRoute = AuthenticatedPlayersRouteImport.update({
   id: '/players',
   path: '/players',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedTeamSetupRoute = AuthenticatedTeamSetupRouteImport.update({
+  id: '/team-setup',
+  path: '/team-setup',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
 const AuthenticatedMatchesIndexRoute =
@@ -118,11 +130,13 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/scoreboard': typeof ScoreboardRoute
   '/verify-email': typeof VerifyEmailRoute
   '/announcements': typeof AuthenticatedAnnouncementsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/players': typeof AuthenticatedPlayersRoute
+  '/team-setup': typeof AuthenticatedTeamSetupRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/teams/$teamId': typeof AuthenticatedTeamsTeamIdRoute
   '/tournaments/$tournamentId': typeof AuthenticatedTournamentsTournamentIdRoute
@@ -135,11 +149,13 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/scoreboard': typeof ScoreboardRoute
   '/verify-email': typeof VerifyEmailRoute
   '/announcements': typeof AuthenticatedAnnouncementsRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/notifications': typeof AuthenticatedNotificationsRoute
   '/players': typeof AuthenticatedPlayersRoute
+  '/team-setup': typeof AuthenticatedTeamSetupRoute
   '/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/teams/$teamId': typeof AuthenticatedTeamsTeamIdRoute
   '/tournaments/$tournamentId': typeof AuthenticatedTournamentsTournamentIdRoute
@@ -154,11 +170,13 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
+  '/scoreboard': typeof ScoreboardRoute
   '/verify-email': typeof VerifyEmailRoute
   '/_authenticated/announcements': typeof AuthenticatedAnnouncementsRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/notifications': typeof AuthenticatedNotificationsRoute
   '/_authenticated/players': typeof AuthenticatedPlayersRoute
+  '/_authenticated/team-setup': typeof AuthenticatedTeamSetupRoute
   '/_authenticated/matches/$matchId': typeof AuthenticatedMatchesMatchIdRoute
   '/_authenticated/teams/$teamId': typeof AuthenticatedTeamsTeamIdRoute
   '/_authenticated/tournaments/$tournamentId': typeof AuthenticatedTournamentsTournamentIdRoute
@@ -173,11 +191,13 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/scoreboard'
     | '/verify-email'
     | '/announcements'
     | '/dashboard'
     | '/notifications'
     | '/players'
+    | '/team-setup'
     | '/matches/$matchId'
     | '/teams/$teamId'
     | '/tournaments/$tournamentId'
@@ -190,11 +210,13 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/scoreboard'
     | '/verify-email'
     | '/announcements'
     | '/dashboard'
     | '/notifications'
     | '/players'
+    | '/team-setup'
     | '/matches/$matchId'
     | '/teams/$teamId'
     | '/tournaments/$tournamentId'
@@ -208,11 +230,13 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/register'
+    | '/scoreboard'
     | '/verify-email'
     | '/_authenticated/announcements'
     | '/_authenticated/dashboard'
     | '/_authenticated/notifications'
     | '/_authenticated/players'
+    | '/_authenticated/team-setup'
     | '/_authenticated/matches/$matchId'
     | '/_authenticated/teams/$teamId'
     | '/_authenticated/tournaments/$tournamentId'
@@ -227,6 +251,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   RegisterRoute: typeof RegisterRoute
+  ScoreboardRoute: typeof ScoreboardRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
 }
 
@@ -267,6 +292,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RegisterRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scoreboard': {
+      id: '/scoreboard'
+      path: '/scoreboard'
+      fullPath: '/scoreboard'
+      preLoaderRoute: typeof ScoreboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/verify-email': {
       id: '/verify-email'
       path: '/verify-email'
@@ -300,6 +332,13 @@ declare module '@tanstack/react-router' {
       path: '/players'
       fullPath: '/players'
       preLoaderRoute: typeof AuthenticatedPlayersRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/team-setup': {
+      id: '/_authenticated/team-setup'
+      path: '/team-setup'
+      fullPath: '/team-setup'
+      preLoaderRoute: typeof AuthenticatedTeamSetupRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/matches/': {
@@ -352,6 +391,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedNotificationsRoute: typeof AuthenticatedNotificationsRoute
   AuthenticatedPlayersRoute: typeof AuthenticatedPlayersRoute
+  AuthenticatedTeamSetupRoute: typeof AuthenticatedTeamSetupRoute
   AuthenticatedMatchesMatchIdRoute: typeof AuthenticatedMatchesMatchIdRoute
   AuthenticatedTeamsTeamIdRoute: typeof AuthenticatedTeamsTeamIdRoute
   AuthenticatedTournamentsTournamentIdRoute: typeof AuthenticatedTournamentsTournamentIdRoute
@@ -365,6 +405,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedNotificationsRoute: AuthenticatedNotificationsRoute,
   AuthenticatedPlayersRoute: AuthenticatedPlayersRoute,
+  AuthenticatedTeamSetupRoute: AuthenticatedTeamSetupRoute,
   AuthenticatedMatchesMatchIdRoute: AuthenticatedMatchesMatchIdRoute,
   AuthenticatedTeamsTeamIdRoute: AuthenticatedTeamsTeamIdRoute,
   AuthenticatedTournamentsTournamentIdRoute:
@@ -383,6 +424,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   RegisterRoute: RegisterRoute,
+  ScoreboardRoute: ScoreboardRoute,
   VerifyEmailRoute: VerifyEmailRoute,
 }
 export const routeTree = rootRouteImport
