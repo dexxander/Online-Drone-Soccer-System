@@ -14,9 +14,9 @@ import {
 import type { ReactNode } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
-import { auth } from "@/lib/store";
+import { auth, initialState } from "@/lib/store";
 import { cn } from "@/lib/utils";
-import type { MatchEventType, PenaltyType } from "@/lib/types";
+import type { Match, MatchEventType, PenaltyType } from "@/lib/types";
 
 export const Route = createFileRoute("/referee")({
   head: () => ({
@@ -81,7 +81,8 @@ const coachB = "M. Rossi";
 
 function RefereePage() {
   const { state, emit } = useMockWebSocket();
-  const match = state.match;
+  const match = safeMatch(state.match);
+  const events = Array.isArray(state.events) ? state.events : [];
   const clock = useMatchClock(match.elapsedMs, match.runningSince);
   const live = match.status === "live";
 
@@ -99,7 +100,7 @@ function RefereePage() {
         : 0;
 
   return (
-    <RefereeLayout>
+    <RefereeLayout match={match}>
       <div className="flex h-full flex-col gap-6 xl:flex-row">
         {/* ── Left / Main Column ── */}
         <div className="flex-1 space-y-6">
@@ -250,13 +251,13 @@ function RefereePage() {
             </div>
             {/* Feed List */}
             <div className="hide-scrollbar flex-1 overflow-y-auto p-2">
-              {state.events.length === 0 && (
+              {events.length === 0 && (
                 <p className="px-3 py-6 text-center text-sm text-muted-foreground">
                   No events yet. Start the match to begin recording.
                 </p>
               )}
               <ul className="space-y-1">
-                {state.events.map((evt, idx) => (
+                {events.map((evt, idx) => (
                   <li
                     key={evt.id}
                     className={cn(
@@ -293,6 +294,29 @@ function RefereePage() {
       </div>
     </RefereeLayout>
   );
+}
+
+function safeMatch(value: unknown): Match {
+  const fallback = initialState.match;
+  if (value == null || typeof value !== "object") return fallback;
+  const match = value as Partial<Match>;
+  return {
+    ...fallback,
+    id: typeof match.id === "string" && match.id ? match.id : fallback.id,
+    tournamentName: typeof match.tournamentName === "string" ? match.tournamentName : fallback.tournamentName,
+    teamAName: typeof match.teamAName === "string" ? match.teamAName : fallback.teamAName,
+    teamBName: typeof match.teamBName === "string" ? match.teamBName : fallback.teamBName,
+    scoreA: typeof match.scoreA === "number" && Number.isFinite(match.scoreA) ? match.scoreA : fallback.scoreA,
+    scoreB: typeof match.scoreB === "number" && Number.isFinite(match.scoreB) ? match.scoreB : fallback.scoreB,
+    status:
+      match.status === "scheduled" || match.status === "live" || match.status === "paused" || match.status === "finished"
+        ? match.status
+        : fallback.status,
+    elapsedMs: typeof match.elapsedMs === "number" && Number.isFinite(match.elapsedMs) ? match.elapsedMs : 0,
+    runningSince:
+      typeof match.runningSince === "number" && Number.isFinite(match.runningSince) ? match.runningSince : null,
+    penalties: Array.isArray(match.penalties) ? match.penalties : [],
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════ */

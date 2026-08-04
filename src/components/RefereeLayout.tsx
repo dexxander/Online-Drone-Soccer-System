@@ -2,12 +2,11 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
-import { useAppState } from "@/hooks/useMockWebSocket";
+import type { Match } from "@/lib/types";
 
-export function RefereeLayout({ children }: { children: ReactNode }) {
+export function RefereeLayout({ children, match }: { children: ReactNode; match: Match }) {
   const navigate = useNavigate();
   const user = auth.current();
-  const { match } = useAppState();
 
   const signOut = () => {
     auth.logout();
