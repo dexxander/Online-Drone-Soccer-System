@@ -99,8 +99,8 @@ function RegisterTeamPage() {
       contactPhone: "",
       logoUrl: null,
     });
+  };
 
-    
   return (
     <CoachLayout>
       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -536,5 +536,4 @@ function RosterRow({
       </button>
     </li>
   );
-}
 }
