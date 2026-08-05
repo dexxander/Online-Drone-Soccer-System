@@ -96,9 +96,7 @@ function Landing() {
         <div className="pointer-events-none absolute -right-40 -top-40 size-[560px] rounded-full bg-primary/10 blur-[120px]" />
         <div className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 pb-16 pt-16 lg:grid-cols-[1fr_440px] lg:items-center lg:pt-24">
           <div>
-            <span className="inline-flex items-center gap-2 rounded-full border border-accent-border bg-accent px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-primary">
-              <span className="size-1.5 rounded-full bg-primary shadow-[0_0_8px_2px_var(--color-primary)]" />
-              League control · Season 4
+            <span>
             </span>
 
             <h1 className="mt-6 text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-6xl lg:text-[64px]">
