@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { store, initialState } from "@/lib/store";
 import type { AppState } from "@/lib/types";
 
@@ -13,11 +13,13 @@ import type { AppState } from "@/lib/types";
  *   emit("updateMatch", (s) => s.adjustScore("A", 1));
  */
 export function useMockWebSocket() {
-  const state = useSyncExternalStore<AppState>(
-    (cb) => store.subscribe(cb),
-    () => store.getState(),
-    () => initialState,
-  );
+  // `store` is a module-level singleton, so this subscribe function is stable
+  // across renders — without useCallback, a fresh closure here forces
+  // useSyncExternalStore to unsubscribe/resubscribe from the store on every
+  // single render, which compounds badly on any page that re-renders often
+  // (e.g. once per clock tick).
+  const subscribe = useCallback((cb: () => void) => store.subscribe(cb), []);
+  const state = useSyncExternalStore<AppState>(subscribe, () => store.getState(), () => initialState);
 
   const emit = (_event: string, action: (s: typeof store) => void) => {
     action(store);
@@ -30,18 +32,27 @@ export function useAppState(): AppState {
   return useMockWebSocket().state;
 }
 
-/** Live elapsed match time in ms, ticking locally from the shared clock. */
+/**
+ * Live elapsed match time in ms, ticking locally from the shared clock.
+ *
+ * This is intentionally a plain useState/useEffect tick, not
+ * useSyncExternalStore: useSyncExternalStore requires getSnapshot to return
+ * an identical value between actual store notifications, but "current wall
+ * clock time" changes on every call by definition — using it here violated
+ * that contract and caused an ever-worsening render loop the longer a match
+ * stayed live.
+ */
 export function useMatchClock(elapsedMs: number, runningSince: number | null) {
-  const subscribe = (cb: () => void) => {
-    if (!runningSince) return () => {};
-    const id = setInterval(cb, 250);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!runningSince) return;
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 250);
     return () => clearInterval(id);
-  };
-  return useSyncExternalStore(
-    subscribe,
-    () => elapsedMs + (runningSince ? Date.now() - runningSince : 0),
-    () => elapsedMs,
-  );
+  }, [runningSince]);
+
+  return runningSince ? elapsedMs + (now - runningSince) : elapsedMs;
 }
 
 export function formatClock(ms: number) {

@@ -1,19 +1,10 @@
-import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { Swords, Monitor, LogOut } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import type { Match } from "@/lib/types";
 
-type NavItem = {
-  label: string;
-  to: "/referee";
-  icon: typeof Swords;
-};
-
-const nav: NavItem[] = [{ label: "Match control", to: "/referee", icon: Swords }];
-
-export function RefereeLayout({ children }: { children: ReactNode }) {
-  const pathname = useRouterState({ select: (s) => s.location.pathname });
+export function RefereeLayout({ children, match }: { children: ReactNode; match: Match }) {
   const navigate = useNavigate();
   const user = auth.current();
 
@@ -23,79 +14,51 @@ export function RefereeLayout({ children }: { children: ReactNode }) {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-background lg:flex">
-          <Link to="/" className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-              DS
-            </span>
-            <span className="leading-tight">
-              <span className="block text-sm font-bold text-foreground">Drone Soccer</span>
-              <span className="block text-xs text-muted-foreground">Referee Console</span>
-            </span>
+    <div className="flex h-screen min-h-screen flex-col bg-surface">
+      {/* ── Top App Bar ── */}
+      <header className="z-40 flex h-20 w-full shrink-0 items-center justify-between border-b border-border bg-background px-6 lg:px-12">
+        {/* Left: Logo + Title + Match Badge */}
+        <div className="flex items-center gap-4">
+          <Link
+            to="/"
+            className="mr-2 flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
+          >
+            DS
           </Link>
-          <nav className="flex-1 space-y-1 p-3">
-            {nav.map((item) => {
-              const active = pathname === item.to;
-              const classes = cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-accent text-primary"
-                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
-              );
-              return (
-                <Link key={item.label} to={item.to} className={classes}>
-                  <item.icon className="size-[18px]" strokeWidth={1.8} />
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="space-y-1 p-3">
-            <Link
-              to="/scoreboard"
-              target="_blank"
-              className="flex items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <Monitor className="size-[18px]" strokeWidth={1.8} />
-              Open scoreboard
-            </Link>
-            <button
-              onClick={signOut}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <LogOut className="size-[18px]" strokeWidth={1.8} />
-              Sign out
-            </button>
-          </div>
-        </aside>
+          <h1 className="hidden text-2xl font-bold tracking-tight text-foreground lg:block">
+            {match.tournamentName}
+          </h1>
+          <h1 className="text-xl font-bold tracking-tight text-foreground lg:hidden">
+            NDSC
+          </h1>
+          <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
+            Quarter-Finals &gt; Match {match.id.split("-").pop()}
+          </span>
+        </div>
 
-        <div className="flex min-w-0 flex-1 flex-col">
-          <header className="flex h-[61px] items-center justify-between border-b border-border bg-background px-6">
-            <Link to="/" className="flex items-center gap-2 lg:hidden">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-                DS
-              </span>
-              <span className="text-sm font-bold">Drone Soccer</span>
-            </Link>
-            <div className="hidden lg:block" />
-            <div className="flex items-center gap-3">
-              {user?.name && (
-                <span className="hidden text-sm font-medium text-muted-foreground sm:inline">
-                  {user.name}
-                </span>
-              )}
-              <span className="rounded-md border border-accent-border bg-accent px-3 py-1 text-xs font-medium text-primary">
-                Referee
+        {/* Right: User + Role */}
+        <div className="flex items-center gap-4">
+          {user?.name && (
+            <div className="hidden items-center gap-2 rounded-lg border border-border bg-muted px-3 py-1.5 md:flex">
+              <span className="size-2 rounded-full bg-primary" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
+                {user.name}
               </span>
             </div>
-          </header>
-          <main className="flex-1 px-6 py-8">
-            <div className="mx-auto w-full max-w-6xl">{children}</div>
-          </main>
+          )}
+          <div className="hidden items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-1.5 text-destructive sm:flex">
+            <ShieldCheck className="size-4" strokeWidth={2} />
+            <span className="text-[11px] font-bold uppercase tracking-wider">
+              Referee
+            </span>
+          </div>
         </div>
-      </div>
+      </header>
+
+      {/* ── Dashboard Canvas ── */}
+      <main className="flex-1 overflow-y-auto bg-surface p-4 lg:p-6">
+        <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+      </main>
     </div>
   );
 }
