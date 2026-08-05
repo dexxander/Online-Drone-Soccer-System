@@ -231,36 +231,7 @@ function LiveTicker() {
   );
 }
 
-/* ── Reads a resolved color from the app's CSS custom properties so the
-   Three.js materials below stay in sync with the design tokens, instead of
-   hardcoding hex values that would drift from the theme. ── */
-function readCssColor(varName: string, fallback: string): string {
-  if (typeof window === "undefined") return fallback;
-  const probe = document.createElement("div");
-  probe.style.color = `var(${varName})`;
-  probe.style.display = "none";
-  document.body.appendChild(probe);
-  const resolved = getComputedStyle(probe).color;
-  document.body.removeChild(probe);
-  return resolved || fallback;
-}
 
-/* ── Builds four color variants from the app's own primary token (hue-shifted
-   in HSL space) rather than hardcoding an unrelated palette, so the drones
-   that cycle through the hero stay visually part of the same design system. ── */
-function buildPaletteFromPrimary(primaryCss: string): [THREE.Color, THREE.Color, THREE.Color, THREE.Color] {
-  const base = new THREE.Color(primaryCss);
-  const hsl = { h: 0, s: 0, l: 0 };
-  base.getHSL(hsl);
-  const variant = (offset: number, lift: number) => {
-    const c = new THREE.Color();
-    c.setHSL((hsl.h + offset) % 1, hsl.s, Math.min(hsl.l + lift, 0.65));
-    return c;
-  };
-  // Fixed-length tuple (not a plain array) so destructuring stays fully typed
-  // under this project's noUncheckedIndexedAccess setting.
-  return [variant(0, 0), variant(1 / 3, 0.05), variant(2 / 3, 0.05), variant(0.5, 0.05)];
-}
 
 interface DroneConfig {
   armCount: number;
@@ -292,7 +263,7 @@ function createDrone(config: DroneConfig): BuiltDrone {
   const primaryMaterial = new THREE.MeshPhongMaterial({
     color: config.primaryColor,
     emissive: config.primaryColor,
-    emissiveIntensity: 0.3,
+    emissiveIntensity: 0.55,
     shininess: 100,
   });
   materials.push(frameMaterial, primaryMaterial);
@@ -360,6 +331,12 @@ function createDrone(config: DroneConfig): BuiltDrone {
     ior: 1.5,
     side: THREE.DoubleSide,
     thickness: 0.5,
+    // Without an environment map, pure transmission renders almost
+    // colorless glass — attenuationColor tints light as it passes through
+    // the material itself, which is what actually makes the cage read as
+    // "colored glass" rather than clear plastic.
+    attenuationColor: config.primaryColor,
+    attenuationDistance: 0.6,
   });
   materials.push(glassMaterial);
   droneGroup.add(new THREE.Mesh(cageGeo, glassMaterial));
@@ -402,15 +379,15 @@ function CagedDrone() {
     const container = containerRef.current;
     if (!container) return;
 
-    const [huePrimary, hueA, hueB, hueC] = buildPaletteFromPrimary(readCssColor("--color-primary", "#4f46e5"));
-    const frameColor = new THREE.Color(readCssColor("--color-foreground", "#1a1a2e"));
-    const fogColor = new THREE.Color(readCssColor("--color-surface", "#ffffff"));
-
+    // Literal palette matching the reference build exactly (teal / red /
+    // orange / purple), rather than colors derived from the app's theme —
+    // each rig also keeps its own frame tone from the source.
     const droneConfigs: DroneConfig[] = [
       {
+        // Aero Classic
         armCount: 4,
-        primaryColor: huePrimary,
-        frameColor,
+        primaryColor: new THREE.Color(0x0099a4),
+        frameColor: new THREE.Color(0x222222),
         cageSize: 2.5,
         glassRoughness: 0.1,
         glassTransmission: 0.9,
@@ -420,9 +397,10 @@ function CagedDrone() {
         propSize: 1.2,
       },
       {
+        // Speedster RX
         armCount: 4,
-        primaryColor: hueA,
-        frameColor,
+        primaryColor: new THREE.Color(0xff3333),
+        frameColor: new THREE.Color(0x111111),
         cageSize: 2.2,
         glassRoughness: 0.4,
         glassTransmission: 0.8,
@@ -432,52 +410,62 @@ function CagedDrone() {
         propSize: 1,
       },
       {
+        // Goliath Lifter
         armCount: 6,
-        primaryColor: hueB,
-        frameColor,
-        cageSize: 2.6,
+        primaryColor: new THREE.Color(0xffaa00),
+        frameColor: new THREE.Color(0x333333),
+        cageSize: 3.2,
         glassRoughness: 0.2,
         glassTransmission: 0.85,
         coreType: "box-wide",
         ringCount: 2,
-        armLength: 2.1,
-        propSize: 1.3,
+        armLength: 2.4,
+        propSize: 1.4,
       },
       {
+        // Night Owl Stealth
         armCount: 8,
-        primaryColor: hueC,
-        frameColor,
-        cageSize: 2.5,
+        primaryColor: new THREE.Color(0xaa33ff),
+        frameColor: new THREE.Color(0x050505),
+        cageSize: 3,
         glassRoughness: 0.05,
         glassTransmission: 0.95,
         coreType: "sphere",
         ringCount: 3,
-        armLength: 2.3,
+        armLength: 2.8,
         propSize: 0.9,
       },
     ];
+    const firstPrimary = droneConfigs[0]?.primaryColor ?? new THREE.Color(0x0099a4);
 
     const width = container.clientWidth || 1;
     const height = container.clientHeight || 1;
 
+    // Deliberately no scene.fog here: the original snippet used it to blend
+    // toward a near-black full-screen background, but on this page's light
+    // `bg-surface` a fog-to-white pass desaturates the whole drone before it
+    // ever reaches camera-near — visible color disappears almost entirely.
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(fogColor.getHex(), 5, 20);
 
+    // Pulled back and widened slightly versus the source (z: 6) since the
+    // largest rig here (Goliath Lifter, cageSize 3.2) needs more headroom in
+    // this fixed 460px hero box than it did in the original's full viewport.
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 1000);
-    camera.position.set(0, 1.4, 7.5);
+    camera.position.set(0, 1.6, 8.5);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
     container.appendChild(renderer.domElement);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     const directLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directLight.position.set(5, 10, 5);
     scene.add(directLight);
-    const pointLight = new THREE.PointLight(huePrimary, 3, 15);
+    const pointLight = new THREE.PointLight(firstPrimary, 3, 15);
     pointLight.position.set(-2, 3, 2);
     scene.add(pointLight);
 
@@ -499,7 +487,7 @@ function CagedDrone() {
     let frameId = 0;
     const mouse = { x: 0, y: 0 };
     const targetTilt = { x: 0, z: 0 };
-    const targetLightColor = allDrones[0]?.config.primaryColor.clone() ?? huePrimary.clone();
+    const targetLightColor = allDrones[0]?.config.primaryColor.clone() ?? firstPrimary.clone();
 
     const handlePointerMove = (e: PointerEvent) => {
       const rect = container.getBoundingClientRect();

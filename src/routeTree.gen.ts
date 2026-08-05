@@ -18,7 +18,6 @@ import { Route as RefereeRouteImport } from './routes/referee'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RegisterTeamRouteImport } from './routes/register-team'
 import { Route as ScoreboardRouteImport } from './routes/scoreboard'
-import { Route as AuthenticatedTeamSetupRouteImport } from './routes/_authenticated/team-setup'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -65,11 +64,6 @@ const ScoreboardRoute = ScoreboardRouteImport.update({
   path: '/scoreboard',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedTeamSetupRoute = AuthenticatedTeamSetupRouteImport.update({
-  id: '/_authenticated/team-setup',
-  path: '/team-setup',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -81,7 +75,6 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
-  '/team-setup': typeof AuthenticatedTeamSetupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -93,7 +86,6 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
-  '/team-setup': typeof AuthenticatedTeamSetupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -106,7 +98,6 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
-  '/_authenticated/team-setup': typeof AuthenticatedTeamSetupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -120,7 +111,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
-    | '/team-setup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -132,7 +122,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
-    | '/team-setup'
   id:
     | '__root__'
     | '/'
@@ -144,7 +133,6 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
-    | '/_authenticated/team-setup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -157,7 +145,6 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   RegisterTeamRoute: typeof RegisterTeamRoute
   ScoreboardRoute: typeof ScoreboardRoute
-  AuthenticatedTeamSetupRoute: typeof AuthenticatedTeamSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -225,13 +212,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScoreboardRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/team-setup': {
-      id: '/_authenticated/team-setup'
-      path: '/team-setup'
-      fullPath: '/team-setup'
-      preLoaderRoute: typeof AuthenticatedTeamSetupRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -245,7 +225,6 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   RegisterTeamRoute: RegisterTeamRoute,
   ScoreboardRoute: ScoreboardRoute,
-  AuthenticatedTeamSetupRoute: AuthenticatedTeamSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
