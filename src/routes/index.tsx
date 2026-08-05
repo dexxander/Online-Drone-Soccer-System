@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users, ShieldCheck, Gauge, Radio, ArrowRight } from "lucide-react";
+import { useEffect, useRef } from "react";
+import * as THREE from "three";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 
 export const Route = createFileRoute("/")({
@@ -229,108 +231,174 @@ function LiveTicker() {
   );
 }
 
-/* ── Signature hero graphic: a high-fidelity caged drone-soccer ball,
-   drawn from the app's existing theme tokens. ── */
+/* ── Reads a resolved color from the app's CSS custom properties so the
+   Three.js materials below stay in sync with the design tokens, instead of
+   hardcoding hex values that would drift from the theme. ── */
+function readCssColor(varName: string, fallback: string): string {
+  if (typeof window === "undefined") return fallback;
+  const probe = document.createElement("div");
+  probe.style.color = `var(${varName})`;
+  probe.style.display = "none";
+  document.body.appendChild(probe);
+  const resolved = getComputedStyle(probe).color;
+  document.body.removeChild(probe);
+  return resolved || fallback;
+}
+
+/* ── Signature hero graphic: a real 3D caged drone-soccer ball rendered
+   with Three.js — geodesic cage, spinning rotor arms, mouse-reactive tilt.
+   Colors are pulled from the app's theme tokens at mount time. ── */
 function CagedDrone() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const primaryColor = new THREE.Color(readCssColor("--color-primary", "#4f46e5"));
+    const frameColor = new THREE.Color(readCssColor("--color-foreground", "#1a1a2e"));
+
+    const width = container.clientWidth || 1;
+    const height = container.clientHeight || 1;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+    camera.position.z = 6;
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+    const directLight = new THREE.DirectionalLight(0xffffff, 1);
+    directLight.position.set(5, 5, 5);
+    scene.add(directLight);
+    const pointLight = new THREE.PointLight(primaryColor, 2, 15);
+    pointLight.position.set(-2, 3, 2);
+    scene.add(pointLight);
+
+    const droneGroup = new THREE.Group();
+    scene.add(droneGroup);
+
+    const frameMaterial = new THREE.MeshPhongMaterial({ color: frameColor, specular: 0x666666, shininess: 100 });
+    const primaryMaterial = new THREE.MeshPhongMaterial({
+      color: primaryColor,
+      emissive: primaryColor.clone().multiplyScalar(0.15),
+      shininess: 100,
+    });
+    const cageMaterial = new THREE.MeshPhongMaterial({
+      color: primaryColor,
+      transparent: true,
+      opacity: 0.15,
+      wireframe: true,
+    });
+
+    // Central flight-controller core
+    const coreGeometry = new THREE.BoxGeometry(0.8, 0.4, 0.8);
+    const core = new THREE.Mesh(coreGeometry, frameMaterial);
+    droneGroup.add(core);
+
+    const coreDetailGeo = new THREE.BoxGeometry(0.4, 0.1, 0.4);
+    const coreDetail = new THREE.Mesh(coreDetailGeo, primaryMaterial);
+    coreDetail.position.y = 0.25;
+    core.add(coreDetail);
+
+    // Rotor arms + spinning propellers
+    const armGeometry = new THREE.CylinderGeometry(0.04, 0.04, 2, 8);
+    const motorGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.2, 16);
+    const propGeo = new THREE.BoxGeometry(1.2, 0.02, 0.08);
+    const propellers: THREE.Mesh[] = [];
+
+    [45, 135, 225, 315].forEach((deg) => {
+      const rad = (deg * Math.PI) / 180;
+
+      const arm = new THREE.Mesh(armGeometry, frameMaterial);
+      arm.rotation.z = Math.PI / 2;
+      arm.position.set(Math.cos(rad), 0, Math.sin(rad));
+      arm.rotation.y = -rad;
+      droneGroup.add(arm);
+
+      const motorPos = new THREE.Group();
+      motorPos.position.set(Math.cos(rad) * 1.8, 0.1, Math.sin(rad) * 1.8);
+      droneGroup.add(motorPos);
+
+      const motor = new THREE.Mesh(motorGeo, frameMaterial);
+      motorPos.add(motor);
+
+      const prop = new THREE.Mesh(propGeo, primaryMaterial);
+      prop.position.y = 0.15;
+      motorPos.add(prop);
+      propellers.push(prop);
+    });
+
+    // Geodesic protective cage
+    const cageGeo = new THREE.IcosahedronGeometry(2.5, 1);
+    const cage = new THREE.Mesh(cageGeo, cageMaterial);
+    droneGroup.add(cage);
+
+    // Telemetry ring
+    const ringGeo = new THREE.TorusGeometry(2.2, 0.01, 16, 100);
+    const ring = new THREE.Mesh(ringGeo, primaryMaterial);
+    ring.rotation.x = Math.PI / 2;
+    droneGroup.add(ring);
+
+    let time = 0;
+    let frameId = 0;
+    const mouse = { x: 0, y: 0 };
+    const targetTilt = { x: 0, z: 0 };
+
+    // Scoped to the graphic itself, not the whole window, so it doesn't
+    // hijack pointer movement anywhere else on the landing page.
+    const handlePointerMove = (e: PointerEvent) => {
+      const rect = container.getBoundingClientRect();
+      mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      targetTilt.x = mouse.y * 0.25;
+      targetTilt.z = -mouse.x * 0.25;
+    };
+    container.addEventListener("pointermove", handlePointerMove);
+
+    const animate = () => {
+      frameId = requestAnimationFrame(animate);
+      time += 0.01;
+
+      droneGroup.position.y = Math.sin(time * 2) * 0.1;
+      propellers.forEach((p) => (p.rotation.y += 0.3));
+      droneGroup.rotation.x = THREE.MathUtils.lerp(droneGroup.rotation.x, targetTilt.x + Math.sin(time) * 0.05, 0.05);
+      droneGroup.rotation.z = THREE.MathUtils.lerp(droneGroup.rotation.z, targetTilt.z + Math.cos(time) * 0.05, 0.05);
+      droneGroup.rotation.y += 0.004;
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    const resizeObserver = new ResizeObserver(() => {
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      if (!w || !h) return;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+    resizeObserver.observe(container);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      resizeObserver.disconnect();
+      container.removeEventListener("pointermove", handlePointerMove);
+      [coreGeometry, coreDetailGeo, armGeometry, motorGeo, propGeo, cageGeo, ringGeo].forEach((g) => g.dispose());
+      [frameMaterial, primaryMaterial, cageMaterial].forEach((m) => m.dispose());
+      renderer.dispose();
+      if (container.contains(renderer.domElement)) container.removeChild(renderer.domElement);
+    };
+  }, []);
+
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[460px] group">
-      {/* Dynamic Glow - Atmospheric under-glow reacting to drone state */}
-      <div className="pointer-events-none absolute inset-12 rounded-full bg-primary/20 blur-[80px] animate-pulse" />
-
-      <svg
-        viewBox="0 0 400 400"
-        className="relative size-full drop-shadow-2xl"
-        style={{ animation: "ds-hover 4s ease-in-out infinite" }}
-      >
-        <defs>
-          <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
-          </radialGradient>
-          <filter id="neon-glow">
-            <feGaussianBlur stdDeviation="2" result="blur" />
-            <feComposite in="SourceGraphic" in2="blur" operator="over" />
-          </filter>
-        </defs>
-
-        {/* Outer Protective Cage - Geodesic Pattern */}
-        <g fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
-          <circle cx="200" cy="200" r="180" />
-          <circle cx="200" cy="200" r="140" strokeDasharray="8 12" />
-
-          {/* Hexagonal Cage Struts */}
-          <path d="M200 20 L355 110 L355 290 L200 380 L45 290 L45 110 Z" />
-          <path d="M200 20 V380 M45 110 L355 290 M45 290 L355 110" opacity="0.5" />
-
-          {/* Inner Structural Ribs */}
-          <g opacity="0.4">
-            {[0, 60, 120, 180, 240, 300].map((deg) => (
-              <line
-                key={deg}
-                x1="200"
-                y1="200"
-                x2={200 + 180 * Math.cos((deg * Math.PI) / 180)}
-                y2={200 + 180 * Math.sin((deg * Math.PI) / 180)}
-              />
-            ))}
-          </g>
-        </g>
-
-        {/* Rotor Arms & Motors */}
-        <g stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-foreground">
-          {[45, 135, 225, 315].map((deg) => (
-            <g key={deg} transform={`rotate(${deg}, 200, 200)`}>
-              {/* Carbon Fiber Arm */}
-              <line x1="200" y1="200" x2="200" y2="120" strokeWidth="6" className="opacity-80" />
-              <line x1="200" y1="200" x2="200" y2="120" stroke="var(--color-primary)" strokeWidth="1.5" />
-
-              {/* Motor Housing */}
-              <circle cx="200" cy="115" r="12" fill="var(--color-background)" strokeWidth="2" />
-              <circle cx="200" cy="115" r="4" fill="var(--color-primary)" />
-
-              {/* Spinning Propellers */}
-              <g transform="translate(200, 115)">
-                <ellipse rx="45" ry="6" fill="var(--color-primary)" opacity="0.15">
-                  <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.1s" repeatCount="indefinite" />
-                </ellipse>
-                <path d="M-40 0 Q-20 -5 0 0 Q20 5 40 0" stroke="currentColor" strokeWidth="1" opacity="0.6">
-                  <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.1s" repeatCount="indefinite" />
-                </path>
-              </g>
-            </g>
-          ))}
-        </g>
-
-        {/* Central Flight Controller Core */}
-        <g transform="translate(200, 200)">
-          {/* Main Housing */}
-          <rect x="-35" y="-35" width="70" height="70" rx="12" fill="var(--color-background)" stroke="currentColor" strokeWidth="2" />
-
-          {/* Status LEDs & Electronics */}
-          <circle r="22" fill="url(#core-glow)" className="animate-pulse" />
-          <g filter="url(#neon-glow)">
-            <circle r="8" fill="var(--color-primary)" />
-          </g>
-
-          {/* Decorative Technical Detail */}
-          <path d="M-20 -20 H20 M-20 20 H20" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-          <path d="M-20 -20 V20 M20 -20 V20" stroke="currentColor" strokeWidth="1" opacity="0.3" />
-        </g>
-
-        {/* Dynamic Telemetry Ring */}
-        <circle cx="200" cy="200" r="155" fill="none" stroke="var(--color-primary)" strokeWidth="1.5" strokeDasharray="2 10" opacity="0.6">
-          <animateTransform attributeName="transform" type="rotate" from="0 200 200" to="360 200 200" dur="25s" repeatCount="indefinite" />
-        </circle>
-      </svg>
-
-      {/* Animation Definitions */}
-      <style>{`
-        @keyframes ds-hover {
-          0%, 100% { transform: translateY(0px) rotate(0deg); }
-          25% { transform: translateY(-12px) rotate(1deg); }
-          75% { transform: translateY(4px) rotate(-1deg); }
-        }
-      `}</style>
+    <div className="relative mx-auto aspect-square w-full max-w-[460px]">
+      <div className="pointer-events-none absolute inset-12 rounded-full bg-primary/20 blur-[80px]" />
+      <div ref={containerRef} className="relative size-full" />
     </div>
   );
 }
