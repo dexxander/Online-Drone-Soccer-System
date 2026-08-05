@@ -8,6 +8,9 @@ import type {
   PenaltyType,
   Player,
   Team,
+  TeamCategory,
+  Tournament,
+  TournamentMatch,
   UserRole,
 } from "./types";
 
@@ -32,6 +35,9 @@ export interface DataStore {
   removePlayer(id: string): void;
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>): void;
   removeTeam(id: string): void;
+  createTournament(name: string, teamIds: string[], category?: TeamCategory): Tournament;
+  setMatchWinner(tournamentId: string, matchId: string, winnerId: string): void;
+  removeTournament(id: string): void;
   startMatch(): void;
   pauseMatch(): void;
   resumeMatch(): void;
@@ -45,6 +51,63 @@ const STORAGE_KEY = "ds-league-state-v1";
 const CHANNEL = "ds-league-channel";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
+
+function nextPowerOf2(n: number): number {
+  let p = 1;
+  while (p < n) p *= 2;
+  return Math.max(p, 2);
+}
+
+function advanceWinner(matches: TournamentMatch[], match: TournamentMatch) {
+  if (!match.winnerId) return;
+  const nextRound = match.round + 1;
+  const nextSlot = Math.floor(match.slot / 2);
+  const next = matches.find((m) => m.round === nextRound && m.slot === nextSlot);
+  if (!next) return;
+  if (match.slot % 2 === 0) next.teamAId = match.winnerId;
+  else next.teamBId = match.winnerId;
+}
+
+function generateBracket(teamIds: string[]): TournamentMatch[] {
+  const shuffled = [...teamIds].sort(() => Math.random() - 0.5);
+  const size = nextPowerOf2(shuffled.length);
+  const byeCount = size - shuffled.length;
+  const byeTeams = shuffled.slice(0, byeCount);
+  const playingTeams = shuffled.slice(byeCount);
+
+  const matches: TournamentMatch[] = [];
+  let slot = 0;
+  for (const teamId of byeTeams) {
+    matches.push({ id: uid(), round: 1, slot: slot++, teamAId: teamId, teamBId: null, winnerId: teamId, isBye: true });
+  }
+  for (let i = 0; i < playingTeams.length; i += 2) {
+    matches.push({
+      id: uid(),
+      round: 1,
+      slot: slot++,
+      teamAId: playingTeams[i] ?? null,
+      teamBId: playingTeams[i + 1] ?? null,
+      winnerId: null,
+      isBye: false,
+    }); 
+  }
+
+  let roundSize = size / 2;
+  let round = 2;
+  while (roundSize > 1) {
+    const nextSize = roundSize / 2;
+    for (let s = 0; s < nextSize; s++) {
+      matches.push({ id: uid(), round, slot: s, teamAId: null, teamBId: null, winnerId: null, isBye: false });
+    }
+    roundSize = nextSize;
+    round++;
+  }
+
+  for (const m of matches.filter((m) => m.round === 1 && m.isBye)) {
+    advanceWinner(matches, m);
+  }
+  return matches;
+}
 
 const initialMatch: Match = {
   id: "match-001",
@@ -62,6 +125,7 @@ const initialMatch: Match = {
 export const initialState: AppState = {
   teams: [],
   players: [],
+  tournaments: [],
   match: initialMatch,
   events: [],
 };
@@ -191,6 +255,39 @@ class LocalStore implements DataStore {
       teams: this.state.teams.filter((t) => t.id !== id),
       players: this.state.players.filter((p) => p.teamId !== id),
     });
+  }
+
+  createTournament(name: string, teamIds: string[], category?: TeamCategory) {
+    const tournament: Tournament = {
+      id: uid(),
+      name,
+      status: "active",
+      teamIds,
+      matches: generateBracket(teamIds),
+      createdAt: Date.now(),
+      ...(category ? { category } : {}),
+    };
+    this.commit({ ...this.state, tournaments: [tournament, ...this.state.tournaments] });
+    return tournament;
+  }
+
+  setMatchWinner(tournamentId: string, matchId: string, winnerId: string) {
+    const tournaments = this.state.tournaments.map((t) => {
+      if (t.id !== tournamentId) return t;
+      const matches = t.matches.map((m) => ({ ...m }));
+      const match = matches.find((m) => m.id === matchId);
+      if (!match) return t;
+      match.winnerId = winnerId;
+      advanceWinner(matches, match);
+      const finalMatch = matches.reduce((a, b) => (b.round > a.round ? b : a));
+      const status: Tournament["status"] = finalMatch.winnerId ? "completed" : "active";
+      return { ...t, matches, status };
+    });
+    this.commit({ ...this.state, tournaments });
+  }
+
+  removeTournament(id: string) {
+    this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
   }
 
   startMatch() {

@@ -31,9 +31,9 @@ export interface Team {
   coachName: string;
   contactEmail: string;
   contactPhone: string;
+  logoUrl?: string | null;
   status: EntityStatus;
   createdAt: number;
-  /** Auth user id of the coach who submitted this team, when signed in. */
   ownerId?: string;
 }
 
@@ -85,6 +85,29 @@ export interface MatchEvent {
 export interface AppState {
   teams: Team[];
   players: Player[];
+  tournaments: Tournament[];
   match: Match;
   events: MatchEvent[];
+}
+
+export type TournamentStatus = "draft" | "active" | "completed";
+
+export interface TournamentMatch {
+  id: string;
+  round: number;
+  slot: number;
+  teamAId: string | null;
+  teamBId: string | null;
+  winnerId: string | null;
+  isBye: boolean;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  category?: TeamCategory;
+  status: TournamentStatus;
+  teamIds: string[];
+  matches: TournamentMatch[];
+  createdAt: number;
 }

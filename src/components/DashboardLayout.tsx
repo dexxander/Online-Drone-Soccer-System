@@ -17,13 +17,13 @@ import { cn } from "@/lib/utils";
 
 type NavItem = {
   label: string;
-  to?: "/admin" | "/referee" | "/register-team" | "/admin-teams" | "/admin-players";
+  to?: "/admin" | "/referee" | "/register-team" | "/admin-teams" | "/admin-players" | "/admin-tournaments";
   icon: typeof LayoutGrid;
 };
 
 const nav: NavItem[] = [
   { label: "Dashboard", to: "/admin", icon: LayoutGrid },
-  { label: "Tournaments", icon: Trophy },
+  { label: "Tournaments", to: "/admin-tournaments", icon: Trophy },
   { label: "Teams", to: "/admin-teams", icon: Shield },
   { label: "Players", to: "/admin-players", icon: User },
   { label: "Announcements", icon: Megaphone },

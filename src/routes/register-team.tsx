@@ -49,7 +49,16 @@ function RegisterTeamPage() {
     coachName: user?.name ?? "",
     contactEmail: user?.email ?? "",
     contactPhone: "",
+    logoUrl: null as string | null,
   });
+
+  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setTeam((t) => ({ ...t, logoUrl: reader.result as string }));
+    reader.readAsDataURL(file);
+  };
   const [players, setPlayers] = useState<PlayerDraft[]>([emptyPlayer(), emptyPlayer(), emptyPlayer()]);
   const [error, setError] = useState("");
   const [justSubmitted, setJustSubmitted] = useState(false);
@@ -88,10 +97,10 @@ function RegisterTeamPage() {
       coachName: user?.name ?? "",
       contactEmail: user?.email ?? "",
       contactPhone: "",
+      logoUrl: null,
     });
-    setPlayers([emptyPlayer()]);
-  };
 
+    
   return (
     <CoachLayout>
       <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -122,9 +131,18 @@ function RegisterTeamPage() {
                 {myTeams.map((t) => (
                   <li key={t.id} className="px-5 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-bold text-foreground">{t.name}</p>
-                        <p className="text-xs text-muted-foreground">{t.category} division</p>
+                      <div className="flex items-center gap-3">
+                        {t.logoUrl && (
+                          <img
+                            src={t.logoUrl}
+                            alt=""
+                            className="size-9 shrink-0 rounded-md border border-border object-cover"
+                          />
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-foreground">{t.name}</p>
+                          <p className="text-xs text-muted-foreground">{t.category} division</p>
+                        </div>
                       </div>
                       <StatusBadge status={t.status} />
                     </div>
@@ -147,6 +165,28 @@ function RegisterTeamPage() {
       <form onSubmit={submit} className="mt-8 space-y-6">
         <section className="rounded-xl border border-border bg-background p-6 shadow-card">
           <h2 className="text-sm font-bold uppercase tracking-wide">Team details</h2>
+          <div className="mt-5 flex items-center gap-4">
+            {team.logoUrl ? (
+              <img
+                src={team.logoUrl}
+                alt="Team logo preview"
+                className="size-16 shrink-0 rounded-lg border border-border object-cover"
+              />
+            ) : (
+              <div className="flex size-16 shrink-0 items-center justify-center rounded-lg border border-dashed border-border text-[10px] text-muted-foreground">
+                No logo
+              </div>
+            )}
+            <div>
+              <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs font-semibold hover:bg-muted">
+                Upload logo
+                <input type="file" accept="image/*" className="hidden" onChange={handleLogoChange} />
+              </label>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Shown on the live scoreboard once matches are connected.
+              </p>
+            </div>
+          </div>
           <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <Field label="Team name">
               <input
@@ -496,4 +536,5 @@ function RosterRow({
       </button>
     </li>
   );
+}
 }
