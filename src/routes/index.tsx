@@ -330,13 +330,13 @@ function createDrone(config: DroneConfig): BuiltDrone {
     transparent: true,
     ior: 1.5,
     side: THREE.DoubleSide,
-    thickness: 0.5,
+    thickness: 0.2,
     // Without an environment map, pure transmission renders almost
     // colorless glass — attenuationColor tints light as it passes through
     // the material itself, which is what actually makes the cage read as
     // "colored glass" rather than clear plastic.
     attenuationColor: config.primaryColor,
-    attenuationDistance: 0.6,
+    attenuationDistance: 2.2,
   });
   materials.push(glassMaterial);
   droneGroup.add(new THREE.Mesh(cageGeo, glassMaterial));
