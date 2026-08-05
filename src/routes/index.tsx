@@ -229,34 +229,108 @@ function LiveTicker() {
   );
 }
 
-/* ── Signature hero graphic: a stylised caged drone-soccer ball, drawn
-   entirely from the app's existing theme tokens. ── */
+/* ── Signature hero graphic: a high-fidelity caged drone-soccer ball,
+   drawn from the app's existing theme tokens. ── */
 function CagedDrone() {
   return (
-    <div className="relative mx-auto aspect-square w-full max-w-[420px]">
-      <div className="pointer-events-none absolute inset-8 rounded-full bg-primary/15 blur-[70px]" />
-      <svg viewBox="0 0 400 400" className="relative size-full" style={{ animation: "ds-float 6s ease-in-out infinite" }}>
-        <circle cx="200" cy="200" r="170" fill="none" stroke="var(--color-border)" strokeWidth="1.5" />
-        <g stroke="var(--color-primary)" strokeWidth="1" opacity="0.4">
-          <path d="M200 30 L340 130 L290 320 L110 320 L60 130 Z" fill="none" />
-          <path d="M200 30 L200 200 M340 130 L200 200 M290 320 L200 200 M110 320 L200 200 M60 130 L200 200" />
+    <div className="relative mx-auto aspect-square w-full max-w-[460px] group">
+      {/* Dynamic Glow - Atmospheric under-glow reacting to drone state */}
+      <div className="pointer-events-none absolute inset-12 rounded-full bg-primary/20 blur-[80px] animate-pulse" />
+
+      <svg
+        viewBox="0 0 400 400"
+        className="relative size-full drop-shadow-2xl"
+        style={{ animation: "ds-hover 4s ease-in-out infinite" }}
+      >
+        <defs>
+          <radialGradient id="core-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="var(--color-primary)" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="var(--color-primary)" stopOpacity="0" />
+          </radialGradient>
+          <filter id="neon-glow">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+          </filter>
+        </defs>
+
+        {/* Outer Protective Cage - Geodesic Pattern */}
+        <g fill="none" stroke="currentColor" strokeWidth="1.5" className="text-muted-foreground/30">
+          <circle cx="200" cy="200" r="180" />
+          <circle cx="200" cy="200" r="140" strokeDasharray="8 12" />
+
+          {/* Hexagonal Cage Struts */}
+          <path d="M200 20 L355 110 L355 290 L200 380 L45 290 L45 110 Z" />
+          <path d="M200 20 V380 M45 110 L355 290 M45 290 L355 110" opacity="0.5" />
+
+          {/* Inner Structural Ribs */}
+          <g opacity="0.4">
+            {[0, 60, 120, 180, 240, 300].map((deg) => (
+              <line
+                key={deg}
+                x1="200"
+                y1="200"
+                x2={200 + 180 * Math.cos((deg * Math.PI) / 180)}
+                y2={200 + 180 * Math.sin((deg * Math.PI) / 180)}
+              />
+            ))}
+          </g>
         </g>
-        <g transform="translate(200,200)">
-          <circle r="30" fill="var(--color-background)" stroke="var(--color-primary)" strokeWidth="2" />
-          <circle r="6" fill="var(--color-primary)" />
+
+        {/* Rotor Arms & Motors */}
+        <g stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-foreground">
           {[45, 135, 225, 315].map((deg) => (
-            <g key={deg} transform={`rotate(${deg})`}>
-              <line x1="0" y1="0" x2="0" y2="-58" stroke="var(--color-muted-foreground)" strokeWidth="2" />
-              <circle cx="0" cy="-58" r="16" fill="none" stroke="var(--color-warning)" strokeWidth="2" opacity="0.9" />
-              <circle cx="0" cy="-58" r="16" fill="var(--color-warning)" opacity="0.1" />
+            <g key={deg} transform={`rotate(${deg}, 200, 200)`}>
+              {/* Carbon Fiber Arm */}
+              <line x1="200" y1="200" x2="200" y2="120" strokeWidth="6" className="opacity-80" />
+              <line x1="200" y1="200" x2="200" y2="120" stroke="var(--color-primary)" strokeWidth="1.5" />
+
+              {/* Motor Housing */}
+              <circle cx="200" cy="115" r="12" fill="var(--color-background)" strokeWidth="2" />
+              <circle cx="200" cy="115" r="4" fill="var(--color-primary)" />
+
+              {/* Spinning Propellers */}
+              <g transform="translate(200, 115)">
+                <ellipse rx="45" ry="6" fill="var(--color-primary)" opacity="0.15">
+                  <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.1s" repeatCount="indefinite" />
+                </ellipse>
+                <path d="M-40 0 Q-20 -5 0 0 Q20 5 40 0" stroke="currentColor" strokeWidth="1" opacity="0.6">
+                  <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="0.1s" repeatCount="indefinite" />
+                </path>
+              </g>
             </g>
           ))}
         </g>
-        <circle cx="200" cy="200" r="170" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeDasharray="4 10" opacity="0.4">
-          <animateTransform attributeName="transform" type="rotate" from="0 200 200" to="360 200 200" dur="18s" repeatCount="indefinite" />
+
+        {/* Central Flight Controller Core */}
+        <g transform="translate(200, 200)">
+          {/* Main Housing */}
+          <rect x="-35" y="-35" width="70" height="70" rx="12" fill="var(--color-background)" stroke="currentColor" strokeWidth="2" />
+
+          {/* Status LEDs & Electronics */}
+          <circle r="22" fill="url(#core-glow)" className="animate-pulse" />
+          <g filter="url(#neon-glow)">
+            <circle r="8" fill="var(--color-primary)" />
+          </g>
+
+          {/* Decorative Technical Detail */}
+          <path d="M-20 -20 H20 M-20 20 H20" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+          <path d="M-20 -20 V20 M20 -20 V20" stroke="currentColor" strokeWidth="1" opacity="0.3" />
+        </g>
+
+        {/* Dynamic Telemetry Ring */}
+        <circle cx="200" cy="200" r="155" fill="none" stroke="var(--color-primary)" strokeWidth="1.5" strokeDasharray="2 10" opacity="0.6">
+          <animateTransform attributeName="transform" type="rotate" from="0 200 200" to="360 200 200" dur="25s" repeatCount="indefinite" />
         </circle>
       </svg>
-      <style>{`@keyframes ds-float { 0%,100% { transform: translateY(0px); } 50% { transform: translateY(-10px); } }`}</style>
+
+      {/* Animation Definitions */}
+      <style>{`
+        @keyframes ds-hover {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          25% { transform: translateY(-12px) rotate(1deg); }
+          75% { transform: translateY(4px) rotate(-1deg); }
+        }
+      `}</style>
     </div>
   );
 }
