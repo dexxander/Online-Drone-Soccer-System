@@ -11,11 +11,14 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AdminPlayersRouteImport } from './routes/admin-players'
+import { Route as AdminTeamsRouteImport } from './routes/admin-teams'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as RefereeRouteImport } from './routes/referee'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RegisterTeamRouteImport } from './routes/register-team'
 import { Route as ScoreboardRouteImport } from './routes/scoreboard'
+import { Route as AuthenticatedTeamSetupRouteImport } from './routes/_authenticated/team-setup'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -25,6 +28,16 @@ const IndexRoute = IndexRouteImport.update({
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPlayersRoute = AdminPlayersRouteImport.update({
+  id: '/admin-players',
+  path: '/admin-players',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTeamsRoute = AdminTeamsRouteImport.update({
+  id: '/admin-teams',
+  path: '/admin-teams',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -52,73 +65,99 @@ const ScoreboardRoute = ScoreboardRouteImport.update({
   path: '/scoreboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedTeamSetupRoute = AuthenticatedTeamSetupRouteImport.update({
+  id: '/_authenticated/team-setup',
+  path: '/team-setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-players': typeof AdminPlayersRoute
+  '/admin-teams': typeof AdminTeamsRoute
   '/login': typeof LoginRoute
   '/referee': typeof RefereeRoute
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/team-setup': typeof AuthenticatedTeamSetupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-players': typeof AdminPlayersRoute
+  '/admin-teams': typeof AdminTeamsRoute
   '/login': typeof LoginRoute
   '/referee': typeof RefereeRoute
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/team-setup': typeof AuthenticatedTeamSetupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/admin-players': typeof AdminPlayersRoute
+  '/admin-teams': typeof AdminTeamsRoute
   '/login': typeof LoginRoute
   '/referee': typeof RefereeRoute
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/_authenticated/team-setup': typeof AuthenticatedTeamSetupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/admin'
+    | '/admin-players'
+    | '/admin-teams'
     | '/login'
     | '/referee'
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/team-setup'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/admin'
+    | '/admin-players'
+    | '/admin-teams'
     | '/login'
     | '/referee'
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/team-setup'
   id:
     | '__root__'
     | '/'
     | '/admin'
+    | '/admin-players'
+    | '/admin-teams'
     | '/login'
     | '/referee'
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/_authenticated/team-setup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
+  AdminPlayersRoute: typeof AdminPlayersRoute
+  AdminTeamsRoute: typeof AdminTeamsRoute
   LoginRoute: typeof LoginRoute
   RefereeRoute: typeof RefereeRoute
   RegisterRoute: typeof RegisterRoute
   RegisterTeamRoute: typeof RegisterTeamRoute
   ScoreboardRoute: typeof ScoreboardRoute
+  AuthenticatedTeamSetupRoute: typeof AuthenticatedTeamSetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -135,6 +174,20 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-players': {
+      id: '/admin-players'
+      path: '/admin-players'
+      fullPath: '/admin-players'
+      preLoaderRoute: typeof AdminPlayersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-teams': {
+      id: '/admin-teams'
+      path: '/admin-teams'
+      fullPath: '/admin-teams'
+      preLoaderRoute: typeof AdminTeamsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -172,17 +225,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScoreboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/team-setup': {
+      id: '/_authenticated/team-setup'
+      path: '/team-setup'
+      fullPath: '/team-setup'
+      preLoaderRoute: typeof AuthenticatedTeamSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
+  AdminPlayersRoute: AdminPlayersRoute,
+  AdminTeamsRoute: AdminTeamsRoute,
   LoginRoute: LoginRoute,
   RefereeRoute: RefereeRoute,
   RegisterRoute: RegisterRoute,
   RegisterTeamRoute: RegisterTeamRoute,
   ScoreboardRoute: ScoreboardRoute,
+  AuthenticatedTeamSetupRoute: AuthenticatedTeamSetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

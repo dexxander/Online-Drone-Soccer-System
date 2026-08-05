@@ -1,4 +1,4 @@
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   LayoutGrid,
   Trophy,
@@ -9,21 +9,23 @@ import {
   Users,
   ScrollText,
   Monitor,
+  LogOut,
 } from "lucide-react";
 import type { ReactNode } from "react";
+import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
   label: string;
-  to?: "/admin" | "/referee" | "/register-team";
+  to?: "/admin" | "/referee" | "/register-team" | "/admin-teams" | "/admin-players";
   icon: typeof LayoutGrid;
 };
 
 const nav: NavItem[] = [
   { label: "Dashboard", to: "/admin", icon: LayoutGrid },
   { label: "Tournaments", icon: Trophy },
-  { label: "Teams", to: "/register-team", icon: Shield },
-  { label: "Players", icon: User },
+  { label: "Teams", to: "/admin-teams", icon: Shield },
+  { label: "Players", to: "/admin-players", icon: User },
   { label: "Announcements", icon: Megaphone },
   { label: "Notifications", icon: Bell },
   { label: "Users", icon: Users },
@@ -38,6 +40,12 @@ export function DashboardLayout({
   roleLabel?: string;
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const navigate = useNavigate();
+
+  const signOut = () => {
+    auth.logout();
+    navigate({ to: "/login" });
+  };
 
   return (
     <div className="min-h-screen bg-surface">
@@ -78,7 +86,7 @@ export function DashboardLayout({
               );
             })}
           </nav>
-          <div className="p-3">
+          <div className="space-y-1 p-3">
             <Link
               to="/scoreboard"
               target="_blank"
@@ -87,6 +95,13 @@ export function DashboardLayout({
               <Monitor className="size-[18px]" strokeWidth={1.8} />
               Open scoreboard
             </Link>
+            <button
+              onClick={signOut}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <LogOut className="size-[18px]" strokeWidth={1.8} />
+              Sign out
+            </button>
           </div>
         </aside>
 

@@ -1,7 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { Shield, User, Trophy, Swords, Check, X } from "lucide-react";
+import { createFileRoute } from '@tanstack/react-router';
+import { Shield, User, Trophy, Swords } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { EmptyState, Panel, StatCard, StatusBadge } from "@/components/ui-kit";
+import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
+import { TeamRow } from "@/components/admin/TeamRow";
+import { PlayerRow } from "@/components/admin/PlayerRow";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { auth } from "@/lib/store";
 
@@ -67,14 +69,7 @@ function AdminPage() {
       </div>
 
       <div className="mt-6 space-y-6">
-        <Panel
-          title="Registered teams"
-          action={
-            <Link to="/register-team" className="text-xs font-semibold text-primary hover:underline">
-              New registration
-            </Link>
-          }
-        >
+        <Panel title="Registered teams">
           {teams.length === 0 ? (
             <EmptyState
               title="No teams registered"
@@ -96,24 +91,7 @@ function AdminPage() {
                 </thead>
                 <tbody>
                   {teams.map((t) => (
-                    <tr key={t.id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3 font-semibold text-foreground">{t.name}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{t.category}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{t.coachName}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{t.contactEmail}</td>
-                      <td className="px-5 py-3 tabular-nums text-muted-foreground">
-                        {players.filter((p) => p.teamId === t.id).length}
-                      </td>
-                      <td className="px-5 py-3">
-                        <StatusBadge status={t.status} />
-                      </td>
-                      <td className="px-5 py-3">
-                        <RowActions
-                          onApprove={() => emit("updateTeam", (s) => s.setTeamStatus(t.id, "approved"))}
-                          onReject={() => emit("updateTeam", (s) => s.setTeamStatus(t.id, "rejected"))}
-                        />
-                      </td>
-                    </tr>
+                    <TeamRow key={t.id} team={t} playerCount={players.filter((p) => p.teamId === t.id).length} emit={emit} />
                   ))}
                 </tbody>
               </table>
@@ -142,23 +120,7 @@ function AdminPage() {
                 </thead>
                 <tbody>
                   {players.map((p) => (
-                    <tr key={p.id} className="border-b border-border last:border-0">
-                      <td className="px-5 py-3 font-semibold text-foreground">{p.name}</td>
-                      <td className="px-5 py-3 tabular-nums text-muted-foreground">{p.number}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{p.position}</td>
-                      <td className="px-5 py-3 text-muted-foreground">
-                        {teams.find((t) => t.id === p.teamId)?.name ?? "—"}
-                      </td>
-                      <td className="px-5 py-3">
-                        <StatusBadge status={p.status} />
-                      </td>
-                      <td className="px-5 py-3">
-                        <RowActions
-                          onApprove={() => emit("updatePlayer", (s) => s.setPlayerStatus(p.id, "approved"))}
-                          onReject={() => emit("updatePlayer", (s) => s.setPlayerStatus(p.id, "rejected"))}
-                        />
-                      </td>
-                    </tr>
+                    <PlayerRow key={p.id} player={p} teams={teams} emit={emit} />
                   ))}
                 </tbody>
               </table>
@@ -170,21 +132,3 @@ function AdminPage() {
   );
 }
 
-function RowActions({ onApprove, onReject }: { onApprove: () => void; onReject: () => void }) {
-  return (
-    <div className="flex justify-end gap-2">
-      <button
-        onClick={onApprove}
-        className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success-soft px-2.5 py-1 text-xs font-semibold text-success hover:opacity-80"
-      >
-        <Check className="size-3.5" /> Approve
-      </button>
-      <button
-        onClick={onReject}
-        className="inline-flex items-center gap-1 rounded-md border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive hover:opacity-80"
-      >
-        <X className="size-3.5" /> Reject
-      </button>
-    </div>
-  );
-}

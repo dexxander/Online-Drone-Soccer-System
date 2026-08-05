@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Check, X } from "lucide-react";
 
 export function StatCard({
   label,
@@ -72,5 +73,24 @@ export function StatusBadge({ status }: { status: "pending" | "approved" | "reje
     >
       {status}
     </span>
+  );
+}
+
+export function RowActions({ onApprove, onReject }: { onApprove: () => void; onReject: () => void }) {
+  return (
+    <div className="flex justify-end gap-2">
+      <button
+        onClick={onApprove}
+        className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-success-soft px-2.5 py-1 text-xs font-semibold text-success hover:opacity-80"
+      >
+        <Check className="size-3.5" /> Approve
+      </button>
+      <button
+        onClick={onReject}
+        className="inline-flex items-center gap-1 rounded-md border border-destructive/25 bg-destructive/10 px-2.5 py-1 text-xs font-semibold text-destructive hover:opacity-80"
+      >
+        <X className="size-3.5" /> Reject
+      </button>
+    </div>
   );
 }
