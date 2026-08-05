@@ -1,11 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trash2, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, CheckCircle2, Pencil, X, Check } from "lucide-react";
 import { CoachLayout } from "@/components/CoachLayout";
 import { EmptyState, Panel, StatusBadge } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { auth } from "@/lib/store";
-import type { PlayerPosition, Team, TeamCategory } from "@/lib/types";
+import type { Player, PlayerPosition, Team, TeamCategory } from "@/lib/types";
 import { Field } from "./login";
 
 export const Route = createFileRoute("/register-team")({
@@ -23,9 +23,21 @@ export const Route = createFileRoute("/register-team")({
 const categories: TeamCategory[] = ["Junior", "Youth", "Collegiate", "Open"];
 const positions: PlayerPosition[] = ["Striker", "Defender", "Goalkeeper", "Flex"];
 
-type PlayerDraft = { name: string; number: string; position: PlayerPosition };
+type PlayerDraft = {
+  name: string;
+  number: string;
+  position: PlayerPosition;
+  studentId: string;
+  dateOfBirth: string;
+};
 
-const emptyPlayer = (): PlayerDraft => ({ name: "", number: "", position: "Striker" });
+const emptyPlayer = (): PlayerDraft => ({
+  name: "",
+  number: "",
+  position: "Striker",
+  studentId: "",
+  dateOfBirth: "",
+});
 
 function RegisterTeamPage() {
   const { state, emit } = useMockWebSocket();
@@ -60,7 +72,13 @@ function RegisterTeamPage() {
       const created = store.addTeam(user ? { ...team, ownerId: user.id } : team);
       store.addPlayers(
         created.id,
-        filled.map((p) => ({ name: p.name.trim(), number: Number(p.number), position: p.position })),
+        filled.map((p) => ({
+          name: p.name.trim(),
+          number: Number(p.number),
+          position: p.position,
+          ...(p.studentId.trim() ? { studentId: p.studentId.trim() } : {}),
+          ...(p.dateOfBirth ? { dateOfBirth: p.dateOfBirth } : {}),
+        })),
       );
     });
     setJustSubmitted(true);
@@ -110,21 +128,14 @@ function RegisterTeamPage() {
                       </div>
                       <StatusBadge status={t.status} />
                     </div>
-                    <ul className="mt-3 flex flex-wrap gap-2">
+                    <ul className="mt-3 space-y-2">
                       {state.players
                         .filter((p) => p.teamId === t.id)
                         .map((p) => (
-                          <li
-                            key={p.id}
-                            className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs"
-                          >
-                            <span className="font-mono font-semibold text-foreground">#{p.number}</span>
-                            <span className="text-foreground">{p.name}</span>
-                            <span className="text-muted-foreground">{p.position}</span>
-                            <StatusBadge status={p.status} />
-                          </li>
+                          <RosterRow key={p.id} player={p} emit={emit} />
                         ))}
                     </ul>
+                    <AddPlayerForm teamId={t.id} emit={emit} />
                   </li>
                 ))}
               </ul>
@@ -197,7 +208,7 @@ function RegisterTeamPage() {
           </div>
           <div className="mt-5 space-y-3">
             {players.map((p, i) => (
-              <div key={i} className="grid gap-3 sm:grid-cols-[1fr_100px_150px_auto]">
+              <div key={i} className="grid gap-3 sm:grid-cols-[1fr_90px_130px_120px_140px_auto]">
                 <input
                   className="auth-input"
                   value={p.name}
@@ -221,6 +232,18 @@ function RegisterTeamPage() {
                     <option key={pos}>{pos}</option>
                   ))}
                 </select>
+                <input
+                  className="auth-input"
+                  value={p.studentId}
+                  onChange={(e) => updatePlayer(i, { studentId: e.target.value })}
+                  placeholder="Student ID"
+                />
+                <input
+                  className="auth-input"
+                  type="date"
+                  value={p.dateOfBirth}
+                  onChange={(e) => updatePlayer(i, { dateOfBirth: e.target.value })}
+                />
                 <button
                   type="button"
                   aria-label="Remove player"
@@ -243,5 +266,234 @@ function RegisterTeamPage() {
         </button>
       </form>
     </CoachLayout>
+  );
+}
+
+function AddPlayerForm({
+  teamId,
+  emit,
+}: {
+  teamId: string;
+  emit: ReturnType<typeof useMockWebSocket>["emit"];
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<PlayerDraft>(emptyPlayer());
+  const [error, setError] = useState("");
+
+  const submit = () => {
+    if (!draft.name.trim() || !draft.number.trim()) {
+      setError("Name and jersey number are required.");
+      return;
+    }
+    setError("");
+    emit("addPlayer", (store) =>
+      store.addPlayers(teamId, [
+        {
+          name: draft.name.trim(),
+          number: Number(draft.number),
+          position: draft.position,
+          ...(draft.studentId.trim() ? { studentId: draft.studentId.trim() } : {}),
+          ...(draft.dateOfBirth ? { dateOfBirth: draft.dateOfBirth } : {}),
+        },
+      ]),
+    );
+    setDraft(emptyPlayer());
+    setOpen(false);
+  };
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+      >
+        <Plus className="size-3.5" /> Add player to this team
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-3 rounded-lg border border-border bg-muted/40 p-3">
+      <div className="grid gap-2 sm:grid-cols-5">
+        <input
+          className="auth-input"
+          value={draft.name}
+          onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+          placeholder="Name"
+        />
+        <input
+          className="auth-input"
+          type="number"
+          min={0}
+          value={draft.number}
+          onChange={(e) => setDraft((d) => ({ ...d, number: e.target.value }))}
+          placeholder="No."
+        />
+        <select
+          className="auth-input"
+          value={draft.position}
+          onChange={(e) => setDraft((d) => ({ ...d, position: e.target.value as PlayerPosition }))}
+        >
+          {positions.map((pos) => (
+            <option key={pos}>{pos}</option>
+          ))}
+        </select>
+        <input
+          className="auth-input"
+          value={draft.studentId}
+          onChange={(e) => setDraft((d) => ({ ...d, studentId: e.target.value }))}
+          placeholder="Student ID"
+        />
+        <input
+          className="auth-input"
+          type="date"
+          value={draft.dateOfBirth}
+          onChange={(e) => setDraft((d) => ({ ...d, dateOfBirth: e.target.value }))}
+        />
+      </div>
+      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      <div className="mt-2 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false);
+            setError("");
+          }}
+          className="rounded-md border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground hover:bg-muted"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={submit}
+          className="rounded-md border border-success/30 bg-success-soft px-2.5 py-1 text-xs font-semibold text-success hover:opacity-80"
+        >
+          Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function RosterRow({
+  player,
+  emit,
+}: {
+  player: Player;
+  emit: ReturnType<typeof useMockWebSocket>["emit"];
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState({
+    name: player.name,
+    number: String(player.number),
+    position: player.position,
+    studentId: player.studentId ?? "",
+    dateOfBirth: player.dateOfBirth ?? "",
+  });
+
+  const save = () => {
+    if (!draft.name.trim() || !draft.number.trim()) return;
+    emit("updatePlayer", (store) =>
+      store.updatePlayer(player.id, {
+        name: draft.name.trim(),
+        number: Number(draft.number),
+        position: draft.position,
+        ...(draft.studentId.trim() ? { studentId: draft.studentId.trim() } : {}),
+        ...(draft.dateOfBirth ? { dateOfBirth: draft.dateOfBirth } : {}),
+      }),
+    );
+    setEditing(false);
+  };
+
+  const remove = () => {
+    if (!window.confirm(`Remove ${player.name} from the roster?`)) return;
+    emit("removePlayer", (store) => store.removePlayer(player.id));
+  };
+
+  if (editing) {
+    return (
+      <li className="rounded-lg border border-border bg-muted/40 p-3">
+        <div className="grid gap-2 sm:grid-cols-[1fr_80px_120px_110px_130px]">
+          <input
+            className="auth-input"
+            value={draft.name}
+            onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+            placeholder="Name"
+          />
+          <input
+            className="auth-input"
+            type="number"
+            min={0}
+            value={draft.number}
+            onChange={(e) => setDraft((d) => ({ ...d, number: e.target.value }))}
+            placeholder="No."
+          />
+          <select
+            className="auth-input"
+            value={draft.position}
+            onChange={(e) => setDraft((d) => ({ ...d, position: e.target.value as PlayerPosition }))}
+          >
+            {positions.map((pos) => (
+              <option key={pos}>{pos}</option>
+            ))}
+          </select>
+          <input
+            className="auth-input"
+            value={draft.studentId}
+            onChange={(e) => setDraft((d) => ({ ...d, studentId: e.target.value }))}
+            placeholder="Student ID"
+          />
+          <input
+            className="auth-input"
+            type="date"
+            value={draft.dateOfBirth}
+            onChange={(e) => setDraft((d) => ({ ...d, dateOfBirth: e.target.value }))}
+          />
+        </div>
+        <div className="mt-2 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setEditing(false)}
+            className="flex size-8 items-center justify-center rounded-md border border-border text-muted-foreground hover:bg-muted"
+          >
+            <X className="size-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            className="flex size-8 items-center justify-center rounded-md border border-success/30 bg-success-soft text-success hover:opacity-80"
+          >
+            <Check className="size-3.5" />
+          </button>
+        </div>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs">
+      <span className="font-mono font-semibold text-foreground">#{player.number}</span>
+      <span className="text-foreground">{player.name}</span>
+      <span className="text-muted-foreground">{player.position}</span>
+      {player.studentId && <span className="text-muted-foreground">ID: {player.studentId}</span>}
+      <StatusBadge status={player.status} />
+      <button
+        type="button"
+        aria-label={`Edit ${player.name}`}
+        onClick={() => setEditing(true)}
+        className="ml-auto flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-foreground"
+      >
+        <Pencil className="size-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label={`Remove ${player.name}`}
+        onClick={remove}
+        className="flex size-6 items-center justify-center rounded text-muted-foreground hover:bg-muted hover:text-destructive"
+      >
+        <Trash2 className="size-3.5" />
+      </button>
+    </li>
   );
 }

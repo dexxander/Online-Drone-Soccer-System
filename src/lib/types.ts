@@ -16,6 +16,8 @@ export interface Player {
   name: string;
   number: number;
   position: PlayerPosition;
+  studentId?: string;
+  dateOfBirth?: string;
   status: EntityStatus;
   createdAt: number;
 }

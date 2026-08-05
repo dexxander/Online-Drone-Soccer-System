@@ -28,6 +28,10 @@ export interface DataStore {
   addPlayers(teamId: string, players: Array<Omit<Player, "id" | "teamId" | "status" | "createdAt">>): void;
   setTeamStatus(id: string, status: EntityStatus): void;
   setPlayerStatus(id: string, status: EntityStatus): void;
+  updatePlayer(id: string, patch: Partial<Omit<Player, "id" | "createdAt">>): void;
+  removePlayer(id: string): void;
+  updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>): void;
+  removeTeam(id: string): void;
   startMatch(): void;
   pauseMatch(): void;
   resumeMatch(): void;
@@ -160,6 +164,35 @@ class LocalStore implements DataStore {
     });
   }
 
+  updatePlayer(id: string, patch: Partial<Omit<Player, "id" | "createdAt">>) {
+    this.commit({
+      ...this.state,
+      players: this.state.players.map((p) => (p.id === id ? { ...p, ...patch } : p)),
+    });
+  }
+
+  removePlayer(id: string) {
+    this.commit({
+      ...this.state,
+      players: this.state.players.filter((p) => p.id !== id),
+    });
+  }
+
+  updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>) {
+    this.commit({
+      ...this.state,
+      teams: this.state.teams.map((t) => (t.id === id ? { ...t, ...patch } : t)),
+    });
+  }
+
+  removeTeam(id: string) {
+    this.commit({
+      ...this.state,
+      teams: this.state.teams.filter((t) => t.id !== id),
+      players: this.state.players.filter((p) => p.teamId !== id),
+    });
+  }
+
   startMatch() {
     const match: Match = { ...this.state.match, status: "live", elapsedMs: 0, runningSince: Date.now() };
     this.commit({ ...this.state, match, events: this.log("match_started", "Match started", this.state) });
@@ -239,7 +272,7 @@ const AUTH_KEY = "ds-league-auth-v1";
 export const auth = {
   login(email: string, role: UserRole): AuthUser {
     const user: AuthUser = {
-      id: uid(),
+      id: `user_${email.trim().toLowerCase()}`,
       name: email.split("@")[0] || "dev-admin",
       email,
       role,
