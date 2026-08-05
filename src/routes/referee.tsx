@@ -6,295 +6,421 @@ import {
   Minus,
   Plus,
   Swords,
-  Settings,
+  Trophy,
   Monitor,
   LogOut,
   History,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
+import { EmptyState, Panel } from "@/components/ui-kit";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
-import { auth, initialState } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { Match, MatchEventType, PenaltyType } from "@/lib/types";
+
+import { 
+  auth, 
+  initialState, 
+  AVAILABLE_TEAMS, 
+  rosterA, 
+  coachA, 
+  rosterB, 
+  coachB 
+} from "@/lib/store";
 
 export const Route = createFileRoute("/referee")({
   head: () => ({
     meta: [
       { title: "Referee control — Drone Soccer League Control" },
-      {
-        name: "description",
-        content:
-          "Officiate live drone soccer matches: clock control, scoring and penalties in real time.",
-      },
-      { property: "og:title", content: "Referee control — Drone Soccer" },
-      {
-        property: "og:description",
-        content: "Real-time match control for drone soccer referees.",
-      },
+      { name: "description", content: "Officiate live drone soccer matches." },
     ],
   }),
   component: RefereePage,
 });
 
-/* ── Phase labels for the clock segment bar ── */
 const phases = ["Testing", "1st Half", "Half Time", "2nd Half"] as const;
+const MATCH_DURATION_MS = 3 * 60 * 1000; 
 
-/* ── Penalty buttons config ── */
 const penaltyButtons: { label: string; type: PenaltyType; style: string }[] = [
-  {
-    label: "Warning",
-    type: "Minor",
-    style:
-      "bg-muted text-foreground border border-border hover:bg-accent",
-  },
-  {
-    label: "YEL CARD",
-    type: "Major",
-    style:
-      "bg-warning-soft text-warning border border-warning/40 hover:bg-warning/20 font-bold",
-  },
-  {
-    label: "RED CARD",
-    type: "Technical",
-    style:
-      "bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold shadow-sm",
-  },
+  { label: "Warning", type: "Minor", style: "bg-muted text-foreground border border-border hover:bg-accent" },
+  { label: "YEL CARD", type: "Major", style: "bg-warning-soft text-warning border border-warning/40 hover:bg-warning/20 font-bold" },
+  { label: "RED CARD", type: "Technical", style: "bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold shadow-sm" },
 ];
 
-/* ── Roster data matching mockup ── */
-const rosterA = [
-  { name: "S. Taylor", position: "Striker", highlight: true },
-  { name: "M. Lee", position: "Defender" },
-  { name: "R. Quinn", position: "Defender" },
-];
-const coachA = "C. Davis";
-
-const rosterB = [
-  { name: "J. Chen", position: "Striker", highlight: true },
-  { name: "A. Patel", position: "Defender" },
-  { name: "K. Nova", position: "Defender" },
-];
-const coachB = "M. Rossi";
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
+function getMatchTitle(round: number, maxRound: number) {
+  if (maxRound === 1) return "Exhibition";
+  if (round === maxRound) return "Final";
+  if (round === maxRound - 1) return "Semi-Finals";
+  if (round === maxRound - 2) return "Quarter-Finals";
+  return `Round ${round}`;
+}
 
 function RefereePage() {
   const { state, emit } = useMockWebSocket();
-  const match = safeMatch(state.match);
+  const rawMatch = safeMatch(state.match);
+  
   const events = Array.isArray(state.events) ? state.events : [];
-  const clock = useMatchClock(match.elapsedMs, match.runningSince);
-  const live = match.status === "live";
+  const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
+  const teams = Array.isArray(state.teams) ? state.teams : []; 
+
+  const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control">("tournaments");
+  const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
+
+  const elapsedMs = useMatchClock(rawMatch.elapsedMs, rawMatch.runningSince);
+  const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
+  
+  const live = rawMatch.status === "live";
+  const isFinished = rawMatch.status === "finished";
 
   const signOut = () => {
     auth.logout();
     window.location.href = "/login";
   };
 
-  /* Determine active phase for visual indicator */
-  const activePhase =
-    match.status === "finished"
-      ? 3
-      : match.status === "live" || match.status === "paused"
-        ? 1
-        : 0;
+  const getTeamName = (id: string | null) => {
+    if (!id) return "TBD";
+    const dynamicTeam = teams.find((t) => t.id === id);
+    if (dynamicTeam) return dynamicTeam.name;
+    const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.id === id);
+    return fallbackTeam ? fallbackTeam.name : "TBD";
+  };
+
+  const getTeamDetailsByName = (name: string) => {
+    if (!name || name === "TBD") return { initials: "TB", logo: undefined };
+    const dynamicTeam = teams.find((t: any) => t.name === name);
+    if (dynamicTeam) return { initials: dynamicTeam.name.substring(0, 2).toUpperCase(), logo: dynamicTeam.logoUrl || dynamicTeam.logo };
+    const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.name === name);
+    return fallbackTeam ? { initials: fallbackTeam.initials, logo: (fallbackTeam as any).logoUrl || (fallbackTeam as any).logo } : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
+  };
+
+  const handleOpenBracket = (tournamentId: string) => {
+    setActiveTournamentId(tournamentId);
+    setViewMode("bracket");
+  };
+
+  const handleSelectMatch = (matchId: string, teamAId: string | null, teamBId: string | null) => {
+    const teamAName = getTeamName(teamAId);
+    const teamBName = getTeamName(teamBId);
+    
+    if (rawMatch.id !== matchId) {
+      emit("setupLiveMatch", (s) => s.setupLiveMatch(matchId, teamAName, teamBName));
+    }
+    setViewMode("control");
+  };
+
+  const activePhase = isFinished ? 3 : live || rawMatch.status === "paused" ? 1 : 0;
+  const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
+  const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
+
+  const activeTournament = tournaments.find(t => t.id === activeTournamentId);
+  const rounds = activeTournament 
+    ? Array.from(new Set(activeTournament.matches.map(m => m.round))).sort((a, b) => a - b)
+    : [];
+  const maxRound = Math.max(...rounds, 0);
+  const minRound = Math.min(...rounds, 0);
 
   return (
-    <RefereeLayout match={match}>
+    <RefereeLayout match={rawMatch}>
       <div className="flex h-full flex-col gap-6 xl:flex-row">
-        {/* ── Left / Main Column ── */}
+        
+        {/* ── Main Column ── */}
         <div className="flex-1 space-y-6">
-          {/* Navigation Action Cards */}
+          
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <NavCard
-              href="/referee"
-              icon={<Swords className="size-8" strokeWidth={1.6} />}
-              label="Match Control"
-              active
-            />
-            <NavCard
-              href="/admin"
-              icon={<Settings className="size-8" strokeWidth={1.6} />}
-              label="Tournament Setup"
-            />
-            <NavCard
-              href="/scoreboard"
-              icon={<Monitor className="size-8" strokeWidth={1.6} />}
-              label="Open Scoreboard"
-              external
-            />
-            <NavCard
-              onClick={signOut}
-              icon={<LogOut className="size-8" strokeWidth={1.6} />}
-              label="Sign Out"
-              danger
-            />
+            <NavCard onClick={() => setViewMode("tournaments")} icon={<Trophy className="size-8" strokeWidth={1.6} />} label="Tournament Brackets" active={viewMode === "tournaments" || viewMode === "bracket"} />
+            <NavCard onClick={() => setViewMode("control")} icon={<Swords className="size-8" strokeWidth={1.6} />} label="Match Control" active={viewMode === "control"} />
+            <NavCard href="/scoreboard" icon={<Monitor className="size-8" strokeWidth={1.6} />} label="Open Scoreboard" external />
+            <NavCard onClick={signOut} icon={<LogOut className="size-8" strokeWidth={1.6} />} label="Sign Out" danger />
           </div>
 
-          {/* ── Match Clock Tile ── */}
-          <div className="flex flex-col items-center rounded-xl border border-border bg-background p-6 shadow-card lg:p-8">
-            {/* Phase Segments */}
-            <div className="mb-6 flex w-full max-w-lg rounded-lg bg-muted p-1">
-              {phases.map((phase, i) => (
-                <button
-                  key={phase}
-                  className={cn(
-                    "flex-1 rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                    i === activePhase
-                      ? "border border-border bg-background text-primary shadow-sm"
-                      : "text-muted-foreground hover:bg-accent",
-                  )}
+          {viewMode === "tournaments" ? (
+            /* ── 1. TOURNAMENT LIST VIEW ── */
+            <Panel title="Active Tournaments">
+              {tournaments.length === 0 ? (
+                <EmptyState
+                  title="No active tournaments"
+                  description="Tournaments generated in the Admin dashboard will appear here."
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                        <th className="px-5 py-3 font-semibold">Tournament Name</th>
+                        <th className="px-5 py-3 font-semibold">Status</th>
+                        <th className="px-5 py-3 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournaments.map((t) => (
+                        <tr 
+                          key={t.id} 
+                          onClick={() => handleOpenBracket(t.id)}
+                          className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/30"
+                        >
+                          <td className="px-5 py-4 font-semibold text-foreground">{t.name}</td>
+                          <td className="px-5 py-4">
+                            <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", t.status === "completed" ? "bg-success/20 text-success" : "bg-primary/20 text-primary")}>
+                              {t.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-4 text-right">
+                            <ChevronRight className="inline size-4 text-muted-foreground" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </Panel>
+          ) : viewMode === "bracket" && activeTournament ? (
+            /* ── 2. VISUAL BRACKET VIEW ── */
+            <Panel title={`Bracket: ${activeTournament.name}`}>
+              <div className="mb-4">
+                 <button 
+                    onClick={() => setViewMode("tournaments")}
+                    className="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
+                  >
+                    <ChevronLeft className="size-3" /> Back to Tournaments
+                  </button>
+              </div>
+              
+              <div className="flex gap-8 overflow-x-auto pb-6 pt-2">
+                {rounds.map(round => (
+                  <div key={round} className="flex min-w-[300px] flex-col justify-center gap-8">
+                    <div className="text-center text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                      {getMatchTitle(round, maxRound)}
+                    </div>
+                    
+                    {activeTournament.matches
+                      .filter(m => m.round === round)
+                      .map(m => {
+                        const isPlayable = !m.isBye && m.teamAId && m.teamBId && !m.winnerId;
+                        const isCompleted = m.winnerId !== null;
+                        const isClickable = isPlayable || isCompleted;
+                        
+                        const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
+                        const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
+
+                        const scoreA = rawMatch.id === m.id ? rawMatch.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : '-');
+                        const scoreB = rawMatch.id === m.id ? rawMatch.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : '-');
+
+                        const hasPrevRound = round !== minRound;
+                        const hasNextRound = round !== maxRound;
+                        const isTopMatch = m.slot % 2 === 0;
+                        const isBottomMatch = m.slot % 2 === 1;
+
+                        return (
+                          <div 
+                            key={m.id} 
+                            className={cn(
+                              "relative flex flex-col rounded-lg border p-3 shadow-sm transition-all",
+                              isClickable ? "border-primary/50 bg-primary/5 hover:border-primary cursor-pointer" : "border-border bg-muted/20 opacity-80",
+                              
+                              hasPrevRound && "before:absolute before:top-1/2 before:-left-4 before:w-4 before:border-t-2 before:border-border",
+                              hasNextRound && isTopMatch && "after:absolute after:top-1/2 after:-right-4 after:w-4 after:h-[calc(50%+1rem)] after:border-t-2 after:border-r-2 after:border-border after:rounded-tr-md",
+                              hasNextRound && isBottomMatch && "after:absolute after:bottom-1/2 after:-right-4 after:w-4 after:h-[calc(50%+1rem)] after:border-b-2 after:border-r-2 after:border-border after:rounded-br-md"
+                            )}
+                            onClick={() => isClickable && handleSelectMatch(m.id, m.teamAId, m.teamBId)}
+                          >
+                            <div className="flex flex-col gap-2">
+                              {/* Team A Slot */}
+                              <div className={cn("flex items-center justify-between rounded bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamAWinner && "border-success text-success bg-success/5")}>
+                                <div className="flex items-center gap-2">
+                                  <span>{getTeamName(m.teamAId)}</span>
+                                  {isTeamAWinner && <Trophy className="size-3" />}
+                                </div>
+                                <span className="font-mono text-muted-foreground">{scoreA}</span>
+                              </div>
+                              {/* Team B Slot */}
+                              <div className={cn("flex items-center justify-between rounded bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamBWinner && "border-success text-success bg-success/5")}>
+                                <div className="flex items-center gap-2">
+                                  <span>{getTeamName(m.teamBId)}</span>
+                                  {isTeamBWinner && <Trophy className="size-3" />}
+                                </div>
+                                <span className="font-mono text-muted-foreground">{scoreB}</span>
+                              </div>
+                            </div>
+                            
+                            {isPlayable && (
+                              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-full bg-primary px-3 py-0.5 text-[9px] font-bold uppercase text-primary-foreground shadow-sm">
+                                Officiate
+                              </div>
+                            )}
+                            {isCompleted && (
+                              <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-10 rounded-full bg-success/80 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">
+                                Review Match
+                              </div>
+                            )}
+                          </div>
+                        );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          ) : (
+            /* ── 3. LIVE CONTROL DASHBOARD ── */
+            <>
+              <div className={cn("flex items-center justify-between rounded-xl border p-4 shadow-card", isFinished ? "border-destructive bg-destructive/5" : "border-border bg-background")}>
+                <button 
+                  onClick={() => setViewMode("bracket")}
+                  className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
                 >
-                  {phase}
+                  <ChevronLeft className="size-4" /> Back to Bracket
                 </button>
-              ))}
-            </div>
+                {isFinished && (
+                  <span className="rounded bg-destructive/10 px-4 py-1.5 font-bold uppercase tracking-widest text-destructive">
+                    Match Concluded (Read-Only)
+                  </span>
+                )}
+              </div>
 
-            {/* Clock Display */}
-            <div className="mb-8 font-mono text-7xl font-bold tabular-nums leading-none tracking-tight text-destructive lg:text-8xl">
-              {formatClock(clock)}
-            </div>
+              {/* Match Clock Tile */}
+              <div className="flex flex-col items-center rounded-xl border border-border bg-background p-6 shadow-card lg:p-8">
+                <div className="mb-6 flex w-full max-w-lg rounded-lg bg-muted p-1">
+                  {phases.map((phase, i) => (
+                    <button
+                      key={phase}
+                      className={cn(
+                        "flex-1 rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                        i === activePhase ? "border border-border bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-accent"
+                      )}
+                    >
+                      {phase}
+                    </button>
+                  ))}
+                </div>
 
-            {/* Clock Controls */}
-            <div className="flex w-full flex-wrap justify-center gap-4">
-              <button
-                onClick={() => {
-                  if (match.status === "paused") {
-                    emit("updateMatch", (s) => s.resumeMatch());
-                  } else {
-                    emit("updateMatch", (s) => s.startMatch());
-                  }
-                }}
-                disabled={live}
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-lg font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Play className="size-5" fill="currentColor" />
-                Start
-              </button>
-              <button
-                onClick={() => emit("updateMatch", (s) => s.pauseMatch())}
-                disabled={!live}
-                className="inline-flex items-center gap-2 rounded-xl border-2 border-border bg-background px-6 py-3 text-lg font-bold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Pause className="size-5" />
-                Pause
-              </button>
-              <button
-                onClick={() => emit("updateMatch", (s) => s.endMatch())}
-                disabled={
-                  match.status === "scheduled" || match.status === "finished"
-                }
-                className="ml-auto inline-flex items-center gap-2 rounded-xl bg-destructive px-6 py-3 text-lg font-bold text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/85 disabled:cursor-not-allowed disabled:opacity-40 lg:ml-8"
-              >
-                <Square className="size-5" />
-                End Half
-              </button>
-            </div>
-          </div>
+                <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Countdown Timer</div>
+                <div className="mb-8 font-mono text-7xl font-bold tabular-nums leading-none tracking-tight text-destructive lg:text-8xl">
+                  {formatClock(remainingMs)}
+                </div>
 
-          {/* ── Team Panels (side-by-side) ── */}
-          <div className="grid gap-6 lg:grid-cols-2">
-            <TeamPanel
-              teamName={match.teamAName}
-              sideLabel="BLUE TEAM"
-              initials="SR"
-              accentColor="primary"
-              score={match.scoreA}
-              onDecrement={() =>
-                emit("updateMatch", (s) => s.adjustScore("A", -1))
-              }
-              onIncrement={() =>
-                emit("updateMatch", (s) => s.adjustScore("A", 1))
-              }
-              onPenalty={(type) =>
-                emit("updateMatch", (s) => s.issuePenalty("A", type))
-              }
-              roster={rosterA}
-              coach={coachA}
-            />
-            <TeamPanel
-              teamName={match.teamBName}
-              sideLabel="RED TEAM"
-              initials="VU"
-              accentColor="destructive"
-              score={match.scoreB}
-              onDecrement={() =>
-                emit("updateMatch", (s) => s.adjustScore("B", -1))
-              }
-              onIncrement={() =>
-                emit("updateMatch", (s) => s.adjustScore("B", 1))
-              }
-              onPenalty={(type) =>
-                emit("updateMatch", (s) => s.issuePenalty("B", type))
-              }
-              roster={rosterB}
-              coach={coachB}
-            />
-          </div>
+                <div className="flex w-full flex-wrap justify-center gap-4">
+                  <button
+                    onClick={() => {
+                      if (rawMatch.status === "paused") emit("updateMatch", (s) => s.resumeMatch());
+                      else emit("updateMatch", (s) => s.startMatch());
+                    }}
+                    disabled={live || isFinished}
+                    className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-lg font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Play className="size-5" fill="currentColor" /> Start
+                  </button>
+                  <button
+                    onClick={() => emit("updateMatch", (s) => s.pauseMatch())}
+                    disabled={!live || isFinished}
+                    className="inline-flex items-center gap-2 rounded-xl border-2 border-border bg-background px-6 py-3 text-lg font-bold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <Pause className="size-5" /> Pause
+                  </button>
+                  <button
+                    onClick={() => emit("updateMatch", (s) => s.endMatch())}
+                    disabled={rawMatch.status === "scheduled" || isFinished}
+                    className="ml-auto inline-flex items-center gap-2 rounded-xl bg-destructive px-6 py-3 text-lg font-bold text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/85 disabled:cursor-not-allowed disabled:opacity-40 lg:ml-8"
+                  >
+                    <Square className="size-5" /> End Match
+                  </button>
+                </div>
+              </div>
+
+              {/* Team Panels */}
+              <div className="grid gap-6 lg:grid-cols-2">
+                <TeamPanel
+                  teamName={rawMatch.teamAName}
+                  sideLabel="BLUE TEAM"
+                  initials={teamAInfo.initials}
+                  logo={teamAInfo.logo}
+                  accentColor="primary"
+                  score={rawMatch.scoreA}
+                  penalties={rawMatch.penalties.filter(p => p.side === "A")}
+                  disabled={isFinished}
+                  onDecrement={() => emit("updateMatch", (s) => s.adjustScore("A", -1))}
+                  onIncrement={() => emit("updateMatch", (s) => s.adjustScore("A", 1))}
+                  onPenalty={(type) => emit("updateMatch", (s) => s.issuePenalty("A", type))}
+                  roster={rosterA}
+                  coach={coachA}
+                />
+                <TeamPanel
+                  teamName={rawMatch.teamBName}
+                  sideLabel="RED TEAM"
+                  initials={teamBInfo.initials}
+                  logo={teamBInfo.logo}
+                  accentColor="destructive"
+                  score={rawMatch.scoreB}
+                  penalties={rawMatch.penalties.filter(p => p.side === "B")}
+                  disabled={isFinished}
+                  onDecrement={() => emit("updateMatch", (s) => s.adjustScore("B", -1))}
+                  onIncrement={() => emit("updateMatch", (s) => s.adjustScore("B", 1))}
+                  onPenalty={(type) => emit("updateMatch", (s) => s.issuePenalty("B", type))}
+                  roster={rosterB}
+                  coach={coachB}
+                />
+              </div>
+            </>
+          )}
         </div>
 
         {/* ── Right Column: Event Feed ── */}
-        <div className="flex w-full flex-col gap-6 xl:w-80">
-          <div className="flex min-h-[400px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-card">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-border bg-muted/50 p-4">
-              <h3 className="text-lg font-bold text-foreground">Event Feed</h3>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => emit("resetMatch", (s) => s.resetMatch())}
-                  className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive"
-                >
-                  Reset
-                </button>
-                <History className="size-5 text-muted-foreground" />
+        {(viewMode === "control") && (
+          <div className="flex w-full flex-col gap-6 xl:w-80">
+            <div className="flex min-h-[400px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-card">
+              <div className="flex items-center justify-between border-b border-border bg-muted/50 p-4">
+                <h3 className="text-lg font-bold text-foreground">Event Feed</h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => emit("resetMatch", (s) => s.resetMatch())}
+                    disabled={isFinished}
+                    className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
+                  >
+                    Reset
+                  </button>
+                  <History className="size-5 text-muted-foreground" />
+                </div>
+              </div>
+              <div className="hide-scrollbar flex-1 overflow-y-auto p-2">
+                {events.length === 0 && (
+                  <p className="px-3 py-6 text-center text-sm text-muted-foreground">
+                    No events yet. Start the match to begin recording.
+                  </p>
+                )}
+                <ul className="space-y-1">
+                  {events.map((evt, idx) => (
+                    <li
+                      key={evt.id}
+                      className={cn(
+                        "rounded-lg p-3 transition-colors",
+                        idx === 0 ? "border border-primary/20 bg-primary/5" : "border-b border-border/20 hover:bg-muted/50"
+                      )}
+                    >
+                      <div className="mb-1 flex items-start justify-between">
+                        <span className={cn("text-[11px] font-bold uppercase tracking-wider", eventLabelColor(evt.type))}>
+                          {eventLabel(evt.type)}
+                        </span>
+                        <span className="font-mono text-[12px] text-muted-foreground">
+                          {new Date(evt.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </span>
+                      </div>
+                      <p className="text-sm text-foreground">{evt.message}</p>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
-            {/* Feed List */}
-            <div className="hide-scrollbar flex-1 overflow-y-auto p-2">
-              {events.length === 0 && (
-                <p className="px-3 py-6 text-center text-sm text-muted-foreground">
-                  No events yet. Start the match to begin recording.
-                </p>
-              )}
-              <ul className="space-y-1">
-                {events.map((evt, idx) => (
-                  <li
-                    key={evt.id}
-                    className={cn(
-                      "rounded-lg p-3 transition-colors",
-                      idx === 0
-                        ? "border border-primary/20 bg-primary/5"
-                        : "border-b border-border/20 hover:bg-muted/50",
-                    )}
-                  >
-                    <div className="mb-1 flex items-start justify-between">
-                      <span
-                        className={cn(
-                          "text-[11px] font-bold uppercase tracking-wider",
-                          eventLabelColor(evt.type),
-                        )}
-                      >
-                        {eventLabel(evt.type)}
-                      </span>
-                      <span className="font-mono text-[12px] text-muted-foreground">
-                        {new Date(evt.createdAt).toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                          second: "2-digit",
-                        })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-foreground">{evt.message}</p>
-                  </li>
-                ))}
-              </ul>
-            </div>
           </div>
-        </div>
+        )}
       </div>
     </RefereeLayout>
   );
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════ */
+/* Helpers & Sub-components                                                    */
+/* ═══════════════════════════════════════════════════════════════════════════ */
 
 function safeMatch(value: unknown): Match {
   const fallback = initialState.match;
@@ -308,240 +434,106 @@ function safeMatch(value: unknown): Match {
     teamBName: typeof match.teamBName === "string" ? match.teamBName : fallback.teamBName,
     scoreA: typeof match.scoreA === "number" && Number.isFinite(match.scoreA) ? match.scoreA : fallback.scoreA,
     scoreB: typeof match.scoreB === "number" && Number.isFinite(match.scoreB) ? match.scoreB : fallback.scoreB,
-    status:
-      match.status === "scheduled" || match.status === "live" || match.status === "paused" || match.status === "finished"
-        ? match.status
-        : fallback.status,
+    status: match.status === "scheduled" || match.status === "live" || match.status === "paused" || match.status === "finished" ? match.status : fallback.status,
     elapsedMs: typeof match.elapsedMs === "number" && Number.isFinite(match.elapsedMs) ? match.elapsedMs : 0,
-    runningSince:
-      typeof match.runningSince === "number" && Number.isFinite(match.runningSince) ? match.runningSince : null,
+    runningSince: typeof match.runningSince === "number" && Number.isFinite(match.runningSince) ? match.runningSince : null,
     penalties: Array.isArray(match.penalties) ? match.penalties : [],
   };
 }
 
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/* Sub-components                                                            */
-/* ═══════════════════════════════════════════════════════════════════════════ */
-
-/* ── Nav Action Card ── */
-function NavCard({
-  href,
-  onClick,
-  icon,
-  label,
-  active,
-  danger,
-  external,
-}: {
-  href?: string;
-  onClick?: () => void;
-  icon: ReactNode;
-  label: string;
-  active?: boolean;
-  danger?: boolean;
-  external?: boolean;
-}) {
+function NavCard({ href, onClick, icon, label, active, danger, external }: any) {
   const classes = cn(
-    "flex flex-col items-center justify-center gap-2 rounded-xl p-4 shadow-sm transition-colors",
-    active
-      ? "bg-primary text-primary-foreground hover:bg-primary/85"
-      : danger
-        ? "border border-border bg-background text-destructive hover:bg-destructive/10"
-        : "border border-border bg-background text-foreground hover:bg-muted",
+    "flex flex-col items-center justify-center gap-2 rounded-xl p-4 shadow-sm transition-colors cursor-pointer",
+    active ? "bg-primary text-primary-foreground hover:bg-primary/85" : danger ? "border border-border bg-background text-destructive hover:bg-destructive/10" : "border border-border bg-background text-foreground hover:bg-muted"
   );
-
-  if (onClick) {
-    return (
-      <button onClick={onClick} className={classes}>
-        {icon}
-        <span className="text-[11px] font-bold uppercase tracking-wider">
-          {label}
-        </span>
-      </button>
-    );
-  }
-
-  if (external) {
-    return (
-      <Link to={href as "/"} target="_blank" className={classes}>
-        {icon}
-        <span className="text-[11px] font-bold uppercase tracking-wider">
-          {label}
-        </span>
-      </Link>
-    );
-  }
-
-  return (
-    <Link to={href as "/"} className={classes}>
-      {icon}
-      <span className="text-[11px] font-bold uppercase tracking-wider">
-        {label}
-      </span>
-    </Link>
-  );
+  if (onClick) return <button onClick={onClick} className={classes}>{icon}<span className="text-[11px] font-bold uppercase tracking-wider">{label}</span></button>;
+  if (external) return <Link to={href} target="_blank" className={classes}>{icon}<span className="text-[11px] font-bold uppercase tracking-wider">{label}</span></Link>;
+  return <Link to={href} className={classes}>{icon}<span className="text-[11px] font-bold uppercase tracking-wider">{label}</span></Link>;
 }
 
-/* ── Team Panel ── */
-function TeamPanel({
-  teamName,
-  sideLabel,
-  initials,
-  accentColor,
-  score,
-  onDecrement,
-  onIncrement,
-  onPenalty,
-  roster,
-  coach,
-}: {
-  teamName: string;
-  sideLabel: string;
-  initials: string;
-  accentColor: "primary" | "destructive";
-  score: number;
-  onDecrement: () => void;
-  onIncrement: () => void;
-  onPenalty: (type: PenaltyType) => void;
-  roster: { name: string; position: string; highlight?: boolean }[];
-  coach: string;
-}) {
+function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, roster, coach }: any) {
   const isPrimary = accentColor === "primary";
 
   return (
-    <div className="flex flex-col rounded-xl border border-border bg-background p-6 shadow-card">
-      {/* Header */}
+    <div className={cn("flex flex-col rounded-xl border bg-background p-6 shadow-card transition-opacity", disabled ? "opacity-75 border-border" : "border-border")}>
       <div className="mb-6 flex items-center justify-between border-b border-border/30 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-foreground lg:text-2xl">
-            {teamName}
-          </h2>
-          <span className="mt-1 inline-block rounded bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {sideLabel}
-          </span>
+          <h2 className="text-xl font-bold text-foreground lg:text-2xl">{teamName}</h2>
+          <span className="mt-1 inline-block rounded bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{sideLabel}</span>
         </div>
-        <div
-          className={cn(
-            "flex size-12 items-center justify-center rounded-full border-2 font-bold",
-            isPrimary
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-destructive bg-destructive/10 text-destructive",
-          )}
-        >
-          {initials}
-        </div>
+        
+        {logo ? (
+          <img 
+            src={logo} 
+            alt={`${teamName} Logo`} 
+            className={cn("size-12 rounded-full object-contain border-2 bg-white", isPrimary ? "border-primary" : "border-destructive")} 
+          />
+        ) : (
+          <div className={cn("flex size-12 items-center justify-center rounded-full border-2 font-bold", isPrimary ? "border-primary bg-primary/10 text-primary" : "border-destructive bg-destructive/10 text-destructive")}>
+            {initials}
+          </div>
+        )}
       </div>
 
-      {/* Score */}
       <div className="mb-8 flex items-center justify-center gap-6">
-        <button
-          onClick={onDecrement}
-          className="flex size-16 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent"
-        >
-          <Minus className="size-7" />
-        </button>
-        <span className="w-32 text-center font-mono text-8xl font-bold tabular-nums leading-none text-foreground lg:text-[96px]">
-          {score}
-        </span>
-        <button
-          onClick={onIncrement}
-          className="flex size-20 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform hover:bg-primary/85 active:scale-95"
-        >
-          <Plus className="size-10" />
-        </button>
+        <button onClick={onDecrement} disabled={disabled} className="flex size-16 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><Minus className="size-7" /></button>
+        <span className="w-32 text-center font-mono text-8xl font-bold tabular-nums leading-none text-foreground lg:text-[96px]">{score}</span>
+        <button onClick={onIncrement} disabled={disabled} className="flex size-20 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform hover:bg-primary/85 active:scale-95 disabled:opacity-50 disabled:active:scale-100"><Plus className="size-10" /></button>
       </div>
 
-      {/* Penalties */}
       <div className="mb-6">
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Penalty Entry
-        </h3>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Penalty Entry</h3>
+          
+          <div className="flex gap-1">
+            {penalties.map((p: any) => (
+               <span key={p.id} className={cn("h-4 w-3 rounded-sm shadow-sm", p.type === "Major" ? "bg-warning" : p.type === "Technical" ? "bg-destructive" : "bg-muted-foreground")}/>
+            ))}
+          </div>
+        </div>
+        
         <div className="flex gap-2">
           {penaltyButtons.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => onPenalty(p.type)}
-              className={cn(
-                "flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                p.style,
-              )}
-            >
+            <button key={p.label} onClick={() => onPenalty(p.type)} disabled={disabled} className={cn("flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors disabled:opacity-50", p.style)}>
               {p.label}
             </button>
           ))}
         </div>
       </div>
 
-      {/* Roster */}
       <div className="mt-auto border-t border-border/30 pt-4">
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-          Roster
-        </h3>
+        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Roster</h3>
         <ul className="space-y-2 font-mono text-sm text-foreground">
-          {roster.map((p) => (
-            <li
-              key={p.name}
-              className="flex items-center justify-between rounded bg-muted/50 px-2 py-1"
-            >
-              <span
-                className={cn(
-                  "font-semibold",
-                  p.highlight
-                    ? isPrimary
-                      ? "text-primary"
-                      : "text-destructive"
-                    : "",
-                )}
-              >
-                {p.name}
-              </span>
+          {roster.map((p: any) => (
+            <li key={p.name} className="flex items-center justify-between rounded bg-muted/50 px-2 py-1">
+              <span className={cn("font-semibold", p.highlight ? (isPrimary ? "text-primary" : "text-destructive") : "")}>{p.name}</span>
               <span className="text-muted-foreground">{p.position}</span>
             </li>
           ))}
-          <li className="mt-2 flex items-center justify-between px-2 py-1 text-muted-foreground">
-            <span className="text-[11px] font-semibold uppercase tracking-wider">
-              Coach
-            </span>
-            <span>{coach}</span>
-          </li>
         </ul>
       </div>
     </div>
   );
 }
 
-/* ── Event type display helpers ── */
 function eventLabel(type: MatchEventType): string {
   switch (type) {
-    case "match_started":
-      return "STARTED";
-    case "match_paused":
-      return "PAUSED";
-    case "match_resumed":
-      return "RESUMED";
-    case "match_ended":
-      return "MATCH ENDED";
-    case "score_changed":
-      return "GOAL";
-    case "penalty_issued":
-      return "PENALTY";
-    default:
-      return type;
+    case "match_started": return "STARTED";
+    case "match_paused": return "PAUSED";
+    case "match_resumed": return "RESUMED";
+    case "match_ended": return "MATCH ENDED";
+    case "score_changed": return "GOAL";
+    case "penalty_issued": return "PENALTY";
+    default: return type;
   }
 }
 
 function eventLabelColor(type: MatchEventType): string {
   switch (type) {
-    case "score_changed":
-      return "text-primary";
-    case "match_ended":
-      return "text-destructive";
-    case "penalty_issued":
-      return "text-warning";
-    case "match_started":
-    case "match_resumed":
-      return "text-success";
-    default:
-      return "text-muted-foreground";
+    case "score_changed": return "text-primary";
+    case "match_ended": return "text-destructive";
+    case "penalty_issued": return "text-warning";
+    case "match_started": case "match_resumed": return "text-success";
+    default: return "text-muted-foreground";
   }
 }

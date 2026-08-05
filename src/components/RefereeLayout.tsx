@@ -3,15 +3,31 @@ import { ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
 import type { Match } from "@/lib/types";
+import { useMockWebSocket } from "@/hooks/useMockWebSocket";
+
+function getMatchTitle(round: number, maxRound: number) {
+  if (maxRound === 1) return "Exhibition Match";
+  if (round === maxRound) return "Grand Final";
+  if (round === maxRound - 1) return "Semi-Finals";
+  if (round === maxRound - 2) return "Quarter-Finals";
+  return `Round ${round}`;
+}
 
 export function RefereeLayout({ children, match }: { children: ReactNode; match: Match }) {
   const navigate = useNavigate();
   const user = auth.current();
+  const { state } = useMockWebSocket();
 
-  const signOut = () => {
-    auth.logout();
-    navigate({ to: "/login" });
-  };
+  // Extract tournament data to dynamically name the header
+  const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
+  const activeTournament = tournaments.find(t => t.matches.some(tm => tm.id === match.id));
+  const tMatch = activeTournament?.matches.find(tm => tm.id === match.id);
+  const maxRound = activeTournament ? Math.max(...activeTournament.matches.map(tm => tm.round)) : 1;
+  const currentRound = tMatch?.round || 1;
+  
+  const matchTitle = activeTournament ? getMatchTitle(currentRound, maxRound) : "Friendly";
+  const tournamentName = activeTournament ? activeTournament.name : match.tournamentName;
+  const matchDisplayNumber = tMatch ? tMatch.slot + 1 : match.id.split("-").pop()?.slice(-4);
 
   return (
     <div className="flex h-screen min-h-screen flex-col bg-surface">
@@ -26,13 +42,13 @@ export function RefereeLayout({ children, match }: { children: ReactNode; match:
             DS
           </Link>
           <h1 className="hidden text-2xl font-bold tracking-tight text-foreground lg:block">
-            {match.tournamentName}
+            {tournamentName}
           </h1>
           <h1 className="text-xl font-bold tracking-tight text-foreground lg:hidden">
             NDSC
           </h1>
           <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
-            Quarter-Finals &gt; Match {match.id.split("-").pop()}
+            {matchTitle} &gt; Match {matchDisplayNumber}
           </span>
         </div>
 

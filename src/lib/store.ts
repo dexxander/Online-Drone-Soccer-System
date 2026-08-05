@@ -14,16 +14,6 @@ import type {
   UserRole,
 } from "./types";
 
-/**
- * ---------------------------------------------------------------------------
- * Data abstraction layer.
- *
- * Every UI component talks to the `store` object below and never to a concrete
- * backend. Swapping the LocalStore implementation for a Firebase/Firestore one
- * later only requires implementing `DataStore` — no UI refactor.
- * ---------------------------------------------------------------------------
- */
-
 export interface DataStore {
   getState(): AppState;
   subscribe(listener: () => void): () => void;
@@ -38,6 +28,7 @@ export interface DataStore {
   createTournament(name: string, teamIds: string[], category?: TeamCategory): Tournament;
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string): void;
   removeTournament(id: string): void;
+  setupLiveMatch(tournamentMatchId: string, teamAName: string, teamBName: string): void;
   startMatch(): void;
   pauseMatch(): void;
   resumeMatch(): void;
@@ -48,6 +39,7 @@ export interface DataStore {
 }
 
 const STORAGE_KEY = "ds-league-state-v1";
+const ARCHIVE_KEY = "ds-league-archive-v1"; 
 const CHANNEL = "ds-league-channel";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -109,6 +101,28 @@ function generateBracket(teamIds: string[]): TournamentMatch[] {
   return matches;
 }
 
+export const AVAILABLE_TEAMS = [
+  { id: "t1", name: "Sky Raptors", initials: "SR" },
+  { id: "t2", name: "Vortex United", initials: "VU" },
+  { id: "t3", name: "Aero Strikers", initials: "AS" },
+  { id: "t4", name: "Void Runners", initials: "VR" },
+  { id: "t5", name: "Neon Falcons", initials: "NF" },
+];
+
+export const rosterA = [
+  { name: "S. Taylor", position: "Striker", highlight: true },
+  { name: "M. Lee", position: "Defender" },
+  { name: "R. Quinn", position: "Defender" },
+];
+export const coachA = "C. Davis";
+
+export const rosterB = [
+  { name: "J. Chen", position: "Striker", highlight: true },
+  { name: "A. Patel", position: "Defender" },
+  { name: "K. Nova", position: "Defender" },
+];
+export const coachB = "M. Rossi";
+
 const initialMatch: Match = {
   id: "match-001",
   tournamentName: "National Drone Soccer Championship",
@@ -132,6 +146,7 @@ export const initialState: AppState = {
 
 class LocalStore implements DataStore {
   private state: AppState = initialState;
+  private matchArchive: Record<string, { match: Match; events: MatchEvent[] }> = {}; 
   private listeners = new Set<() => void>();
   private channel: BroadcastChannel | null = null;
   private hydrated = false;
@@ -142,9 +157,11 @@ class LocalStore implements DataStore {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) this.state = { ...initialState, ...(JSON.parse(raw) as AppState) };
-    } catch {
-      /* ignore corrupt state */
-    }
+      
+      const rawArchive = window.localStorage.getItem(ARCHIVE_KEY);
+      if (rawArchive) this.matchArchive = JSON.parse(rawArchive);
+    } catch { /* ignore corrupt state */ }
+    
     if ("BroadcastChannel" in window) {
       this.channel = new BroadcastChannel(CHANNEL);
       this.channel.onmessage = (e: MessageEvent<AppState>) => {
@@ -157,13 +174,14 @@ class LocalStore implements DataStore {
         this.state = JSON.parse(e.newValue) as AppState;
         this.listeners.forEach((l) => l());
       }
+      if (e.key === ARCHIVE_KEY && e.newValue) {
+        this.matchArchive = JSON.parse(e.newValue);
+      }
     });
     this.listeners.forEach((l) => l());
   }
 
-  getState() {
-    return this.state;
-  }
+  getState() { return this.state; }
 
   subscribe(listener: () => void) {
     this.hydrate();
@@ -171,28 +189,39 @@ class LocalStore implements DataStore {
     return () => this.listeners.delete(listener);
   }
 
-  /** Mutate + persist + broadcast: the "socket.emit" of this prototype. */
+  private syncArchive(next: AppState) {
+    if (next.match.id && next.match.id !== "match-001") {
+      this.matchArchive[next.match.id] = { match: next.match, events: next.events };
+    }
+    
+    next.tournaments = next.tournaments.map((t) => ({
+      ...t,
+      matches: t.matches.map((m) => {
+        const archive = this.matchArchive[m.id];
+        if (archive) {
+          return { ...m, scoreA: archive.match.scoreA, scoreB: archive.match.scoreB, status: archive.match.status } as TournamentMatch;
+        }
+        return m;
+      }),
+    }));
+  }
+
   private commit(next: AppState) {
+    this.syncArchive(next);
     this.state = next;
+    
     if (typeof window !== "undefined") {
-      try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* quota */
-      }
+      try { 
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); 
+        window.localStorage.setItem(ARCHIVE_KEY, JSON.stringify(this.matchArchive)); 
+      } catch { /* quota */ }
       this.channel?.postMessage(next);
     }
     this.listeners.forEach((l) => l());
   }
 
   private log(type: MatchEventType, message: string, state: AppState): MatchEvent[] {
-    const event: MatchEvent = {
-      id: uid(),
-      matchId: state.match.id,
-      type,
-      message,
-      createdAt: Date.now(),
-    };
+    const event: MatchEvent = { id: uid(), matchId: state.match.id, type, message, createdAt: Date.now() };
     return [event, ...state.events].slice(0, 50);
   }
 
@@ -203,13 +232,7 @@ class LocalStore implements DataStore {
   }
 
   addPlayers(teamId: string, players: Array<Omit<Player, "id" | "teamId" | "status" | "createdAt">>) {
-    const rows: Player[] = players.map((p) => ({
-      ...p,
-      id: uid(),
-      teamId,
-      status: "pending",
-      createdAt: Date.now(),
-    }));
+    const rows: Player[] = players.map((p) => ({ ...p, id: uid(), teamId, status: "pending", createdAt: Date.now() }));
     this.commit({ ...this.state, players: [...rows, ...this.state.players] });
   }
 
@@ -229,24 +252,15 @@ class LocalStore implements DataStore {
   }
 
   updatePlayer(id: string, patch: Partial<Omit<Player, "id" | "createdAt">>) {
-    this.commit({
-      ...this.state,
-      players: this.state.players.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-    });
+    this.commit({ ...this.state, players: this.state.players.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
   }
 
   removePlayer(id: string) {
-    this.commit({
-      ...this.state,
-      players: this.state.players.filter((p) => p.id !== id),
-    });
+    this.commit({ ...this.state, players: this.state.players.filter((p) => p.id !== id) });
   }
 
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>) {
-    this.commit({
-      ...this.state,
-      teams: this.state.teams.map((t) => (t.id === id ? { ...t, ...patch } : t)),
-    });
+    this.commit({ ...this.state, teams: this.state.teams.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
   }
 
   removeTeam(id: string) {
@@ -259,13 +273,7 @@ class LocalStore implements DataStore {
 
   createTournament(name: string, teamIds: string[], category?: TeamCategory) {
     const tournament: Tournament = {
-      id: uid(),
-      name,
-      status: "active",
-      teamIds,
-      matches: generateBracket(teamIds),
-      createdAt: Date.now(),
-      ...(category ? { category } : {}),
+      id: uid(), name, status: "active", teamIds, matches: generateBracket(teamIds), createdAt: Date.now(), ...(category ? { category } : {}),
     };
     this.commit({ ...this.state, tournaments: [tournament, ...this.state.tournaments] });
     return tournament;
@@ -290,6 +298,23 @@ class LocalStore implements DataStore {
     this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
   }
 
+  setupLiveMatch(tournamentMatchId: string, teamAName: string, teamBName: string) {
+    const archived = this.matchArchive[tournamentMatchId];
+    if (archived) {
+      this.commit({ ...this.state, match: archived.match, events: archived.events });
+      return;
+    }
+
+    const match: Match = {
+      ...initialMatch,
+      id: tournamentMatchId,
+      teamAName,
+      teamBName,
+      status: "scheduled",
+    };
+    this.commit({ ...this.state, match, events: [] });
+  }
+
   startMatch() {
     const match: Match = { ...this.state.match, status: "live", elapsedMs: 0, runningSince: Date.now() };
     this.commit({ ...this.state, match, events: this.log("match_started", "Match started", this.state) });
@@ -299,10 +324,7 @@ class LocalStore implements DataStore {
     const m = this.state.match;
     if (m.status !== "live") return;
     const match: Match = {
-      ...m,
-      status: "paused",
-      elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0),
-      runningSince: null,
+      ...m, status: "paused", elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0), runningSince: null,
     };
     this.commit({ ...this.state, match, events: this.log("match_paused", "Match paused", this.state) });
   }
@@ -317,12 +339,28 @@ class LocalStore implements DataStore {
   endMatch() {
     const m = this.state.match;
     const match: Match = {
-      ...m,
-      status: "finished",
-      elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0),
-      runningSince: null,
+      ...m, status: "finished", elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0), runningSince: null,
     };
-    this.commit({ ...this.state, match, events: this.log("match_ended", "Match ended", this.state) });
+    
+    let nextEvents = this.log("match_ended", "Match ended", { ...this.state, match });
+    let nextState = { ...this.state, match, events: nextEvents };
+
+    nextState.tournaments = nextState.tournaments.map((t) => {
+      const tMatch = t.matches.find((tm) => tm.id === match.id);
+      if (tMatch && !tMatch.winnerId) {
+        if (match.scoreA > match.scoreB) tMatch.winnerId = tMatch.teamAId;
+        else if (match.scoreB > match.scoreA) tMatch.winnerId = tMatch.teamBId;
+        
+        if (tMatch.winnerId) {
+          advanceWinner(t.matches, tMatch);
+          const finalMatch = t.matches.reduce((a, b) => (b.round > a.round ? b : a));
+          t.status = finalMatch.winnerId ? "completed" : "active";
+        }
+      }
+      return t;
+    });
+
+    this.commit(nextState);
   }
 
   adjustScore(side: "A" | "B", delta: number) {
@@ -331,66 +369,51 @@ class LocalStore implements DataStore {
     const value = Math.max(0, m[key] + delta);
     const match: Match = { ...m, [key]: value } as Match;
     const name = side === "A" ? m.teamAName : m.teamBName;
-    this.commit({
-      ...this.state,
-      match,
-      events: this.log("score_changed", `${name} score ${delta > 0 ? "+" : "-"}1 (now ${value})`, this.state),
-    });
+    this.commit({ ...this.state, match, events: this.log("score_changed", `${name} score ${delta > 0 ? "+" : "-"}1 (now ${value})`, { ...this.state, match }) });
   }
 
   issuePenalty(side: "A" | "B", type: PenaltyType) {
     const m = this.state.match;
     const match: Match = {
-      ...m,
-      penalties: [
-        { id: uid(), matchId: m.id, side, type, createdAt: Date.now() },
-        ...m.penalties,
-      ],
+      ...m, penalties: [{ id: uid(), matchId: m.id, side, type, createdAt: Date.now() }, ...m.penalties],
     };
     const name = side === "A" ? m.teamAName : m.teamBName;
-    this.commit({
-      ...this.state,
-      match,
-      events: this.log("penalty_issued", `${type} penalty — ${name}`, this.state),
-    });
+    this.commit({ ...this.state, match, events: this.log("penalty_issued", `${type} penalty — ${name}`, { ...this.state, match }) });
   }
 
+  // UPDATED: Now clears the CURRENT match's data while keeping the ID intact!
   resetMatch() {
-    this.commit({ ...this.state, match: { ...initialMatch }, events: [] });
+    const m = this.state.match;
+    const match: Match = {
+      ...m,
+      scoreA: 0,
+      scoreB: 0,
+      status: "scheduled",
+      elapsedMs: 0,
+      runningSince: null,
+      penalties: [],
+    };
+    this.commit({ ...this.state, match, events: [] });
   }
 }
 
 export const store: DataStore & { hydrate: () => void } = new LocalStore();
-
-/* ----------------------------- mock auth layer ---------------------------- */
 
 const AUTH_KEY = "ds-league-auth-v1";
 
 export const auth = {
   login(email: string, role: UserRole): AuthUser {
     const user: AuthUser = {
-      id: `user_${email.trim().toLowerCase()}`,
-      name: email.split("@")[0] || "dev-admin",
-      email,
-      role,
-      token: `mock.${uid()}.${uid()}`,
+      id: `user_${email.trim().toLowerCase()}`, name: email.split("@")[0] || "dev-admin", email, role, token: `mock.${uid()}.${uid()}`,
     };
     window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
     return user;
   },
   current(): AuthUser | null {
     if (typeof window === "undefined") return null;
-    try {
-      const raw = window.localStorage.getItem(AUTH_KEY);
-      return raw ? (JSON.parse(raw) as AuthUser) : null;
-    } catch {
-      return null;
-    }
+    try { const raw = window.localStorage.getItem(AUTH_KEY); return raw ? (JSON.parse(raw) as AuthUser) : null; } catch { return null; }
   },
-  logout() {
-    window.localStorage.removeItem(AUTH_KEY);
-  },
+  logout() { window.localStorage.removeItem(AUTH_KEY); },
 };
 
-export const homeForRole = (role: UserRole) =>
-  role === "referee" ? "/referee" : role === "coach" ? "/register-team" : "/admin";
+export const homeForRole = (role: UserRole) => role === "referee" ? "/referee" : role === "coach" ? "/register-team" : "/admin";

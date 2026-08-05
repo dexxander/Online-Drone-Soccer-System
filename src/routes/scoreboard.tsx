@@ -1,5 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { ArrowLeftRight } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
+import { cn } from "@/lib/utils";
+import { AVAILABLE_TEAMS } from "@/lib/store";
 
 export const Route = createFileRoute("/scoreboard")({
   head: () => ({
@@ -11,109 +15,173 @@ export const Route = createFileRoute("/scoreboard")({
   component: Scoreboard,
 });
 
+const MATCH_DURATION_MS = 3 * 60 * 1000; 
+
+function getTeamDetailsByName(name: string, dynamicTeams: any[]) {
+  if (!name || name === "TBD") return { initials: "TB", logo: undefined };
+  
+  const dynamicTeam = dynamicTeams.find((t: any) => t.name === name);
+  if (dynamicTeam) return { initials: dynamicTeam.name.substring(0, 2).toUpperCase(), logo: dynamicTeam.logoUrl || dynamicTeam.logo };
+  
+  const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.name === name);
+  return fallbackTeam 
+    ? { initials: fallbackTeam.initials, logo: (fallbackTeam as any).logoUrl || (fallbackTeam as any).logo } 
+    : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
+}
+
+// Math helper to calculate round names
+function getMatchTitle(round: number, maxRound: number) {
+  if (maxRound === 1) return "Exhibition Match";
+  if (round === maxRound) return "Grand Final";
+  if (round === maxRound - 1) return "Semi-Finals";
+  if (round === maxRound - 2) return "Quarter-Finals";
+  return `Round ${round}`;
+}
+
 function Scoreboard() {
   const { state } = useMockWebSocket();
+  const [isSwapped, setIsSwapped] = useState(false);
   
-  // 1. Pull the single match and the live events array from your store
   const m = state.match;
-  const events = state.events || []; 
+  const events = Array.isArray(state.events) ? state.events : []; 
+  const teams = Array.isArray(state.teams) ? state.teams : [];
+  const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
   
-  const clock = useMatchClock(m.elapsedMs, m.runningSince);
+  const elapsedMs = useMatchClock(m.elapsedMs, m.runningSince);
+  const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
+
+  const teamAInfo = getTeamDetailsByName(m.teamAName, teams);
+  const teamBInfo = getTeamDetailsByName(m.teamBName, teams);
+
+  const penaltiesA = Array.isArray(m.penalties) ? m.penalties.filter(p => p.side === "A") : [];
+  const penaltiesB = Array.isArray(m.penalties) ? m.penalties.filter(p => p.side === "B") : [];
+
+  // Dynamic Header Logic
+  const activeTournament = tournaments.find(t => t.matches.some(tm => tm.id === m.id));
+  const tMatch = activeTournament?.matches.find(tm => tm.id === m.id);
+  const maxRound = activeTournament ? Math.max(...activeTournament.matches.map(tm => tm.round)) : 1;
+  const currentRound = tMatch?.round || 1;
+  const matchTitle = getMatchTitle(currentRound, maxRound);
+  const tournamentName = activeTournament ? activeTournament.name : "Friendly Match";
+
+  const TeamAPanel = (
+    <div className="relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-white p-8 shadow-sm">
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
+        {teamAInfo.logo ? (
+          <img src={teamAInfo.logo} className="h-full w-full object-contain opacity-40 grayscale mix-blend-multiply" alt="" />
+        ) : (
+          <span className="text-[12rem] font-black leading-none text-slate-800 opacity-[0.09]">{teamAInfo.initials}</span>
+        )}
+      </div>
+      <h3 className="relative z-10 text-xl font-bold text-teal-700">{m.teamAName}</h3>
+      <p className="relative z-10 mt-4 font-mono text-[8rem] font-bold leading-none tabular-nums text-slate-800">
+        {m.scoreA.toString().padStart(2, '0')}
+      </p>
+      <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
+        {penaltiesA.map((p) => (
+          <span key={p.id} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", p.type === "Major" ? "bg-yellow-400" : p.type === "Technical" ? "bg-red-600" : "bg-slate-300")} />
+        ))}
+      </div>
+    </div>
+  );
+
+  const TeamBPanel = (
+    <div className="relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-white p-8 shadow-sm">
+      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
+        {teamBInfo.logo ? (
+          <img src={teamBInfo.logo} className="h-full w-full object-contain opacity-40 grayscale mix-blend-multiply" alt="" />
+        ) : (
+          <span className="text-[12rem] font-black leading-none text-slate-800 opacity-[0.09]">{teamBInfo.initials}</span>
+        )}
+      </div>
+      <h3 className="relative z-10 text-xl font-bold text-orange-600">{m.teamBName}</h3>
+      <p className="relative z-10 mt-4 font-mono text-[8rem] font-bold leading-none tabular-nums text-slate-800">
+        {m.scoreB.toString().padStart(2, '0')}
+      </p>
+      <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
+        {penaltiesB.map((p) => (
+          <span key={p.id} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", p.type === "Major" ? "bg-yellow-400" : p.type === "Technical" ? "bg-red-600" : "bg-slate-300")} />
+        ))}
+      </div>
+    </div>
+  );
+
+  const EventLogPanel = (
+    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
+      <div className="border-b border-slate-200 bg-slate-100 px-4 py-3">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">Event Log / 事件日志</h3>
+      </div>
+      <div className="flex flex-col gap-3 overflow-hidden p-4">
+          {events.length === 0 ? (
+            <p className="py-6 text-center text-sm text-slate-400">No match events yet.</p>
+          ) : (
+            events.slice(0, 4).map((evt) => {
+              const isTeamA = m.teamAName && evt.message.includes(m.teamAName);
+              const isTeamB = m.teamBName && evt.message.includes(m.teamBName);
+              
+              let side: 'left' | 'right' | 'center' = 'center';
+              if (isTeamA && !isTeamB) side = isSwapped ? 'right' : 'left';
+              else if (isTeamB && !isTeamA) side = isSwapped ? 'left' : 'right';
+
+              let uiType: 'goal' | 'penalty' | 'system' = 'system';
+              if (evt.type === 'score_changed') uiType = 'goal';
+              if (evt.type === 'penalty_issued') uiType = 'penalty';
+
+              const timeStr = new Date(evt.createdAt).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
+
+              return <EventLogItem key={evt.id} type={uiType} message={evt.message} time={timeStr} side={side} />;
+            })
+          )}
+      </div>
+    </div>
+  );
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900 font-sans">
+    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
       <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
         <div className="flex items-center gap-6">
-          <h1 className="text-xl font-bold tracking-tight text-teal-800 uppercase">
+          <h1 className="text-xl font-bold uppercase tracking-tight text-teal-800">
             Drone Soccer Arena
           </h1>
-          <div className="hidden md:flex items-center gap-2">
-             <span className="flex h-2 w-2 rounded-full bg-teal-500 animate-pulse"></span>
-             <span className="text-xs font-bold text-teal-700 tracking-widest uppercase">实时转播 Live</span>
+          <div className="hidden items-center gap-2 md:flex">
+             <span className="flex h-2 w-2 animate-pulse rounded-full bg-teal-500"></span>
+             <span className="text-xs font-bold uppercase tracking-widest text-teal-700">Live</span>
           </div>
         </div>
+        <button
+          onClick={() => setIsSwapped(!isSwapped)}
+          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+          title="Swap team sides visually"
+        >
+          <ArrowLeftRight className="size-4" strokeWidth={2.5} />
+          <span>Swap Sides</span>
+        </button>
       </header>
 
       <main className="flex-1 p-6">
-        <div className="max-w-6xl mx-auto flex flex-col gap-6">
-          <div className="text-center mt-4">
-            <h2 className="text-3xl font-bold tracking-widest text-teal-800">FINAL MATCH</h2>
-            <p className="text-sm font-semibold text-slate-500 tracking-widest mt-1">ROUND 3 (局 3)</p>
+        <div className="mx-auto flex max-w-6xl flex-col gap-6">
+          <div className="mt-4 text-center">
+            <h2 className="text-3xl font-bold uppercase tracking-widest text-teal-800">{matchTitle}</h2>
+            <p className="mt-1 text-sm font-semibold uppercase tracking-widest text-slate-500">{tournamentName}</p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex flex-col items-center justify-center">
+          <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
             <p className="font-mono text-7xl font-bold tabular-nums text-slate-800">
-              {formatClock(clock)}
+              {formatClock(remainingMs)}
             </p>
-            <p className="text-xs font-bold text-red-400 mt-2 tracking-widest uppercase">Time Remaining</p>
+            <p className="mt-2 text-xs font-bold uppercase tracking-widest text-red-400">Time Remaining</p>
           </div>
 
-          <div className="grid grid-cols-[1fr_2fr_1fr] gap-6 mt-4">
-            {/* Team A */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-8 flex flex-col items-center justify-center">
-              <h3 className="text-xl font-bold text-teal-700">{m.teamAName}</h3>
-              <p className="font-mono text-[8rem] font-bold leading-none tabular-nums text-slate-800 mt-4">
-                {m.scoreA.toString().padStart(2, '0')}
-              </p>
-            </div>
-
-            {/* Live Event Log */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 flex flex-col overflow-hidden">
-              <div className="bg-slate-100 px-4 py-3 border-b border-slate-200">
-                <h3 className="text-xs font-bold text-slate-600 uppercase tracking-widest">Event Log / 事件日志</h3>
-              </div>
-              <div className="p-4 flex flex-col gap-3 overflow-y-auto max-h-[400px]">
-                 {events.length === 0 ? (
-                    <p className="text-center text-sm text-slate-400 py-6">No match events yet.</p>
-                 ) : (
-                    events.map((evt) => {
-                      // 2. Logic to decide if the event points left (Team A) or right (Team B)
-                      const isTeamA = evt.message.includes(m.teamAName);
-                      const isTeamB = evt.message.includes(m.teamBName);
-                      
-                      let side: 'left' | 'right' | 'center' = 'center';
-                      if (isTeamA) side = 'left';
-                      if (isTeamB) side = 'right';
-
-                      // 3. Logic to color code goals vs penalties
-                      let uiType: 'goal' | 'penalty' | 'system' = 'system';
-                      if (evt.type === 'score_changed') uiType = 'goal';
-                      if (evt.type === 'penalty_issued') uiType = 'penalty';
-
-                      const timeStr = new Date(evt.createdAt).toLocaleTimeString([], {
-                        minute: '2-digit',
-                        second: '2-digit'
-                      });
-
-                      return (
-                        <EventLogItem 
-                          key={evt.id} 
-                          type={uiType} 
-                          message={evt.message} 
-                          time={timeStr} 
-                          side={side} 
-                        />
-                      );
-                    })
-                 )}
-              </div>
-            </div>
-
-            {/* Team B */}
-            <div className="bg-white rounded-xl shadow-sm border border-slate-100 p-8 flex flex-col items-center justify-center">
-              <h3 className="text-xl font-bold text-orange-600">{m.teamBName}</h3>
-              <p className="font-mono text-[8rem] font-bold leading-none tabular-nums text-slate-800 mt-4">
-                {m.scoreB.toString().padStart(2, '0')}
-              </p>
-            </div>
+          <div className="grid gap-6 mt-4 md:grid-cols-[1fr_2fr_1fr]">
+            {isSwapped ? TeamBPanel : TeamAPanel}
+            {EventLogPanel}
+            {isSwapped ? TeamAPanel : TeamBPanel}
           </div>
         </div>
       </main>
     </div>
   );
 }
-
-// --- UTILITY UI COMPONENTS ---
 
 function EventLogItem({ type, message, time, side }: { type: 'goal' | 'penalty' | 'system', message: string, time: string, side: 'left' | 'right' | 'center' }) {
   let colorClass = 'border-slate-200 text-slate-600 bg-slate-50'; 
@@ -128,19 +196,15 @@ function EventLogItem({ type, message, time, side }: { type: 'goal' | 'penalty' 
   }
   
   return (
-    <div className={`border rounded-lg p-3 flex items-center justify-between ${colorClass}`}>
-      <div className="w-4 flex justify-start">
+    <div className={`flex items-center justify-between rounded-lg border p-3 ${colorClass}`}>
+      <div className="flex w-4 justify-start">
         {side === 'left' && <span className={indicatorColor}>◀</span>}
       </div>
-      
       <div className="flex-1 text-center">
-        <p className="font-bold text-sm uppercase tracking-wide">
-          {message}
-        </p>
-        <p className="text-xs mt-1 text-slate-400">{time}</p>
+        <p className="text-sm font-bold uppercase tracking-wide">{message}</p>
+        <p className="mt-1 text-xs text-slate-400">{time}</p>
       </div>
-
-      <div className="w-4 flex justify-end">
+      <div className="flex w-4 justify-end">
         {side === 'right' && <span className={indicatorColor}>▶</span>}
       </div>
     </div>
