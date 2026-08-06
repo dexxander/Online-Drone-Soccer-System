@@ -144,12 +144,6 @@ function MatchesPage() {
             <Link to="/login" className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
               Sign in
             </Link>
-            <Link
-              to="/register-team"
-              className="rounded-lg bg-primary px-4 py-2 text-[13px] font-bold text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Register team
-            </Link>
           </nav>
         </div>
       </header>
