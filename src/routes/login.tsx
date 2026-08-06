@@ -30,6 +30,14 @@ function LoginPage() {
     }
     try {
       const loggedUser = await auth.login(email, password);
+      
+      // Prevent admins from logging in through the regular portal
+      if (loggedUser.role === "admin") {
+        await auth.logout();
+        setError("Administrators must sign in through the internal /admin-login portal.");
+        return;
+      }
+      
       navigate({ to: homeForRole(loggedUser.role) });
     } catch (err: any) {
       setError(err.message || "Failed to sign in. Please check your credentials.");
