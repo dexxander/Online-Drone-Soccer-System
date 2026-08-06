@@ -50,7 +50,7 @@ const DEVELOPERS: Array<{
     bio: "Design the referee and scoreboard interfaces, ensuring a smooth user experience.Created Drone SVG animations for the landing page.",
     photo: null, // e.g. "/team/developer-two.jpg"
     email: "trevorleongthomas@@gmail.com",
-    github: "https://github.com/RevoltLT",
+    github: "https://github.com/trevorleong55",
     linkedin: "https://www.linkedin.com/in/trevorleongthomas/",
   },
   {
