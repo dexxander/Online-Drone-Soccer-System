@@ -18,8 +18,8 @@ function HiddenAdminAuthPage() {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
 
   // Sign In Form State
-  const [signInEmail, setSignInEmail] = useState("dev-admin@dronesoccer.io");
-  const [signInPassword, setSignInPassword] = useState("password");
+  const [signInEmail, setSignInEmail] = useState("");
+  const [signInPassword, setSignInPassword] = useState("");
   const [signInError, setSignInError] = useState("");
 
   // Sign Up Form State
