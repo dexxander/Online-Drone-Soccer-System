@@ -197,6 +197,7 @@ export interface DataStore {
   setSlotVisibility(slotId: MatchSlotId, visible: boolean): void;
   touchSlotPresence(slotId: MatchSlotId): void;
   releaseSlotPresence(slotId: MatchSlotId): void;
+  refreshMatchSlots(): Promise<void>;
   addAnnouncement(input: Omit<Announcement, "id" | "createdAt">): Announcement;
   updateAnnouncement(id: string, patch: Partial<Omit<Announcement, "id" | "createdAt">>): void;
   removeAnnouncement(id: string): void;
@@ -232,11 +233,12 @@ export class SupabaseStore implements DataStore {
         supabase.from('announcements').select('*'),
         supabase.from('tournaments').select('*'),
         supabase.from('audit_logs').select('*'),
-        supabase.from('tournament_matches').select('*')
+        supabase.from('tournament_matches').select('*'),
+        supabase.from('match_slots').select('*')
       ]);
       const firstError = responses.find((response) => response.error)?.error;
       if (firstError) throw firstError;
-      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches] = responses.map((response) => response.data);
+      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches, matchSlots] = responses.map((response) => response.data);
 
       const camelTournaments = toCamel(tournaments || []);
       const camelMatches = toCamel(tournamentMatches || []);
@@ -256,6 +258,7 @@ export class SupabaseStore implements DataStore {
         tournaments: mappedTournaments,
         auditLogs: toCamel(auditLogs) || [],
       };
+      this.applyMatchSlots(toCamel(matchSlots) || []);
       this.notify();
     } catch (e) {
       console.error("Supabase hydration failed", e);
@@ -301,6 +304,61 @@ export class SupabaseStore implements DataStore {
     const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, ...patch } : s)) as [MatchSlot, MatchSlot];
     const primary = matches[0];
     this.commit({ ...this.state, matches, match: primary.match, events: primary.events });
+    this.persistMatchSlot(matches.find((slot) => slot.slotId === slotId)!);
+  }
+
+  private applyMatchSlots(rows: any[]) {
+    if (!rows.length) return;
+    const matches = this.state.matches.map((slot) => {
+      const row = rows.find((candidate) => candidate.slotId === slot.slotId);
+      if (!row) return slot;
+      return {
+        ...slot,
+        match: {
+          ...slot.match,
+          id: row.tournamentMatchId || slot.match.id,
+          teamAName: row.teamAName || "TBD",
+          teamBName: row.teamBName || "TBD",
+          scoreA: Number(row.scoreA) || 0,
+          scoreB: Number(row.scoreB) || 0,
+          status: row.status || "scheduled",
+          elapsedMs: Number(row.elapsedMs) || 0,
+          runningSince: row.runningSince == null ? null : Number(row.runningSince),
+        },
+        visibleOnScoreboard: row.visibleOnScoreboard ?? true,
+        lastActiveAt: row.lastActiveAt == null ? null : Number(row.lastActiveAt),
+      };
+    }) as [MatchSlot, MatchSlot];
+    this.state = { ...this.state, matches, match: matches[0].match, events: matches[0].events };
+  }
+
+  async refreshMatchSlots() {
+    const { data, error } = await supabase.from('match_slots').select('*');
+    if (error) {
+      console.error('Supabase match slot refresh failed:', error);
+      return;
+    }
+    this.applyMatchSlots(toCamel(data || []));
+    this.notify();
+  }
+
+  private persistMatchSlot(slot: MatchSlot) {
+    const row = {
+      slot_id: slot.slotId,
+      tournament_match_id: slot.match.id,
+      team_a_name: slot.match.teamAName,
+      team_b_name: slot.match.teamBName,
+      score_a: slot.match.scoreA,
+      score_b: slot.match.scoreB,
+      status: slot.match.status,
+      elapsed_ms: slot.match.elapsedMs,
+      running_since: slot.match.runningSince,
+      visible_on_scoreboard: slot.visibleOnScoreboard,
+      last_active_at: slot.lastActiveAt,
+    };
+    // The schema seeds slots 1 and 2 and grants referees UPDATE access. Use
+    // UPDATE instead of upsert so RLS does not require INSERT permission.
+    this.persist('match slot update', () => supabase.from('match_slots').update(row).eq('slot_id', slot.slotId).select('slot_id').single());
   }
 
   private log(type: MatchEventType, message: string, matchId: string, events: MatchEvent[]): MatchEvent[] {

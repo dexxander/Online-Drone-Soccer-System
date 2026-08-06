@@ -86,8 +86,17 @@ function useTick(intervalMs: number) {
 }
 
 function Scoreboard() {
-  const { state } = useMockWebSocket();
+  const { state, socket } = useMockWebSocket();
   useTick(1000);
+
+  // The referee and scoreboard may be open in different browser tabs, so
+  // they do not share the same in-memory store. Read the live slot rows from
+  // Supabase so score, status and referee presence stay synchronized.
+  useEffect(() => {
+    void socket.refreshMatchSlots();
+    const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
+    return () => clearInterval(id);
+  }, [socket]);
 
   const slots: MatchSlot[] = Array.isArray(state.matches) && state.matches.length === 2
     ? state.matches
