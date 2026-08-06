@@ -80,12 +80,6 @@ function Landing() {
               Matches
             </Link>
             <Link
-              to="/scoreboard"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Live scoreboard
-            </Link>
-            <Link
               to="/about"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
             >
