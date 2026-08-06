@@ -10,7 +10,7 @@ import type { AppState } from "@/lib/types";
  * Replacing this with a real socket client keeps the same component API:
  *
  *   const { state, emit } = useMockWebSocket();
- *   emit("updateMatch", (s) => s.adjustScore("A", 1));
+ *   emit("updateMatch", (s) => s.adjustScore(1, "A", 1)); // slotId 1 = Court 1
  */
 export function useMockWebSocket() {
   // `store` is a module-level singleton, so this subscribe function is stable

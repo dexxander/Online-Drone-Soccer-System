@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ShieldCheck } from "lucide-react";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
-import type { Match } from "@/lib/types";
+import type { Match, MatchSlotId } from "@/lib/types";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 
 function getMatchTitle(round: number, maxRound: number) {
@@ -13,7 +13,7 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
-export function RefereeLayout({ children, match }: { children: ReactNode; match: Match }) {
+export function RefereeLayout({ children, match, slotId }: { children: ReactNode; match: Match; slotId?: MatchSlotId }) {
   const navigate = useNavigate();
   const user = auth.current();
   const { state } = useMockWebSocket();
@@ -50,6 +50,11 @@ export function RefereeLayout({ children, match }: { children: ReactNode; match:
           <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
             {matchTitle} &gt; Match {matchDisplayNumber}
           </span>
+          {slotId && (
+            <span className="hidden rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
+              Court {slotId}
+            </span>
+          )}
         </div>
 
         {/* Right: User + Role */}

@@ -10,6 +10,8 @@ import type {
   MatchEvent,
   MatchEventType,
   MatchmakingType,
+  MatchSlot,
+  MatchSlotId,
   PenaltyType,
   Player,
   Team,
@@ -46,14 +48,25 @@ export interface DataStore {
   ): void;
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string): void;
   removeTournament(id: string): void;
-  setupLiveMatch(tournamentMatchId: string, teamAName: string, teamBName: string): void;
-  startMatch(): void;
-  pauseMatch(): void;
-  resumeMatch(): void;
-  endMatch(): void;
-  adjustScore(side: "A" | "B", delta: number): void;
-  issuePenalty(side: "A" | "B", type: PenaltyType): void;
-  resetMatch(): void;
+
+  // Match control — every action now targets a specific slot (Court 1 / Court 2)
+  // so up to two matches can run independently at the same time.
+  setupLiveMatch(slotId: MatchSlotId, tournamentMatchId: string, teamAName: string, teamBName: string): void;
+  startMatch(slotId: MatchSlotId): void;
+  pauseMatch(slotId: MatchSlotId): void;
+  resumeMatch(slotId: MatchSlotId): void;
+  endMatch(slotId: MatchSlotId): void;
+  adjustScore(slotId: MatchSlotId, side: "A" | "B", delta: number): void;
+  issuePenalty(slotId: MatchSlotId, side: "A" | "B", type: PenaltyType): void;
+  resetMatch(slotId: MatchSlotId): void;
+
+  // Scoreboard visibility toggle for a slot ("show this match on the public scoreboard").
+  setSlotVisibility(slotId: MatchSlotId, visible: boolean): void;
+
+  // Presence heartbeat — called by an open referee control page so the
+  // public scoreboard knows this slot is currently being officiated.
+  touchSlotPresence(slotId: MatchSlotId): void;
+  releaseSlotPresence(slotId: MatchSlotId): void;
 
   // Announcements
   addAnnouncement(input: Omit<Announcement, "id" | "createdAt">): Announcement;
@@ -71,9 +84,21 @@ export interface DataStore {
   logAudit(action: string, performedBy: string, target: string, category: AuditLogEntry["category"], details?: string): void;
 }
 
-const STORAGE_KEY = "ds-league-state-v3";
-const ARCHIVE_KEY = "ds-league-archive-v3";
-const CHANNEL = "ds-league-channel-v3";
+// Bumped to v4: AppState now carries `matches` (two independent match
+// slots) instead of a single `match`. v3 (upstream) added scheduledDate/
+// scheduledTime to tournament matches; v4 layers the multi-court slots on
+// top. Old state is simply ignored on load — no migration code needed for
+// a mock/local store.
+const STORAGE_KEY = "ds-league-state-v4";
+const ARCHIVE_KEY = "ds-league-archive-v4";
+const CHANNEL = "ds-league-channel-v4";
+
+/** How long a slot is considered "open" on the scoreboard after its last presence heartbeat. */
+export const PRESENCE_TTL_MS = 8000;
+/** How often an open control page pings presence for its slot. */
+export const PRESENCE_HEARTBEAT_MS = 3000;
+
+const DEFAULT_SLOT_MATCH_IDS = new Set(["match-slot-1", "match-slot-2"]);
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -373,10 +398,23 @@ export const rosterB = [
 export const coachB = "M. Rossi";
 
 const initialMatch: Match = {
-  id: "match-001",
+  id: "match-slot-1",
   tournamentName: "National Drone Soccer Championship",
   teamAName: "Sky Raptors",
   teamBName: "Vortex United",
+  scoreA: 0,
+  scoreB: 0,
+  status: "scheduled",
+  elapsedMs: 0,
+  runningSince: null,
+  penalties: [],
+};
+
+const initialMatchSlot2: Match = {
+  id: "match-slot-2",
+  tournamentName: "National Drone Soccer Championship",
+  teamAName: "TBD",
+  teamBName: "TBD",
   scoreA: 0,
   scoreB: 0,
   status: "scheduled",
@@ -558,12 +596,19 @@ export const initialTournaments: Tournament[] = [
   },
 ];
 
+const initialMatchSlots: [MatchSlot, MatchSlot] = [
+  { slotId: 1, match: initialMatch, events: [], visibleOnScoreboard: true, lastActiveAt: null },
+  { slotId: 2, match: initialMatchSlot2, events: [], visibleOnScoreboard: true, lastActiveAt: null },
+];
+
 export const initialState: AppState = {
   teams: initialTeams,
   players: initialPlayers,
   tournaments: initialTournaments,
-  match: initialMatch,
-  events: [],
+  matches: initialMatchSlots,
+  // Legacy mirrors — always slot 1. Kept in sync by every commit.
+  match: initialMatchSlots[0].match,
+  events: initialMatchSlots[0].events,
   announcements: initialAnnouncements,
   users: initialUsers,
   auditLogs: initialAuditLogs,
@@ -576,6 +621,40 @@ class LocalStore implements DataStore {
   private channel: BroadcastChannel | null = null;
   private hydrated = false;
 
+  /** Normalizes a persisted/broadcast slot into a well-formed MatchSlot, falling back to defaults for anything missing or corrupt. */
+  private static normalizeSlot(raw: Partial<MatchSlot> | undefined, slotId: MatchSlotId, resetPresence: boolean): MatchSlot {
+    const fallback = initialMatchSlots[slotId - 1];
+    return {
+      slotId,
+      match: raw?.match ?? fallback.match,
+      events: Array.isArray(raw?.events) ? raw!.events : [],
+      visibleOnScoreboard: typeof raw?.visibleOnScoreboard === "boolean" ? raw!.visibleOnScoreboard : true,
+      // `resetPresence` is true ONLY for the one-time load from localStorage
+      // on page open — a timestamp from a previous session shouldn't count
+      // as "still open". For live cross-tab syncs (BroadcastChannel / the
+      // `storage` event) we must preserve the incoming value as-is, or a
+      // control page's heartbeat would get wiped the instant another tab
+      // received it and the scoreboard would never see a slot as open.
+      lastActiveAt: resetPresence
+        ? null
+        : (typeof raw?.lastActiveAt === "number" ? raw!.lastActiveAt : null),
+    };
+  }
+
+  private static normalizeMatches(parsed: Partial<AppState>, resetPresence: boolean): [MatchSlot, MatchSlot] {
+    if (Array.isArray(parsed.matches) && parsed.matches.length === 2) {
+      return [
+        LocalStore.normalizeSlot(parsed.matches[0], 1, resetPresence),
+        LocalStore.normalizeSlot(parsed.matches[1], 2, resetPresence),
+      ];
+    }
+    // Very old / foreign shape (or missing): start clean from defaults.
+    return [
+      LocalStore.normalizeSlot(undefined, 1, resetPresence),
+      LocalStore.normalizeSlot(undefined, 2, resetPresence),
+    ];
+  }
+
   hydrate() {
     if (this.hydrated || typeof window === "undefined") return;
     this.hydrated = true;
@@ -583,9 +662,13 @@ class LocalStore implements DataStore {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as AppState;
+        const matches = LocalStore.normalizeMatches(parsed, true);
         this.state = {
           ...initialState,
           ...parsed,
+          matches,
+          match: matches[0].match,
+          events: matches[0].events,
           teams: parsed.teams && parsed.teams.length >= 8 ? parsed.teams : initialTeams,
           players: parsed.players && parsed.players.length >= 40 ? parsed.players : initialPlayers,
         };
@@ -598,18 +681,28 @@ class LocalStore implements DataStore {
     if ("BroadcastChannel" in window) {
       this.channel = new BroadcastChannel(CHANNEL);
       this.channel.onmessage = (e: MessageEvent<AppState>) => {
-        this.state = e.data;
+        const matches = LocalStore.normalizeMatches(e.data, false);
+        this.state = { ...e.data, matches, match: matches[0].match, events: matches[0].events };
         this.listeners.forEach((l) => l());
       };
     }
     window.addEventListener("storage", (e) => {
       if (e.key === STORAGE_KEY && e.newValue) {
-        this.state = JSON.parse(e.newValue) as AppState;
+        const parsed = JSON.parse(e.newValue) as AppState;
+        const matches = LocalStore.normalizeMatches(parsed, false);
+        this.state = { ...parsed, matches, match: matches[0].match, events: matches[0].events };
         this.listeners.forEach((l) => l());
       }
       if (e.key === ARCHIVE_KEY && e.newValue) {
         this.matchArchive = JSON.parse(e.newValue);
       }
+    });
+    // Best-effort: let go of this tab's presence if it's closed/refreshed
+    // rather than waiting out the full presence TTL on the scoreboard.
+    window.addEventListener("beforeunload", () => {
+      this.state.matches.forEach((slot) => {
+        if (slot.lastActiveAt !== null) this.releaseSlotPresence(slot.slotId);
+      });
     });
     this.listeners.forEach((l) => l());
   }
@@ -622,10 +715,23 @@ class LocalStore implements DataStore {
     return () => this.listeners.delete(listener);
   }
 
+  private getSlot(slotId: MatchSlotId): MatchSlot {
+    return this.state.matches.find((s) => s.slotId === slotId) ?? this.state.matches[0];
+  }
+
+  /** Applies a partial patch to one slot and commits, keeping the legacy `match`/`events` mirror (slot 1) in sync. */
+  private commitSlot(slotId: MatchSlotId, patch: Partial<Pick<MatchSlot, "match" | "events" | "visibleOnScoreboard" | "lastActiveAt">>) {
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, ...patch } : s)) as [MatchSlot, MatchSlot];
+    const primary = matches[0];
+    this.commit({ ...this.state, matches, match: primary.match, events: primary.events });
+  }
+
   private syncArchive(next: AppState) {
-    if (next.match.id && next.match.id !== "match-001") {
-      this.matchArchive[next.match.id] = { match: next.match, events: next.events };
-    }
+    next.matches.forEach((slot) => {
+      if (slot.match.id && !DEFAULT_SLOT_MATCH_IDS.has(slot.match.id)) {
+        this.matchArchive[slot.match.id] = { match: slot.match, events: slot.events };
+      }
+    });
 
     next.tournaments = next.tournaments.map((t) => ({
       ...t,
@@ -653,9 +759,9 @@ class LocalStore implements DataStore {
     this.listeners.forEach((l) => l());
   }
 
-  private log(type: MatchEventType, message: string, state: AppState): MatchEvent[] {
-    const event: MatchEvent = { id: uid(), matchId: state.match.id, type, message, createdAt: Date.now() };
-    return [event, ...state.events].slice(0, 50);
+  private log(type: MatchEventType, message: string, matchId: string, events: MatchEvent[]): MatchEvent[] {
+    const event: MatchEvent = { id: uid(), matchId, type, message, createdAt: Date.now() };
+    return [event, ...events].slice(0, 50);
   }
 
   addTeam(input: Omit<Team, "id" | "status" | "createdAt">) {
@@ -790,52 +896,61 @@ class LocalStore implements DataStore {
     this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
   }
 
-  setupLiveMatch(tournamentMatchId: string, teamAName: string, teamBName: string) {
+  setupLiveMatch(slotId: MatchSlotId, tournamentMatchId: string, teamAName: string, teamBName: string) {
     const archived = this.matchArchive[tournamentMatchId];
     if (archived) {
-      this.commit({ ...this.state, match: archived.match, events: archived.events });
+      this.commitSlot(slotId, { match: archived.match, events: archived.events });
       return;
     }
 
+    const base = slotId === 2 ? initialMatchSlot2 : initialMatch;
     const match: Match = {
-      ...initialMatch,
+      ...base,
       id: tournamentMatchId,
       teamAName,
       teamBName,
       status: "scheduled",
     };
-    this.commit({ ...this.state, match, events: [] });
+    this.commitSlot(slotId, { match, events: [] });
   }
 
-  startMatch() {
-    const match: Match = { ...this.state.match, status: "live", elapsedMs: 0, runningSince: Date.now() };
-    this.commit({ ...this.state, match, events: this.log("match_started", "Match started", this.state) });
+  startMatch(slotId: MatchSlotId) {
+    const slot = this.getSlot(slotId);
+    const match: Match = { ...slot.match, status: "live", elapsedMs: 0, runningSince: Date.now() };
+    const events = this.log("match_started", "Match started", match.id, slot.events);
+    this.commitSlot(slotId, { match, events });
   }
 
-  pauseMatch() {
-    const m = this.state.match;
+  pauseMatch(slotId: MatchSlotId) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
     if (m.status !== "live") return;
     const match: Match = {
       ...m, status: "paused", elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0), runningSince: null,
     };
-    this.commit({ ...this.state, match, events: this.log("match_paused", "Match paused", this.state) });
+    const events = this.log("match_paused", "Match paused", match.id, slot.events);
+    this.commitSlot(slotId, { match, events });
   }
 
-  resumeMatch() {
-    const m = this.state.match;
+  resumeMatch(slotId: MatchSlotId) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
     if (m.status !== "paused") return;
     const match: Match = { ...m, status: "live", runningSince: Date.now() };
-    this.commit({ ...this.state, match, events: this.log("match_resumed", "Match resumed", this.state) });
+    const events = this.log("match_resumed", "Match resumed", match.id, slot.events);
+    this.commitSlot(slotId, { match, events });
   }
 
-  endMatch() {
-    const m = this.state.match;
+  endMatch(slotId: MatchSlotId) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
     const match: Match = {
       ...m, status: "finished", elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0), runningSince: null,
     };
 
-    let nextEvents = this.log("match_ended", "Match ended", { ...this.state, match });
-    let nextState = { ...this.state, match, events: nextEvents };
+    const nextEvents = this.log("match_ended", "Match ended", match.id, slot.events);
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, match, events: nextEvents } : s)) as [MatchSlot, MatchSlot];
+    const nextState: AppState = { ...this.state, matches, match: matches[0].match, events: matches[0].events };
 
     nextState.tournaments = nextState.tournaments.map((t) => {
       const tMatch = t.matches.find((tm) => tm.id === match.id);
@@ -855,27 +970,32 @@ class LocalStore implements DataStore {
     this.commit(nextState);
   }
 
-  adjustScore(side: "A" | "B", delta: number) {
-    const m = this.state.match;
+  adjustScore(slotId: MatchSlotId, side: "A" | "B", delta: number) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
     const key = side === "A" ? "scoreA" : "scoreB";
     const value = Math.max(0, m[key] + delta);
     const match: Match = { ...m, [key]: value } as Match;
     const name = side === "A" ? m.teamAName : m.teamBName;
-    this.commit({ ...this.state, match, events: this.log("score_changed", `${name} score ${delta > 0 ? "+" : "-"}1 (now ${value})`, { ...this.state, match }) });
+    const events = this.log("score_changed", `${name} score ${delta > 0 ? "+" : "-"}1 (now ${value})`, match.id, slot.events);
+    this.commitSlot(slotId, { match, events });
   }
 
-  issuePenalty(side: "A" | "B", type: PenaltyType) {
-    const m = this.state.match;
+  issuePenalty(slotId: MatchSlotId, side: "A" | "B", type: PenaltyType) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
     const match: Match = {
       ...m, penalties: [{ id: uid(), matchId: m.id, side, type, createdAt: Date.now() }, ...m.penalties],
     };
     const name = side === "A" ? m.teamAName : m.teamBName;
-    this.commit({ ...this.state, match, events: this.log("penalty_issued", `${type} penalty — ${name}`, { ...this.state, match }) });
+    const events = this.log("penalty_issued", `${type} penalty — ${name}`, match.id, slot.events);
+    this.commitSlot(slotId, { match, events });
   }
 
-  // UPDATED: Now clears the CURRENT match's data while keeping the ID intact!
-  resetMatch() {
-    const m = this.state.match;
+  // Clears the CURRENT match's data while keeping the ID intact!
+  resetMatch(slotId: MatchSlotId) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
     const match: Match = {
       ...m,
       scoreA: 0,
@@ -885,7 +1005,21 @@ class LocalStore implements DataStore {
       runningSince: null,
       penalties: [],
     };
-    this.commit({ ...this.state, match, events: [] });
+    this.commitSlot(slotId, { match, events: [] });
+  }
+
+  setSlotVisibility(slotId: MatchSlotId, visible: boolean) {
+    this.commitSlot(slotId, { visibleOnScoreboard: visible });
+  }
+
+  touchSlotPresence(slotId: MatchSlotId) {
+    this.commitSlot(slotId, { lastActiveAt: Date.now() });
+  }
+
+  releaseSlotPresence(slotId: MatchSlotId) {
+    const slot = this.getSlot(slotId);
+    if (slot.lastActiveAt === null) return;
+    this.commitSlot(slotId, { lastActiveAt: null });
   }
 
   addAnnouncement(input: Omit<Announcement, "id" | "createdAt">): Announcement {

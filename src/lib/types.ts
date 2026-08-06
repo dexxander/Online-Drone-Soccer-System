@@ -82,6 +82,25 @@ export interface MatchEvent {
   createdAt: number;
 }
 
+/**
+ * Up to two matches can run concurrently (e.g. two courts / two referee
+ * control tabs). Each slot is fully independent: its own match, its own
+ * event log, its own scoreboard visibility toggle, and its own presence
+ * heartbeat so the public scoreboard can tell whether a control page for
+ * that slot is currently open.
+ */
+export type MatchSlotId = 1 | 2;
+
+export interface MatchSlot {
+  slotId: MatchSlotId;
+  match: Match;
+  events: MatchEvent[];
+  /** Referee-controlled toggle: should this slot appear on the public scoreboard when open? */
+  visibleOnScoreboard: boolean;
+  /** Timestamp (ms) of the last heartbeat from an open control page for this slot, or null if none is open. */
+  lastActiveAt: number | null;
+}
+
 export type AnnouncementCategory = "General" | "Tournament" | "Rule Update" | "Maintenance" | "Urgent";
 
 export interface Announcement {
@@ -122,7 +141,20 @@ export interface AppState {
   teams: Team[];
   players: Player[];
   tournaments: Tournament[];
+  /**
+   * The two concurrent match slots (Court 1 / Court 2). This is the source
+   * of truth for referee control + the scoreboard.
+   */
+  matches: [MatchSlot, MatchSlot];
+  /**
+   * @deprecated Legacy mirror of `matches[0].match` / `matches[0].events`,
+   * kept so pages that only ever cared about "the" live match (marketing
+   * ticker, admin stat card, matches list, tournaments page) keep working
+   * unchanged. Always points at slot 1 — new code should read from
+   * `matches` instead.
+   */
   match: Match;
+  /** @deprecated see `match` above — mirrors `matches[0].events`. */
   events: MatchEvent[];
   announcements: Announcement[];
   users: AppUser[];
