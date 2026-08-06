@@ -159,33 +159,6 @@ function Landing() {
         </div>
       </section>
 
-      {/* ── Match-day flow ── */}
-      <section className="mx-auto w-full max-w-6xl px-6 py-16">
-        <h2 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">How a league day runs</h2>
-        <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-          Four roles, one shared state. Each step below is a real workspace in the platform.
-        </p>
-        <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {flow.map((f) => (
-            <Link
-              key={f.n}
-              to={f.href}
-              className="group flex flex-col rounded-xl border border-border bg-background p-5 shadow-card transition-colors hover:border-primary/50"
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-primary">{f.n}</span>
-                <f.icon className="size-4 text-muted-foreground" />
-              </div>
-              <h3 className="mt-4 text-sm font-bold uppercase tracking-wide text-foreground">{f.title}</h3>
-              <p className="mt-2 flex-1 text-[13px] leading-relaxed text-muted-foreground">{f.body}</p>
-              <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                Open <ArrowRight className="size-3" />
-              </span>
-            </Link>
-          ))}
-        </div>
-      </section>
-
       {/* ── Footer ── */}
       <footer className="border-t border-border py-8">
         <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
