@@ -5,7 +5,6 @@ import {
   Shield,
   User,
   Megaphone,
-  Bell,
   Users,
   ScrollText,
   Monitor,
@@ -17,7 +16,16 @@ import { cn } from "@/lib/utils";
 
 type NavItem = {
   label: string;
-  to?: "/admin" | "/referee" | "/register-team" | "/admin-teams" | "/admin-players" | "/admin-tournaments";
+  to?:
+    | "/admin"
+    | "/referee"
+    | "/register-team"
+    | "/admin-teams"
+    | "/admin-players"
+    | "/admin-tournaments"
+    | "/admin-announcements"
+    | "/admin-users"
+    | "/admin-audit-log";
   icon: typeof LayoutGrid;
 };
 
@@ -26,10 +34,9 @@ const nav: NavItem[] = [
   { label: "Tournaments", to: "/admin-tournaments", icon: Trophy },
   { label: "Teams", to: "/admin-teams", icon: Shield },
   { label: "Players", to: "/admin-players", icon: User },
-  { label: "Announcements", icon: Megaphone },
-  { label: "Notifications", icon: Bell },
-  { label: "Users", icon: Users },
-  { label: "Audit log", icon: ScrollText },
+  { label: "Announcements", to: "/admin-announcements", icon: Megaphone },
+  { label: "Users", to: "/admin-users", icon: Users },
+  { label: "Audit log", to: "/admin-audit-log", icon: ScrollText },
 ];
 
 export function DashboardLayout({

@@ -1,16 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trophy, Trash2, ArrowLeft } from "lucide-react";
+import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { EmptyState, Panel } from "@/components/ui-kit";
+import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
-import type { Team, Tournament, TournamentMatch } from "@/lib/types";
+import type { MatchmakingType, Team, TeamCategory, Tournament, TournamentMatch } from "@/lib/types";
 
 export const Route = createFileRoute("/admin-tournaments")({
   head: () => ({
     meta: [
       { title: "Tournaments — Drone Soccer League Control" },
-      { name: "description", content: "Create tournaments and generate fair, randomized brackets." },
+      { name: "description", content: "Create tournaments with Auto or Manual matchmaking brackets." },
     ],
   }),
   component: AdminTournamentsPage,
@@ -20,25 +20,67 @@ function AdminTournamentsPage() {
   const { state, emit } = useMockWebSocket();
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [reMatchmakingItem, setReMatchmakingItem] = useState<Tournament | null>(null);
 
   const selected = state.tournaments.find((t) => t.id === selectedId) ?? null;
 
   if (selected) {
     return (
       <DashboardLayout>
-        <button
-          onClick={() => setSelectedId(null)}
-          className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="size-3.5" /> Back to tournaments
-        </button>
-        <h1 className="mt-3 text-3xl font-bold tracking-tight">{selected.name}</h1>
-        <p className="mt-1 text-sm capitalize text-muted-foreground">
-          {selected.status} · {selected.teamIds.length} teams
-        </p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <button
+              onClick={() => setSelectedId(null)}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground hover:text-foreground mb-2"
+            >
+              <ArrowLeft className="size-3.5" /> Back to tournaments
+            </button>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">{selected.name}</h1>
+              <span
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-0.5 text-xs font-semibold ${
+                  selected.matchmakingType === "manual"
+                    ? "border-purple-500/30 bg-purple-500/10 text-purple-600"
+                    : "border-primary/30 bg-primary/10 text-primary"
+                }`}
+              >
+                {selected.matchmakingType === "manual" ? (
+                  <>
+                    <Settings2 className="size-3" /> Manual Matchmaking
+                  </>
+                ) : (
+                  <>
+                    <Dices className="size-3" /> Auto Matchmaking
+                  </>
+                )}
+              </span>
+            </div>
+            <p className="mt-1 text-sm capitalize text-muted-foreground">
+              {selected.status} · {selected.teamIds.length} Teams Registered
+              {selected.teamQuota ? ` (Quota: ${selected.teamQuota})` : ""}
+            </p>
+          </div>
+
+          <button
+            onClick={() => setReMatchmakingItem(selected)}
+            className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-semibold text-foreground transition-colors hover:bg-muted"
+          >
+            <Shuffle className="size-4 text-primary" /> Re-Matchmake / Edit Pairings
+          </button>
+        </div>
+
         <div className="mt-8">
           <Bracket tournament={selected} teams={state.teams} emit={emit} />
         </div>
+
+        {reMatchmakingItem && (
+          <ReMatchmakingModal
+            tournament={reMatchmakingItem}
+            teams={state.teams}
+            onClose={() => setReMatchmakingItem(null)}
+            emit={emit}
+          />
+        )}
       </DashboardLayout>
     );
   }
@@ -52,14 +94,14 @@ function AdminTournamentsPage() {
           </p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight">Tournaments</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Generate randomized, fair brackets from your approved teams.
+            Create tournaments with flexible <strong>Auto Matchmaking</strong> or <strong>Manual Pairing</strong>.
           </p>
         </div>
         <button
           onClick={() => setCreating(true)}
           className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
         >
-          <Plus className="size-4" /> New tournament
+          <Plus className="size-4" /> New Tournament
         </button>
       </div>
 
@@ -72,20 +114,32 @@ function AdminTournamentsPage() {
       )}
 
       <div className="mt-6">
-        <Panel title={`${state.tournaments.length} tournament${state.tournaments.length === 1 ? "" : "s"}`}>
+        <Panel title={`${state.tournaments.length} Tournament${state.tournaments.length === 1 ? "" : "s"}`}>
           {state.tournaments.length === 0 ? (
             <EmptyState
               title="No tournaments yet"
-              description="Create one from your approved teams to generate a bracket."
+              description="Create a new tournament with Auto or Manual Matchmaking from your approved teams."
             />
           ) : (
             <ul className="divide-y divide-border">
               {state.tournaments.map((t) => (
-                <li key={t.id} className="flex items-center justify-between px-5 py-4">
-                  <button onClick={() => setSelectedId(t.id)} className="text-left">
-                    <p className="text-sm font-bold text-foreground hover:text-primary">{t.name}</p>
-                    <p className="text-xs capitalize text-muted-foreground">
-                      {t.status} · {t.teamIds.length} teams
+                <li key={t.id} className="flex items-center justify-between px-5 py-4 transition-colors hover:bg-muted/30">
+                  <button onClick={() => setSelectedId(t.id)} className="text-left flex-1">
+                    <div className="flex items-center gap-3">
+                      <p className="text-base font-bold text-foreground hover:text-primary">{t.name}</p>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                          t.matchmakingType === "manual"
+                            ? "border-purple-500/30 bg-purple-500/10 text-purple-600"
+                            : "border-primary/30 bg-primary/10 text-primary"
+                        }`}
+                      >
+                        {t.matchmakingType === "manual" ? "Manual" : "Auto"}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs capitalize text-muted-foreground">
+                      Status: <strong className="text-foreground">{t.status}</strong> · {t.teamIds.length} Teams
+                      {t.teamQuota ? ` / Quota: ${t.teamQuota}` : ""}
                     </p>
                   </button>
                   <button
@@ -109,6 +163,23 @@ function AdminTournamentsPage() {
   );
 }
 
+function getAssignedTeamIdsExcept(
+  pairs: Array<{ teamAId: string | null; teamBId: string | null }>,
+  currentSlotIndex: number,
+  currentSide: "teamAId" | "teamBId"
+): Set<string> {
+  const set = new Set<string>();
+  pairs.forEach((p, idx) => {
+    if (p.teamAId && !(idx === currentSlotIndex && currentSide === "teamAId")) {
+      set.add(p.teamAId);
+    }
+    if (p.teamBId && !(idx === currentSlotIndex && currentSide === "teamBId")) {
+      set.add(p.teamBId);
+    }
+  });
+  return set;
+}
+
 function CreateTournamentForm({
   teams,
   onClose,
@@ -119,75 +190,537 @@ function CreateTournamentForm({
   emit: ReturnType<typeof useMockWebSocket>["emit"];
 }) {
   const [name, setName] = useState("");
+  const [category, setCategory] = useState<TeamCategory>("Open");
+  const [teamQuota, setTeamQuota] = useState<number>(4);
+  const [matchmakingType, setMatchmakingType] = useState<MatchmakingType>("auto");
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [error, setError] = useState("");
 
-  const toggle = (id: string) =>
-    setSelectedTeamIds((ids) => (ids.includes(id) ? ids.filter((i) => i !== id) : [...ids, id]));
+  // Manual Pairs state: array of { teamAId: string | null, teamBId: string | null }
+  const [manualPairs, setManualPairs] = useState<Array<{ teamAId: string | null; teamBId: string | null }>>([]);
+
+  // Auto initialize manual pairs based on selected teams or quota
+  const initManualPairs = (chosenIds: string[]) => {
+    const pairCount = Math.max(1, Math.ceil(chosenIds.length / 2));
+    const pairs: Array<{ teamAId: string | null; teamBId: string | null }> = [];
+    for (let i = 0; i < pairCount; i++) {
+      pairs.push({
+        teamAId: chosenIds[i * 2] || null,
+        teamBId: chosenIds[i * 2 + 1] || null,
+      });
+    }
+    setManualPairs(pairs);
+  };
+
+  const toggleTeamSelect = (id: string) => {
+    const next = selectedTeamIds.includes(id)
+      ? selectedTeamIds.filter((i) => i !== id)
+      : [...selectedTeamIds, id];
+    setSelectedTeamIds(next);
+    if (matchmakingType === "manual") {
+      initManualPairs(next);
+    }
+  };
+
+  const handleMatchmakingTypeChange = (type: MatchmakingType) => {
+    setMatchmakingType(type);
+    if (type === "manual") {
+      initManualPairs(selectedTeamIds);
+    }
+  };
+
+  const updateManualPair = (index: number, side: "teamAId" | "teamBId", value: string | null) => {
+    const updated = [...manualPairs];
+    const item = updated[index];
+    if (item) {
+      updated[index] = {
+        teamAId: side === "teamAId" ? (value === "none" ? null : value) : item.teamAId,
+        teamBId: side === "teamBId" ? (value === "none" ? null : value) : item.teamBId,
+      };
+      setManualPairs(updated);
+    }
+  };
+
+  const addManualSlot = () => {
+    setManualPairs([...manualPairs, { teamAId: null, teamBId: null }]);
+  };
 
   const submit = () => {
-    if (!name.trim()) return setError("Tournament name is required.");
-    if (selectedTeamIds.length < 2) return setError("Select at least 2 teams.");
+    if (!name.trim()) {
+      setError("Tournament name is required.");
+      return;
+    }
+    if (selectedTeamIds.length < 2) {
+      setError("Select at least 2 teams.");
+      return;
+    }
+
+    if (matchmakingType === "manual") {
+      if (manualPairs.length === 0) {
+        setError("Please configure at least 1 match slot for manual pairing.");
+        return;
+      }
+
+      // Check 1: Same team in same slot
+      for (let idx = 0; idx < manualPairs.length; idx++) {
+        const pair = manualPairs[idx];
+        if (pair && pair.teamAId && pair.teamBId && pair.teamAId === pair.teamBId) {
+          const team = teams.find((t) => t.id === pair.teamAId);
+          setError(`Slot #${idx + 1}: ${team?.name || "A team"} cannot play against itself.`);
+          return;
+        }
+      }
+
+      // Check 2: Same team assigned to multiple slots in Round 1
+      const assignedIds = new Set<string>();
+      for (let idx = 0; idx < manualPairs.length; idx++) {
+        const pair = manualPairs[idx];
+        if (pair && pair.teamAId) {
+          if (assignedIds.has(pair.teamAId)) {
+            const team = teams.find((t) => t.id === pair.teamAId);
+            setError(`Team "${team?.name || pair.teamAId}" is assigned to multiple match slots in Round 1.`);
+            return;
+          }
+          assignedIds.add(pair.teamAId);
+        }
+        if (pair && pair.teamBId) {
+          if (assignedIds.has(pair.teamBId)) {
+            const team = teams.find((t) => t.id === pair.teamBId);
+            setError(`Team "${team?.name || pair.teamBId}" is assigned to multiple match slots in Round 1.`);
+            return;
+          }
+          assignedIds.add(pair.teamBId);
+        }
+      }
+    }
+
     setError("");
-    emit("createTournament", (store) => store.createTournament(name.trim(), selectedTeamIds));
+    emit("createTournament", (store) =>
+      store.createTournament(
+        name.trim(),
+        selectedTeamIds,
+        category,
+        matchmakingType,
+        teamQuota,
+        matchmakingType === "manual" ? manualPairs : undefined
+      )
+    );
     onClose();
   };
 
   return (
-    <section className="mt-6 rounded-xl border border-border bg-background p-6 shadow-card">
-      <h2 className="text-sm font-bold uppercase tracking-wide">New tournament</h2>
-      <div className="mt-4 space-y-4">
+    <section className="mt-6 rounded-xl border border-border bg-background p-6 shadow-card animate-in fade-in duration-150">
+      <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
-          <label className="mb-1.5 block text-xs font-semibold text-foreground">Tournament name</label>
-          <input
-            className="auth-input"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="National Drone Soccer Championship"
-          />
+          <h2 className="text-base font-bold text-foreground">Create New Tournament</h2>
+          <p className="text-xs text-muted-foreground">Configure team quota and select matchmaking type.</p>
         </div>
+        <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted">
+          <X className="size-5" />
+        </button>
+      </div>
+
+      <div className="mt-5 space-y-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <label className="mb-1.5 block text-xs font-semibold text-foreground uppercase tracking-wider">
+              Tournament Name
+            </label>
+            <input
+              className="auth-input"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., 2026 National Drone Soccer Championship"
+            />
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-foreground uppercase tracking-wider">
+              Division / Category
+            </label>
+            <select
+              className="auth-input"
+              value={category}
+              onChange={(e) => setCategory(e.target.value as TeamCategory)}
+            >
+              <option value="Open">Open</option>
+              <option value="Collegiate">Collegiate</option>
+              <option value="Youth">Youth</option>
+              <option value="Junior">Junior</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Team Quota & Matchmaking Type Selector */}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-foreground uppercase tracking-wider">
+              Team Quota
+            </label>
+            <select
+              className="auth-input"
+              value={teamQuota}
+              onChange={(e) => setTeamQuota(Number(e.target.value))}
+            >
+              <option value={4}>4 Teams (Semifinals)</option>
+              <option value={8}>8 Teams (Quarterfinals)</option>
+              <option value={16}>16 Teams (Round of 16)</option>
+              <option value={32}>32 Teams (Round of 32)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-1.5 block text-xs font-semibold text-foreground uppercase tracking-wider">
+              Matchmaking Type
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => handleMatchmakingTypeChange("auto")}
+                className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold transition-colors ${
+                  matchmakingType === "auto"
+                    ? "border-primary bg-primary/10 text-primary shadow-sm"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Dices className="size-4" /> Auto Matchmaking
+              </button>
+              <button
+                type="button"
+                onClick={() => handleMatchmakingTypeChange("manual")}
+                className={`flex items-center justify-center gap-2 rounded-lg border py-2 text-xs font-semibold transition-colors ${
+                  matchmakingType === "manual"
+                    ? "border-purple-500 bg-purple-500/10 text-purple-600 shadow-sm"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                }`}
+              >
+                <Settings2 className="size-4" /> Manual Matchmaking
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Select Teams Section */}
         <div>
-          <p className="mb-2 text-xs font-semibold text-foreground">
-            Select teams ({selectedTeamIds.length} chosen)
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground flex items-center justify-between">
+            <span>Select Teams for Tournament ({selectedTeamIds.length} / {teamQuota} Selected)</span>
+            {selectedTeamIds.length > teamQuota && (
+              <span className="text-destructive font-normal text-xs">Exceeds team quota!</span>
+            )}
           </p>
           {teams.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No approved teams available yet.</p>
+            <p className="text-sm text-muted-foreground">No approved teams available. Please approve team registrations first.</p>
           ) : (
-            <div className="grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2">
+            <div className="grid max-h-48 gap-2 overflow-y-auto sm:grid-cols-2 rounded-lg border border-border p-3 bg-muted/20">
               {teams.map((t) => (
                 <label
                   key={t.id}
-                  className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted"
+                  className={`flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm cursor-pointer transition-colors ${
+                    selectedTeamIds.includes(t.id)
+                      ? "border-primary/50 bg-primary/5 text-foreground font-semibold"
+                      : "border-border bg-background text-muted-foreground hover:bg-muted"
+                  }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedTeamIds.includes(t.id)}
-                    onChange={() => toggle(t.id)}
-                  />
-                  {t.name}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="size-4 rounded border-border text-primary"
+                      checked={selectedTeamIds.includes(t.id)}
+                      onChange={() => toggleTeamSelect(t.id)}
+                    />
+                    <span>{t.name}</span>
+                  </div>
                   <span className="text-xs text-muted-foreground">{t.category}</span>
                 </label>
               ))}
             </div>
           )}
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
-        <div className="flex justify-end gap-2">
+
+        {/* Manual Pairing Builder */}
+        {matchmakingType === "manual" && (
+          <div className="rounded-xl border border-purple-500/30 bg-purple-500/5 p-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-purple-600 flex items-center gap-1.5">
+                  <Settings2 className="size-4" /> Manual Round 1 Pairings
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Pick which team faces which team in Round 1. Unassigned slots act as BYEs.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={addManualSlot}
+                className="inline-flex items-center gap-1 rounded-md border border-purple-500/40 bg-background px-2.5 py-1 text-xs font-semibold text-purple-600 hover:bg-purple-500/10"
+              >
+                <Plus className="size-3" /> Add Slot
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {manualPairs.map((pair, idx) => {
+                const assignedForA = getAssignedTeamIdsExcept(manualPairs, idx, "teamAId");
+                const assignedForB = getAssignedTeamIdsExcept(manualPairs, idx, "teamBId");
+
+                return (
+                  <div key={idx} className="rounded-lg border border-border bg-background p-3 shadow-xs space-y-2">
+                    <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                      Match Slot #{idx + 1}
+                    </p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="block text-[10px] font-semibold text-muted-foreground mb-1">Team A</span>
+                        <select
+                          className="auth-input text-xs py-1.5"
+                          value={pair.teamAId || "none"}
+                          onChange={(e) => updateManualPair(idx, "teamAId", e.target.value)}
+                        >
+                          <option value="none">-- BYE / Empty --</option>
+                          {teams
+                            .filter((t) => selectedTeamIds.includes(t.id) && !assignedForA.has(t.id))
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <span className="block text-[10px] font-semibold text-muted-foreground mb-1">Team B</span>
+                        <select
+                          className="auth-input text-xs py-1.5"
+                          value={pair.teamBId || "none"}
+                          onChange={(e) => updateManualPair(idx, "teamBId", e.target.value)}
+                        >
+                          <option value="none">-- BYE / Empty --</option>
+                          {teams
+                            .filter((t) => selectedTeamIds.includes(t.id) && !assignedForB.has(t.id))
+                            .map((t) => (
+                              <option key={t.id} value={t.id}>
+                                {t.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-sm font-semibold text-destructive">{error}</p>}
+
+        <div className="flex justify-end gap-3 pt-4 border-t border-border">
           <button
+            type="button"
             onClick={onClose}
             className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
           >
             Cancel
           </button>
           <button
+            type="button"
             onClick={submit}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90 shadow-sm"
           >
-            Generate bracket
+            <Check className="size-4" />
+            {matchmakingType === "manual" ? "Generate Manual Bracket" : "Auto Generate Bracket"}
           </button>
         </div>
       </div>
     </section>
+  );
+}
+
+function ReMatchmakingModal({
+  tournament,
+  teams,
+  onClose,
+  emit,
+}: {
+  tournament: Tournament;
+  teams: Team[];
+  onClose: () => void;
+  emit: ReturnType<typeof useMockWebSocket>["emit"];
+}) {
+  const [matchmakingType, setMatchmakingType] = useState<MatchmakingType>(
+    tournament.matchmakingType || "auto"
+  );
+  const [manualPairs, setManualPairs] = useState<Array<{ teamAId: string | null; teamBId: string | null }>>(() => {
+    const round1 = tournament.matches.filter((m) => m.round === 1);
+    if (round1.length > 0) {
+      return round1.map((m) => ({ teamAId: m.teamAId, teamBId: m.teamBId }));
+    }
+    return [{ teamAId: null, teamBId: null }];
+  });
+
+  const availableTeams = teams.filter((t) => tournament.teamIds.includes(t.id));
+
+  const [error, setError] = useState("");
+
+  const updateManualPair = (index: number, side: "teamAId" | "teamBId", value: string | null) => {
+    setError("");
+    const updated = [...manualPairs];
+    const item = updated[index];
+    if (item) {
+      updated[index] = {
+        teamAId: side === "teamAId" ? (value === "none" ? null : value) : item.teamAId,
+        teamBId: side === "teamBId" ? (value === "none" ? null : value) : item.teamBId,
+      };
+      setManualPairs(updated);
+    }
+  };
+
+  const handleApply = () => {
+    if (matchmakingType === "manual") {
+      for (let idx = 0; idx < manualPairs.length; idx++) {
+        const pair = manualPairs[idx];
+        if (pair && pair.teamAId && pair.teamBId && pair.teamAId === pair.teamBId) {
+          const team = availableTeams.find((t) => t.id === pair.teamAId);
+          setError(`Slot #${idx + 1}: ${team?.name || "A team"} cannot play against itself.`);
+          return;
+        }
+      }
+    }
+
+    emit("regenerateTournamentMatchmaking", (s) =>
+      s.regenerateTournamentMatchmaking(
+        tournament.id,
+        matchmakingType,
+        matchmakingType === "manual" ? manualPairs : undefined
+      )
+    );
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-xl border border-border bg-background p-6 shadow-2xl animate-in fade-in zoom-in-95">
+        <div className="flex items-center justify-between border-b border-border pb-4">
+          <div>
+            <h2 className="text-lg font-bold text-foreground">Re-Matchmake Tournament</h2>
+            <p className="text-xs text-muted-foreground">{tournament.name}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted">
+            <X className="size-5" />
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+              Select Matchmaking Mode
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setMatchmakingType("auto");
+                }}
+                className={`flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-colors ${
+                  matchmakingType === "auto"
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <Dices className="size-4" /> Auto Matchmake
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setError("");
+                  setMatchmakingType("manual");
+                }}
+                className={`flex items-center justify-center gap-2 rounded-lg border py-2.5 text-xs font-semibold transition-colors ${
+                  matchmakingType === "manual"
+                    ? "border-purple-500 bg-purple-500/10 text-purple-600"
+                    : "border-border bg-background text-muted-foreground hover:bg-muted"
+                }`}
+              >
+                <Settings2 className="size-4" /> Manual Matchmake
+              </button>
+            </div>
+          </div>
+
+          {matchmakingType === "manual" ? (
+            <div className="space-y-3 rounded-lg border border-purple-500/30 bg-purple-500/5 p-3.5">
+              <p className="text-xs font-bold uppercase tracking-wider text-purple-600">
+                Configure Round 1 Slots
+              </p>
+              <div className="grid gap-3 max-h-60 overflow-y-auto sm:grid-cols-2">
+                {manualPairs.map((pair, idx) => {
+                  const assignedForA = getAssignedTeamIdsExcept(manualPairs, idx, "teamAId");
+                  const assignedForB = getAssignedTeamIdsExcept(manualPairs, idx, "teamBId");
+
+                  return (
+                    <div key={idx} className="rounded-lg border border-border bg-background p-2.5 shadow-xs space-y-1.5">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground">Slot #{idx + 1}</p>
+                      <select
+                        className="auth-input text-xs py-1"
+                        value={pair.teamAId || "none"}
+                        onChange={(e) => updateManualPair(idx, "teamAId", e.target.value)}
+                      >
+                        <option value="none">-- BYE --</option>
+                        {availableTeams
+                          .filter((t) => !assignedForA.has(t.id))
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                      </select>
+                      <select
+                        className="auth-input text-xs py-1"
+                        value={pair.teamBId || "none"}
+                        onChange={(e) => updateManualPair(idx, "teamBId", e.target.value)}
+                      >
+                        <option value="none">-- BYE --</option>
+                        {availableTeams
+                          .filter((t) => !assignedForB.has(t.id))
+                          .map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.name}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-border bg-muted/20 p-4 text-center">
+              <p className="text-sm font-semibold text-foreground">Auto Matchmaking Enabled</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Clicking apply will randomly shuffle the {availableTeams.length} registered teams and regenerate Round 1 match slots automatically.
+              </p>
+            </div>
+          )}
+
+          {error && <p className="text-xs font-bold text-destructive">{error}</p>}
+
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
+            <button
+              onClick={onClose}
+              className="rounded-lg border border-border px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleApply}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90"
+            >
+              <Check className="size-4" /> Apply & Re-Generate Bracket
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -203,44 +736,93 @@ function Bracket({
   const teamName = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "—" : null);
   const rounds = Math.max(...tournament.matches.map((m) => m.round));
 
-  return (
-    <div className="flex items-center gap-14 overflow-x-auto pb-4">
-      {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
-        const matches = tournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
-        const label = round === rounds ? "Final" : round === rounds - 1 ? "Semifinal" : `Round ${round}`;
-        const isLast = round === rounds;
-        const pairs: TournamentMatch[][] = [];
-        for (let i = 0; i < matches.length; i += 2) {
-          pairs.push([matches[i], matches[i + 1]].filter(Boolean) as TournamentMatch[]);
-        }
-        const pairGap = 28 * Math.pow(2, round);
+  const getRoundTitle = (r: number) => {
+    if (r === rounds) return "FINAL";
+    if (r === rounds - 1) return "SEMIFINAL";
+    if (r === rounds - 2) return "QUARTERFINAL";
+    return `ROUND ${r}`;
+  };
 
-        return (
-          <div key={round} className="flex min-w-[220px] flex-col" style={{ gap: pairGap }}>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {label}
-            </p>
-            {pairs.map((pair, pi) => (
-              <div key={pi} className="relative flex flex-col justify-center gap-4">
-                {pair.map((m) => (
-                  <div key={m.id} className="relative">
-                    <MatchBox match={m} teamName={teamName} tournament={tournament} emit={emit} />
+  return (
+    <div className="rounded-2xl border border-border bg-background/50 p-6 shadow-sm">
+      <div className="flex flex-col gap-6 overflow-x-auto pb-4">
+        {/* Round Headers */}
+        <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
+          {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
+            const matchesCount = tournament.matches.filter((m) => m.round === round).length;
+            return (
+              <div key={round} className="w-[260px] flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <span className="flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground">
+                    {round}
+                  </span>
+                  {getRoundTitle(round)}
+                </span>
+                <span className="text-[11px] font-medium text-muted-foreground">
+                  {matchesCount} Match{matchesCount === 1 ? "" : "es"}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Bracket Columns */}
+        <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
+          {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
+            const matches = tournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+            const isLast = round === rounds;
+
+            // Group matches into pairs for Round 1, 2, etc.
+            const pairs: TournamentMatch[][] = [];
+            for (let i = 0; i < matches.length; i += 2) {
+              const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
+              pairs.push(pair);
+            }
+
+            return (
+              <div key={round} className="w-[260px] flex flex-col justify-around">
+                {pairs.map((pair, pi) => (
+                  <div key={pi} className="relative flex flex-col justify-around h-full my-4">
+                    {pair.map((m, idx) => {
+                      const hasWinner = !!m.winnerId;
+                      return (
+                        <div key={m.id} className="relative py-2 z-10">
+                          <MatchBox match={m} teamName={teamName} tournament={tournament} emit={emit} />
+                          {/* Horizontal line extending right from MatchBox */}
+                          {!isLast && (
+                            <div
+                              className={`absolute -right-8 top-1/2 h-[2.5px] w-8 -translate-y-1/2 transition-colors ${
+                                hasWinner ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                              }`}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Bracket Spine Connector connecting Top & Bottom Match in the Pair */}
                     {!isLast && (
-                      <span className="absolute top-1/2 -right-7 h-px w-7 -translate-y-1/2 bg-border" />
+                      <>
+                        <div
+                          className={`absolute -right-8 top-[25%] bottom-[25%] w-[2.5px] z-0 transition-colors ${
+                            pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                          }`}
+                        />
+                        {/* Forward Stem to Next Round */}
+                        <div
+                          className={`absolute -right-16 top-1/2 h-[2.5px] w-8 -translate-y-1/2 z-0 transition-colors ${
+                            pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
+                          }`}
+                        />
+                      </>
                     )}
                   </div>
                 ))}
-                {!isLast && pair.length === 2 && (
-                  <span
-                    className="absolute -right-7 w-px bg-border"
-                    style={{ top: "25%", bottom: "25%" }}
-                  />
-                )}
               </div>
-            ))}
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
@@ -266,15 +848,15 @@ function MatchBox({
     const isWinner = id && id === match.winnerId;
     return (
       <div
-        className={`flex items-center justify-between rounded-md px-3 py-2 text-sm ${
-          isWinner ? "bg-success-soft font-semibold text-success" : "text-foreground"
+        className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
+          isWinner ? "bg-emerald-500/10 font-bold text-emerald-600 dark:text-emerald-400" : "text-foreground"
         }`}
       >
-        <span>{teamName(id) ?? "TBD"}</span>
+        <span className="truncate pr-2 font-medium">{teamName(id) ?? "TBD"}</span>
         {canDecide && id && (
           <button
             onClick={() => pick(id)}
-            className="rounded border border-border px-2 py-0.5 text-[11px] font-semibold text-muted-foreground hover:border-primary hover:text-primary"
+            className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary transition-colors hover:bg-primary hover:text-primary-foreground shrink-0"
           >
             Win
           </button>
@@ -286,10 +868,10 @@ function MatchBox({
   return (
     <div className="flex items-center gap-2">
       <Trophy className="size-3.5 shrink-0 text-muted-foreground" />
-      <div className="flex-1 divide-y divide-border rounded-lg border border-border bg-background shadow-card">
+      <div className="flex-1 divide-y divide-border rounded-xl border border-border bg-background shadow-sm transition-all hover:border-primary/50">
         {row(match.teamAId)}
         {!match.isBye && row(match.teamBId)}
-        {match.isBye && <div className="px-3 py-2 text-xs text-muted-foreground">Bye</div>}
+        {match.isBye && <div className="px-3 py-2 text-xs font-semibold italic text-muted-foreground">Bye (Auto-Advance)</div>}
       </div>
     </div>
   );

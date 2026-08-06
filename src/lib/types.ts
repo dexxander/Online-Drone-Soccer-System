@@ -82,12 +82,51 @@ export interface MatchEvent {
   createdAt: number;
 }
 
+export type AnnouncementCategory = "General" | "Tournament" | "Rule Update" | "Maintenance" | "Urgent";
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  category: AnnouncementCategory;
+  author: string;
+  pinned?: boolean | undefined;
+  createdAt: number;
+  updatedAt?: number | undefined;
+}
+
+export type UserTag = "admin" | "referee" | "coach" | "player" | "user";
+
+export interface AppUser {
+  id: string;
+  name: string;
+  email: string;
+  role: UserTag;
+  status: "active" | "suspended" | "pending";
+  teamName?: string | undefined;
+  phone?: string | undefined;
+  createdAt: number;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  performedBy: string;
+  target: string;
+  category: "User Management" | "Announcement" | "Tournament" | "Team" | "System";
+  timestamp: number;
+  details?: string | undefined;
+}
+
 export interface AppState {
   teams: Team[];
   players: Player[];
   tournaments: Tournament[];
   match: Match;
   events: MatchEvent[];
+  announcements: Announcement[];
+  users: AppUser[];
+  auditLogs: AuditLogEntry[];
 }
 
 export type TournamentStatus = "draft" | "active" | "completed";
@@ -102,12 +141,16 @@ export interface TournamentMatch {
   isBye: boolean;
 }
 
+export type MatchmakingType = "auto" | "manual";
+
 export interface Tournament {
   id: string;
   name: string;
-  category?: TeamCategory;
+  category?: TeamCategory | undefined;
   status: TournamentStatus;
   teamIds: string[];
   matches: TournamentMatch[];
+  matchmakingType?: MatchmakingType | undefined;
+  teamQuota?: number | undefined;
   createdAt: number;
 }
