@@ -28,10 +28,6 @@ import {
   auth,
   initialState,
   AVAILABLE_TEAMS,
-  rosterA,
-  coachA,
-  rosterB,
-  coachB,
   PRESENCE_HEARTBEAT_MS,
 } from "@/lib/store";
 
@@ -130,23 +126,22 @@ function RefereePage() {
 
   const getDynamicRoster = (teamName: string) => {
     if (!teamName || teamName === "TBD") return [];
-    
+
     const team = teams.find(t => t.name === teamName);
-    if (team) {
-      const teamPlayers = players.filter(p => p.teamId === team.id);
-      if (teamPlayers.length > 0) {
-        return teamPlayers.map(p => ({
-          name: p.name || "Unknown",
-          position: (p as any).position || (p as any).role || "Player",
-          highlight: (p as any).position === "Striker" || (p as any).role === "Striker"
-        }));
-      }
-    }
-    
-    if (teamName === "Sky Raptors") return rosterA;
-    if (teamName === "Vortex United") return rosterB;
-    
-    return [];
+    if (!team) return [];
+
+    const teamPlayers = players.filter(p => p.teamId === team.id);
+    return teamPlayers.map(p => ({
+      name: p.name || "Unknown",
+      position: (p as any).position || (p as any).role || "Player",
+      highlight: (p as any).position === "Striker" || (p as any).role === "Striker"
+    }));
+  };
+
+  const getDynamicCoach = (teamName: string) => {
+    if (!teamName || teamName === "TBD") return undefined;
+    const team = teams.find(t => t.name === teamName);
+    return team?.coachName || undefined;
   };
 
   const handleOpenBracket = (tournamentId: string) => {
@@ -170,6 +165,8 @@ function RefereePage() {
   
   const dynamicRosterA = getDynamicRoster(rawMatch.teamAName);
   const dynamicRosterB = getDynamicRoster(rawMatch.teamBName);
+  const dynamicCoachA = getDynamicCoach(rawMatch.teamAName);
+  const dynamicCoachB = getDynamicCoach(rawMatch.teamBName);
 
   const activeTournament = tournaments.find(t => t.id === activeTournamentId);
   const rounds = activeTournament
@@ -511,8 +508,8 @@ function RefereePage() {
                   onDecrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "A", -1))}
                   onIncrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "A", 1))}
                   onPenalty={(type: PenaltyType) => emit("updateMatch", (s) => s.issuePenalty(slotId, "A", type))}
-                  roster={dynamicRosterA.length > 0 ? dynamicRosterA : rosterA}
-                  coach={coachA}
+                  roster={dynamicRosterA}
+                  coach={dynamicCoachA}
                 />
                 <TeamPanel
                   teamName={rawMatch.teamBName}
@@ -526,8 +523,8 @@ function RefereePage() {
                   onDecrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "B", -1))}
                   onIncrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "B", 1))}
                   onPenalty={(type: PenaltyType) => emit("updateMatch", (s) => s.issuePenalty(slotId, "B", type))}
-                  roster={dynamicRosterB.length > 0 ? dynamicRosterB : rosterB}
-                  coach={coachB}
+                  roster={dynamicRosterB}
+                  coach={dynamicCoachB}
                 />
               </div>
             </>

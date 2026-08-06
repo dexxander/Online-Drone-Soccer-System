@@ -203,7 +203,10 @@ export class SupabaseStore implements DataStore {
   private state: AppState = emptyState;
   private listeners = new Set<() => void>();
   private hydrated = false;
+  private hydrationError: string | null = null;
   private matchArchive: Record<string, { match: Match; events: MatchEvent[] }> = {};
+
+  getHydrationError() { return this.hydrationError; }
 
   async hydrate() {
     if (this.hydrated || typeof window === "undefined") return;
@@ -249,6 +252,9 @@ export class SupabaseStore implements DataStore {
       this.notify();
     } catch (e) {
       console.error("Supabase hydration failed", e);
+      this.hydrated = false; // allow a retry on next subscribe() instead of getting stuck on emptyState forever
+      this.hydrationError = e instanceof Error ? e.message : String(e);
+      this.notify();
     }
   }
 
