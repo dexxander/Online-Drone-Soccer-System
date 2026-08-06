@@ -55,8 +55,8 @@ const DEVELOPERS: Array<{
   },
   {
     name: "Job Vinius",
-    role: "Backend Developer",
-    bio: "Design the admin and coach interfaces, and implement the backend logic for match management.",
+    role: "Frontend Developer",
+    bio: "Design the admin and coach interfaces, and implement the frontend workflow logic for match management.",
     photo: null, // e.g. "/team/developer-three.jpg"
     email: "jobvinius442@gmail.com",
     github: "https://github.com/JoblessPP",
