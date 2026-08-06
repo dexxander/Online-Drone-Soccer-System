@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
-import { auth } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,9 +56,6 @@ const flow = [
 ];
 
 function Landing() {
-  const currentUser = auth.current();
-  const isCoach = currentUser?.role === "coach";
-
   return (
     <div className="min-h-screen bg-surface">
       {/* ── Nav ── */}
@@ -95,14 +91,6 @@ function Landing() {
             >
               About
             </Link>
-            {isCoach && (
-              <Link
-                to="/register-team"
-                className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary hover:bg-primary/20 sm:block"
-              >
-                Register Team
-              </Link>
-            )}
             <AccountMenu />
           </nav>
         </div>

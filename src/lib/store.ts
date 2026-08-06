@@ -1161,4 +1161,4 @@ export const auth = {
 };
 
 export const homeForRole = (role: UserRole) =>
-  role === "referee" ? "/referee" : role === "coach" ? "/" : "/admin";
+  role === "referee" ? "/referee" : role === "coach" ? "/register-team" : "/admin";
