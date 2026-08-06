@@ -33,31 +33,31 @@ const DEVELOPERS: Array<{
   linkedin?: string;
 }> = [
   {
-    name: "Developer One",
-    role: "Frontend Developer",
-    bio: "Placeholder bio — one or two sentences about this developer's focus on the project.",
+    name: "Dexter Oliver Robilin",
+    role: "Lead Developer",
+    bio: "Lead the development of this project, focusing on architecture and core features.",
     photo: null, // e.g. "/team/developer-one.jpg"
-    email: "dev.one@example.com",
-    github: "https://github.com/",
-    linkedin: "https://linkedin.com/",
+    email: "deux15012@gmail.com",
+    github: "https://github.com/dexxander",
+    linkedin: "https://www.linkedin.com/in/dexteroliverrobilin/",
   },
   {
-    name: "Developer Two",
-    role: "Backend Developer",
-    bio: "Placeholder bio — one or two sentences about this developer's focus on the project.",
+    name: "Trevor Leong Thomas",
+    role: "Frontend Developer",
+    bio: "Design the referee and scoreboard interfaces, ensuring a smooth user experience.",
     photo: null, // e.g. "/team/developer-two.jpg"
-    email: "dev.two@example.com",
-    github: "https://github.com/",
-    linkedin: "https://linkedin.com/",
+    email: "trevorleongthomas@@gmail.com",
+    github: "https://github.com/RevoltLT",
+    linkedin: "https://www.linkedin.com/in/trevorleongthomas/",
   },
   {
-    name: "Developer Three",
-    role: "UI / UX Designer",
-    bio: "Placeholder bio — one or two sentences about this developer's focus on the project.",
+    name: "Job Vinius",
+    role: "Backend Developer",
+    bio: "Design the admin and coach interfaces, and implement the backend logic for match management.",
     photo: null, // e.g. "/team/developer-three.jpg"
-    email: "dev.three@example.com",
-    github: "https://github.com/",
-    linkedin: "https://linkedin.com/",
+    email: "jobvinius442@gmail.com",
+    github: "https://github.com/JoblessPP",
+    linkedin: "https://www.linkedin.com/in/jobvinius/",
   },
 ];
 
