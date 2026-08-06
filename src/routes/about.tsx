@@ -44,7 +44,7 @@ const DEVELOPERS: Array<{
   {
     name: "Trevor Leong Thomas",
     role: "Frontend Developer",
-    bio: "Design the referee and scoreboard interfaces, ensuring a smooth user experience.",
+    bio: "Design the referee and scoreboard interfaces, ensuring a smooth user experience.Created Drone SVG animations for the landing page.",
     photo: null, // e.g. "/team/developer-two.jpg"
     email: "trevorleongthomas@@gmail.com",
     github: "https://github.com/RevoltLT",
