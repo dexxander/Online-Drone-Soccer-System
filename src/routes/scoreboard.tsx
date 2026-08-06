@@ -29,7 +29,6 @@ function getTeamDetailsByName(name: string, dynamicTeams: any[]) {
     : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
 }
 
-// Math helper to calculate round names
 function getMatchTitle(round: number, maxRound: number) {
   if (maxRound === 1) return "Exhibition Match";
   if (round === maxRound) return "Grand Final";
@@ -38,10 +37,43 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
+// --- PENALTY ESCALATION ENGINE ---
+function calculateEffectivePenalties(rawPenalties: any[]) {
+  let minor = 0; // Warnings
+  let major = 0; // Yellow Cards
+  let tech = 0;  // Red Cards (Disqualified)
+
+  rawPenalties.forEach(p => {
+    if (p.type === 'Minor') minor++;
+    if (p.type === 'Major') major++;
+    if (p.type === 'Technical') tech++;
+  });
+
+  // Escalation: 2 Warnings = 1 Yellow Card
+  major += Math.floor(minor / 2);
+  minor = minor % 2;
+
+  // Escalation: 2 Yellow Cards = 1 Red Card
+  tech += Math.floor(major / 2);
+  major = major % 2;
+
+  const isDisqualified = tech > 0;
+
+  // Build the visual badge array
+  const badges: string[] = [];
+  if (!isDisqualified) {
+    for (let i = 0; i < major; i++) badges.push('Yellow');
+    for (let i = 0; i < minor; i++) badges.push('Warning');
+  }
+
+  return { badges, isDisqualified };
+}
+
 function Scoreboard() {
   const { state } = useMockWebSocket();
   const [isSwapped, setIsSwapped] = useState(false);
   
+  // Reverting to stable single match reference
   const m = state.match;
   const events = Array.isArray(state.events) ? state.events : []; 
   const teams = Array.isArray(state.teams) ? state.teams : [];
@@ -53,16 +85,18 @@ function Scoreboard() {
   const teamAInfo = getTeamDetailsByName(m.teamAName, teams);
   const teamBInfo = getTeamDetailsByName(m.teamBName, teams);
 
-  const penaltiesA = Array.isArray(m.penalties) ? m.penalties.filter(p => p.side === "A") : [];
-  const penaltiesB = Array.isArray(m.penalties) ? m.penalties.filter(p => p.side === "B") : [];
+  const rawPenaltiesA = Array.isArray(m.penalties) ? m.penalties.filter(p => p.side === "A") : [];
+  const rawPenaltiesB = Array.isArray(m.penalties) ? m.penalties.filter(p => p.side === "B") : [];
+  
+  const penaltiesA = calculateEffectivePenalties(rawPenaltiesA);
+  const penaltiesB = calculateEffectivePenalties(rawPenaltiesB);
 
-  // Dynamic Header Logic
   const activeTournament = tournaments.find(t => t.matches.some(tm => tm.id === m.id));
   const tMatch = activeTournament?.matches.find(tm => tm.id === m.id);
   const maxRound = activeTournament ? Math.max(...activeTournament.matches.map(tm => tm.round)) : 1;
   const currentRound = tMatch?.round || 1;
-  const matchTitle = getMatchTitle(currentRound, maxRound);
-  const tournamentName = activeTournament ? activeTournament.name : "Friendly Match";
+  const matchTitle = activeTournament ? getMatchTitle(currentRound, maxRound) : "Friendly Match";
+  const tournamentName = activeTournament ? activeTournament.name : "Exhibition";
 
   const TeamAPanel = (
     <div className="relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-white p-8 shadow-sm">
@@ -78,9 +112,13 @@ function Scoreboard() {
         {m.scoreA.toString().padStart(2, '0')}
       </p>
       <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
-        {penaltiesA.map((p) => (
-          <span key={p.id} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", p.type === "Major" ? "bg-yellow-400" : p.type === "Technical" ? "bg-red-600" : "bg-slate-300")} />
-        ))}
+        {penaltiesA.isDisqualified ? (
+          <span className="rounded bg-red-100 px-4 py-1 text-sm font-bold tracking-widest text-red-700 border border-red-200">DISQUALIFIED</span>
+        ) : (
+          penaltiesA.badges.map((b, i) => (
+            <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-yellow-400" : "bg-slate-300")} />
+          ))
+        )}
       </div>
     </div>
   );
@@ -99,9 +137,13 @@ function Scoreboard() {
         {m.scoreB.toString().padStart(2, '0')}
       </p>
       <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
-        {penaltiesB.map((p) => (
-          <span key={p.id} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", p.type === "Major" ? "bg-yellow-400" : p.type === "Technical" ? "bg-red-600" : "bg-slate-300")} />
-        ))}
+        {penaltiesB.isDisqualified ? (
+          <span className="rounded bg-red-100 px-4 py-1 text-sm font-bold tracking-widest text-red-700 border border-red-200">DISQUALIFIED</span>
+        ) : (
+          penaltiesB.badges.map((b, i) => (
+            <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-yellow-400" : "bg-slate-300")} />
+          ))
+        )}
       </div>
     </div>
   );
@@ -109,7 +151,7 @@ function Scoreboard() {
   const EventLogPanel = (
     <div className="flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
       <div className="border-b border-slate-200 bg-slate-100 px-4 py-3">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">Event Log / 事件日志</h3>
+        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">Event Log</h3>
       </div>
       <div className="flex flex-col gap-3 overflow-hidden p-4">
           {events.length === 0 ? (
@@ -124,12 +166,28 @@ function Scoreboard() {
               else if (isTeamB && !isTeamA) side = isSwapped ? 'left' : 'right';
 
               let uiType: 'goal' | 'penalty' | 'system' = 'system';
+              let penaltyLevel: 'warning' | 'yellow' | 'red' | null = null;
+
               if (evt.type === 'score_changed') uiType = 'goal';
-              if (evt.type === 'penalty_issued') uiType = 'penalty';
+              if (evt.type === 'penalty_issued') {
+                uiType = 'penalty';
+                if (evt.message.includes('Minor')) penaltyLevel = 'warning';
+                else if (evt.message.includes('Major')) penaltyLevel = 'yellow';
+                else if (evt.message.includes('Technical')) penaltyLevel = 'red';
+              }
 
               const timeStr = new Date(evt.createdAt).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
 
-              return <EventLogItem key={evt.id} type={uiType} message={evt.message} time={timeStr} side={side} />;
+              return (
+                <EventLogItem 
+                  key={evt.id} 
+                  type={uiType} 
+                  penaltyLevel={penaltyLevel}
+                  message={evt.message} 
+                  time={timeStr} 
+                  side={side} 
+                />
+              );
             })
           )}
       </div>
@@ -183,16 +241,26 @@ function Scoreboard() {
   );
 }
 
-function EventLogItem({ type, message, time, side }: { type: 'goal' | 'penalty' | 'system', message: string, time: string, side: 'left' | 'right' | 'center' }) {
-  let colorClass = 'border-slate-200 text-slate-600 bg-slate-50'; 
+// --- UTILITY UI COMPONENTS ---
+
+function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal' | 'penalty' | 'system', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center' }) {
+  let colorClass = 'border-slate-200 text-slate-500 bg-slate-50'; 
   let indicatorColor = 'text-slate-400';
 
   if (type === 'goal') {
-    colorClass = 'border-green-400 text-slate-800 bg-white';
+    colorClass = 'border-green-400 text-green-800 bg-green-50/50';
     indicatorColor = 'text-green-500';
   } else if (type === 'penalty') {
-    colorClass = 'border-red-400 text-red-600 bg-white';
-    indicatorColor = 'text-red-500';
+    if (penaltyLevel === 'warning') {
+      colorClass = 'border-slate-300 text-slate-700 bg-white';
+      indicatorColor = 'text-slate-500';
+    } else if (penaltyLevel === 'yellow') {
+      colorClass = 'border-yellow-400 text-yellow-800 bg-yellow-50';
+      indicatorColor = 'text-yellow-500';
+    } else if (penaltyLevel === 'red') {
+      colorClass = 'border-red-400 text-red-800 bg-red-50';
+      indicatorColor = 'text-red-600';
+    }
   }
   
   return (
@@ -200,10 +268,14 @@ function EventLogItem({ type, message, time, side }: { type: 'goal' | 'penalty' 
       <div className="flex w-4 justify-start">
         {side === 'left' && <span className={indicatorColor}>◀</span>}
       </div>
+      
       <div className="flex-1 text-center">
-        <p className="text-sm font-bold uppercase tracking-wide">{message}</p>
-        <p className="mt-1 text-xs text-slate-400">{time}</p>
+        <p className="text-sm font-bold uppercase tracking-wide">
+          {message}
+        </p>
+        <p className="mt-1 text-xs opacity-75">{time}</p>
       </div>
+
       <div className="flex w-4 justify-end">
         {side === 'right' && <span className={indicatorColor}>▶</span>}
       </div>

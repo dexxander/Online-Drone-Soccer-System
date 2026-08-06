@@ -45,13 +45,13 @@ const MATCH_DURATION_MS = 3 * 60 * 1000;
 
 const penaltyButtons: { label: string; type: PenaltyType; style: string }[] = [
   { label: "Warning", type: "Minor", style: "bg-muted text-foreground border border-border hover:bg-accent" },
-  { label: "YEL CARD", type: "Major", style: "bg-warning-soft text-warning border border-warning/40 hover:bg-warning/20 font-bold" },
+  { label: "YELLOW CARD", type: "Major", style: "bg-warning-soft text-warning border border-warning/40 hover:bg-warning/20 font-bold" },
   { label: "RED CARD", type: "Technical", style: "bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold shadow-sm" },
 ];
 
 function getMatchTitle(round: number, maxRound: number) {
-  if (maxRound === 1) return "Exhibition";
-  if (round === maxRound) return "Final";
+  if (maxRound === 1) return "Exhibition Match";
+  if (round === maxRound) return "Grand Final";
   if (round === maxRound - 1) return "Semi-Finals";
   if (round === maxRound - 2) return "Quarter-Finals";
   return `Round ${round}`;
@@ -64,6 +64,7 @@ function RefereePage() {
   const events = Array.isArray(state.events) ? state.events : [];
   const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
   const teams = Array.isArray(state.teams) ? state.teams : [];
+  const players = Array.isArray(state.players) ? state.players : [];
 
   const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control">("tournaments");
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
@@ -95,6 +96,27 @@ function RefereePage() {
     return fallbackTeam ? { initials: fallbackTeam.initials, logo: (fallbackTeam as any).logoUrl || (fallbackTeam as any).logo } : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
   };
 
+  const getDynamicRoster = (teamName: string) => {
+    if (!teamName || teamName === "TBD") return [];
+    
+    const team = teams.find(t => t.name === teamName);
+    if (team) {
+      const teamPlayers = players.filter(p => p.teamId === team.id);
+      if (teamPlayers.length > 0) {
+        return teamPlayers.map(p => ({
+          name: p.name || "Unknown",
+          position: (p as any).position || (p as any).role || "Player",
+          highlight: (p as any).position === "Striker" || (p as any).role === "Striker"
+        }));
+      }
+    }
+    
+    if (teamName === "Sky Raptors") return rosterA;
+    if (teamName === "Vortex United") return rosterB;
+    
+    return [];
+  };
+
   const handleOpenBracket = (tournamentId: string) => {
     setActiveTournamentId(tournamentId);
     setViewMode("bracket");
@@ -113,6 +135,9 @@ function RefereePage() {
   const activePhase = isFinished ? 3 : live || rawMatch.status === "paused" ? 1 : 0;
   const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
   const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
+  
+  const dynamicRosterA = getDynamicRoster(rawMatch.teamAName);
+  const dynamicRosterB = getDynamicRoster(rawMatch.teamBName);
 
   const activeTournament = tournaments.find(t => t.id === activeTournamentId);
   const rounds = activeTournament
@@ -220,13 +245,16 @@ function RefereePage() {
                               {pair.map((m) => {
                                 const isPlayable = !m.isBye && Boolean(m.teamAId) && Boolean(m.teamBId) && !m.winnerId;
                                 const isCompleted = m.winnerId !== null;
-                                const isClickable = Boolean(isPlayable || isCompleted);
+                                const isClickable = isPlayable || (isCompleted && !m.isBye);
 
                                 const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
                                 const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
 
-                                const scoreA = rawMatch.id === m.id ? rawMatch.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : "-");
-                                const scoreB = rawMatch.id === m.id ? rawMatch.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : "-");
+                                const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
+                                const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
+
+                                const scoreA = m.isBye ? "-" : (rawMatch.id === m.id ? rawMatch.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : "-"));
+                                const scoreB = m.isBye ? "-" : (rawMatch.id === m.id ? rawMatch.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : "-"));
 
                                 const hasWinner = !!m.winnerId;
 
@@ -243,8 +271,8 @@ function RefereePage() {
                                         {/* Team A Slot */}
                                         <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamAWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
                                           <div className="flex items-center gap-2">
-                                            <span>{getTeamName(m.teamAId)}</span>
-                                            {isTeamAWinner && <Trophy className="size-3.5 text-emerald-600" />}
+                                            <span className={displayTeamA === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamA}</span>
+                                            {isTeamAWinner && !m.isBye && <Trophy className="size-3.5 text-emerald-600" />}
                                           </div>
                                           <span className="font-mono text-muted-foreground">{scoreA}</span>
                                         </div>
@@ -252,8 +280,8 @@ function RefereePage() {
                                         {/* Team B Slot */}
                                         <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamBWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
                                           <div className="flex items-center gap-2">
-                                            <span>{getTeamName(m.teamBId)}</span>
-                                            {isTeamBWinner && <Trophy className="size-3.5 text-emerald-600" />}
+                                            <span className={displayTeamB === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamB}</span>
+                                            {isTeamBWinner && !m.isBye && <Trophy className="size-3.5 text-emerald-600" />}
                                           </div>
                                           <span className="font-mono text-muted-foreground">{scoreB}</span>
                                         </div>
@@ -264,9 +292,14 @@ function RefereePage() {
                                           Officiate Match
                                         </div>
                                       )}
-                                      {isCompleted && (
+                                      {isCompleted && !m.isBye && (
                                         <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-600 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">
                                           Review Match
+                                        </div>
+                                      )}
+                                      {m.isBye && (
+                                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-muted-foreground/80 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">
+                                          Auto-Advance
                                         </div>
                                       )}
                                     </div>
@@ -386,9 +419,8 @@ function RefereePage() {
                   penalties={rawMatch.penalties.filter(p => p.side === "A")}
                   disabled={isFinished}
                   onDecrement={() => emit("updateMatch", (s) => s.adjustScore("A", -1))}
-                  onIncrement={() => emit("updateMatch", (s) => s.adjustScore("A", 1))}
                   onPenalty={(type: PenaltyType) => emit("updateMatch", (s) => s.issuePenalty("A", type))}
-                  roster={rosterA}
+                  roster={dynamicRosterA.length > 0 ? dynamicRosterA : rosterA}
                   coach={coachA}
                 />
                 <TeamPanel
@@ -403,7 +435,7 @@ function RefereePage() {
                   onDecrement={() => emit("updateMatch", (s) => s.adjustScore("B", -1))}
                   onIncrement={() => emit("updateMatch", (s) => s.adjustScore("B", 1))}
                   onPenalty={(type: PenaltyType) => emit("updateMatch", (s) => s.issuePenalty("B", type))}
-                  roster={rosterB}
+                  roster={dynamicRosterB.length > 0 ? dynamicRosterB : rosterB}
                   coach={coachB}
                 />
               </div>
@@ -497,7 +529,7 @@ function NavCard({ href, onClick, icon, label, active, danger, external }: any) 
   return <Link to={href} className={classes}>{icon}<span className="text-[11px] font-bold uppercase tracking-wider">{label}</span></Link>;
 }
 
-function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, roster, coach }: any) {
+function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, roster }: any) {
   const isPrimary = accentColor === "primary";
 
   return (
@@ -549,14 +581,19 @@ function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, pe
 
       <div className="mt-auto border-t border-border/30 pt-4">
         <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Roster</h3>
-        <ul className="space-y-2 font-mono text-sm text-foreground">
-          {roster.map((p: any) => (
-            <li key={p.name} className="flex items-center justify-between rounded bg-muted/50 px-2 py-1">
-              <span className={cn("font-semibold", p.highlight ? (isPrimary ? "text-primary" : "text-destructive") : "")}>{p.name}</span>
-              <span className="text-muted-foreground">{p.position}</span>
-            </li>
-          ))}
-        </ul>
+        
+        {roster.length === 0 ? (
+          <p className="text-sm font-mono text-muted-foreground italic">No players registered.</p>
+        ) : (
+          <ul className="space-y-2 font-mono text-sm text-foreground">
+            {roster.map((p: any) => (
+              <li key={p.name} className="flex items-center justify-between rounded bg-muted/50 px-2 py-1">
+                <span className={cn("font-semibold", p.highlight ? (isPrimary ? "text-primary" : "text-destructive") : "")}>{p.name}</span>
+                <span className="text-muted-foreground">{p.position}</span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );
