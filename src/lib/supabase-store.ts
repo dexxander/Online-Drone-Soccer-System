@@ -218,6 +218,7 @@ export class SupabaseStore implements DataStore {
   private hydrationError: string | null = null;
   private matchArchive: Record<string, { match: Match; events: MatchEvent[] }> = {};
   private writeQueue = Promise.resolve();
+  private persistedEventIds = new Set<string>();
 
   getHydrationError() { return this.hydrationError; }
 
@@ -234,11 +235,13 @@ export class SupabaseStore implements DataStore {
         supabase.from('tournaments').select('*'),
         supabase.from('audit_logs').select('*'),
         supabase.from('tournament_matches').select('*'),
-        supabase.from('match_slots').select('*')
+        supabase.from('match_slots').select('*'),
+        supabase.from('match_events').select('*').order('created_at', { ascending: false }),
+        supabase.from('penalties').select('*').order('created_at', { ascending: false })
       ]);
       const firstError = responses.find((response) => response.error)?.error;
       if (firstError) throw firstError;
-      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches, matchSlots] = responses.map((response) => response.data);
+      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches, matchSlots, matchEvents, penalties] = responses.map((response) => response.data);
 
       const camelTournaments = toCamel(tournaments || []);
       const camelMatches = toCamel(tournamentMatches || []);
@@ -258,7 +261,7 @@ export class SupabaseStore implements DataStore {
         tournaments: mappedTournaments,
         auditLogs: toCamel(auditLogs) || [],
       };
-      this.applyMatchSlots(toCamel(matchSlots) || []);
+      this.applyMatchSlots(toCamel(matchSlots) || [], toCamel(matchEvents) || [], toCamel(penalties) || []);
       this.notify();
     } catch (e) {
       console.error("Supabase hydration failed", e);
@@ -304,14 +307,23 @@ export class SupabaseStore implements DataStore {
     const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, ...patch } : s)) as [MatchSlot, MatchSlot];
     const primary = matches[0];
     this.commit({ ...this.state, matches, match: primary.match, events: primary.events });
-    this.persistMatchSlot(matches.find((slot) => slot.slotId === slotId)!);
+    const changedSlot = matches.find((slot) => slot.slotId === slotId)!;
+    this.persistMatchSlot(changedSlot);
+    if (patch.events !== undefined) this.persistMatchEvents(changedSlot.slotId, changedSlot.events);
   }
 
-  private applyMatchSlots(rows: any[]) {
+  private applyMatchSlots(rows: any[], eventRows: any[] = [], penaltyRows: any[] = []) {
     if (!rows.length) return;
     const matches = this.state.matches.map((slot) => {
       const row = rows.find((candidate) => candidate.slotId === slot.slotId);
       if (!row) return slot;
+      const events = eventRows
+        .filter((event) => event.slotId === slot.slotId)
+        .map((event) => ({ ...event, matchId: event.matchId || row.tournamentMatchId || slot.match.id }));
+      const slotPenalties = penaltyRows
+        .filter((penalty) => penalty.slotId === slot.slotId)
+        .map((penalty) => ({ ...penalty, matchId: penalty.matchId || row.tournamentMatchId || slot.match.id }));
+      events.forEach((event) => this.persistedEventIds.add(event.id));
       return {
         ...slot,
         match: {
@@ -324,7 +336,9 @@ export class SupabaseStore implements DataStore {
           status: row.status || "scheduled",
           elapsedMs: Number(row.elapsedMs) || 0,
           runningSince: row.runningSince == null ? null : Number(row.runningSince),
+          penalties: slotPenalties,
         },
+        events,
         visibleOnScoreboard: row.visibleOnScoreboard ?? true,
         lastActiveAt: row.lastActiveAt == null ? null : Number(row.lastActiveAt),
       };
@@ -338,7 +352,15 @@ export class SupabaseStore implements DataStore {
       console.error('Supabase match slot refresh failed:', error);
       return;
     }
-    this.applyMatchSlots(toCamel(data || []));
+    const [{ data: eventData, error: eventError }, { data: penaltyData, error: penaltyError }] = await Promise.all([
+      supabase.from('match_events').select('*').order('created_at', { ascending: false }),
+      supabase.from('penalties').select('*').order('created_at', { ascending: false }),
+    ]);
+    if (eventError || penaltyError) {
+      console.error('Supabase live event refresh failed:', eventError || penaltyError);
+      return;
+    }
+    this.applyMatchSlots(toCamel(data || []), toCamel(eventData || []), toCamel(penaltyData || []));
     this.notify();
   }
 
@@ -359,6 +381,21 @@ export class SupabaseStore implements DataStore {
     // The schema seeds slots 1 and 2 and grants referees UPDATE access. Use
     // UPDATE instead of upsert so RLS does not require INSERT permission.
     this.persist('match slot update', () => supabase.from('match_slots').update(row).eq('slot_id', slot.slotId).select('slot_id').single());
+  }
+
+  private persistMatchEvents(slotId: MatchSlotId, events: MatchEvent[]) {
+    const newEvents = events.filter((event) => !this.persistedEventIds.has(event.id));
+    newEvents.forEach((event) => {
+      this.persistedEventIds.add(event.id);
+      const row = {
+        id: event.id,
+        slot_id: slotId,
+        type: event.type,
+        message: event.message,
+        created_at: event.createdAt,
+      };
+      this.persist('match event insert', () => supabase.from('match_events').insert(row));
+    });
   }
 
   private log(type: MatchEventType, message: string, matchId: string, events: MatchEvent[]): MatchEvent[] {
@@ -587,6 +624,9 @@ export class SupabaseStore implements DataStore {
     this.matchArchive[match.id] = { match, events: nextEvents };
 
     this.commit(nextState);
+    const finishedSlot = nextState.matches.find((slot) => slot.slotId === slotId)!;
+    this.persistMatchSlot(finishedSlot);
+    this.persistMatchEvents(slotId, nextEvents);
   }
 
   adjustScore(slotId: MatchSlotId, side: "A" | "B", delta: number) {
