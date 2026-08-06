@@ -3,6 +3,7 @@ import { Users, ShieldCheck, Gauge, Radio, ArrowRight } from "lucide-react";
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
+import { AccountMenu } from "@/components/AccountMenu";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -90,15 +91,7 @@ function Landing() {
             >
               About
             </Link>
-            <Link to="/login" className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
-              Sign in
-            </Link>
-            <Link
-              to="/register-team"
-              className="rounded-lg bg-primary px-4 py-2 text-[13px] font-bold text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              Register team
-            </Link>
+            <AccountMenu />
           </nav>
         </div>
       </header>
