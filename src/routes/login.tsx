@@ -34,7 +34,7 @@ function LoginPage() {
       // Prevent admins from logging in through the regular portal
       if (loggedUser.role === "admin") {
         await auth.logout();
-        setError("Administrators must sign in through the internal /admin-login portal.");
+        setError("Administrators must sign in through admin portal.");
         return;
       }
       
