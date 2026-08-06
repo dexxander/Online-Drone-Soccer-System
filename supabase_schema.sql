@@ -154,7 +154,8 @@ ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 -- Users: Read by everyone, update by themselves or admin
 CREATE POLICY "Users are viewable by everyone" ON public.users FOR SELECT USING (true);
 CREATE POLICY "Users can update their own data" ON public.users FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins can manage all users" ON public.users FOR ALL USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can update users" ON public.users FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins can delete users" ON public.users FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
 
 -- Teams: Read by everyone, insert by coach/admin, update by owner/admin
 CREATE POLICY "Teams are viewable by everyone" ON public.teams FOR SELECT USING (true);

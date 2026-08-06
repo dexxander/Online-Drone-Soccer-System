@@ -62,7 +62,13 @@ export const auth = {
     if (error) throw error;
     
     // Fetch role from users table
-    const { data: userRow } = await supabase.from('users').select('role, name').eq('id', data.user.id).single();
+    const { data: userRow, error: userError } = await supabase.from('users').select('role, name').eq('id', data.user.id).single();
+    
+    if (userError) {
+      console.error("Error fetching user profile:", userError);
+    }
+    
+    // If the database returns null or there's an error, fallback to 'user'
     const role = userRow?.role || 'user';
     
     const user: AuthUser = {
@@ -104,4 +110,4 @@ export const auth = {
 };
 
 export const homeForRole = (role: UserRole) =>
-  role === "referee" ? "/referee" : role === "coach" ? "/register-team" : "/admin";
+  role === "admin" ? "/admin" : role === "referee" ? "/referee" : role === "coach" ? "/register-team" : "/";
