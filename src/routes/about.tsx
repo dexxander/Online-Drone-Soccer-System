@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Target, Users, Camera, Github, Linkedin, Mail } from "lucide-react";
+import { AccountMenu } from "@/components/AccountMenu";
+import { auth } from "@/lib/store";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -94,6 +96,12 @@ function AboutPage() {
           </Link>
           <nav className="flex items-center gap-2">
             <Link
+              to="/tournaments"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              Tournaments
+            </Link>
+            <Link
               to="/matches"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
             >
@@ -101,13 +109,19 @@ function AboutPage() {
             </Link>
             <Link
               to="/about"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-foreground sm:block"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-bold text-foreground sm:block"
             >
               About
             </Link>
-            <Link to="/login" className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
-              Sign in
-            </Link>
+            {auth.current()?.role === "coach" && (
+              <Link
+                to="/register-team"
+                className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary hover:bg-primary/20 sm:block"
+              >
+                Register Team
+              </Link>
+            )}
+            <AccountMenu />
           </nav>
         </div>
       </header>

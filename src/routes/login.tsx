@@ -15,17 +15,11 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const roles: { value: UserRole; label: string }[] = [
-  { value: "admin", label: "Administrator" },
-  { value: "referee", label: "Referee" },
-  { value: "coach", label: "Coach" },
-];
 
 function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("dev-admin@dronesoccer.io");
   const [password, setPassword] = useState("password");
-  const [role, setRole] = useState<UserRole>("admin");
   const [error, setError] = useState("");
 
   const submit = (e: React.FormEvent) => {
@@ -34,8 +28,8 @@ function LoginPage() {
       setError("Enter a valid email and a password of at least 4 characters.");
       return;
     }
-    auth.login(email, role);
-    navigate({ to: homeForRole(role) });
+    const loggedUser = auth.login(email);
+    navigate({ to: homeForRole(loggedUser.role) });
   };
 
   return (
@@ -58,24 +52,6 @@ function LoginPage() {
             className="auth-input"
             placeholder="••••••••"
           />
-        </Field>
-        <Field label="Sign in as">
-          <div className="grid grid-cols-3 gap-2">
-            {roles.map((r) => (
-              <button
-                key={r.value}
-                type="button"
-                onClick={() => setRole(r.value)}
-                className={`rounded-lg border px-2 py-2 text-xs font-semibold transition-colors ${
-                  role === r.value
-                    ? "border-primary bg-accent text-primary"
-                    : "border-border text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
         </Field>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <button

@@ -19,7 +19,6 @@ export const Route = createFileRoute("/register")({
 const roles: { value: UserRole; label: string }[] = [
   { value: "coach", label: "Coach" },
   { value: "referee", label: "Referee" },
-  { value: "admin", label: "Administrator" },
 ];
 
 function RegisterPage() {
@@ -42,7 +41,7 @@ function RegisterPage() {
   };
 
   return (
-    <AuthShell title="Create your account" subtitle="Register to manage teams, matches or the league.">
+    <AuthShell title="Create your account" subtitle="Register to manage teams or officiate matches.">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Full name">
           <input className="auth-input" value={form.name} onChange={set("name")} placeholder="Alex Rivera" />
@@ -59,7 +58,7 @@ function RegisterPage() {
           </Field>
         </div>
         <Field label="Account type">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {roles.map((r) => (
               <button
                 key={r.value}

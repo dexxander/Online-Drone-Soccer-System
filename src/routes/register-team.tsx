@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, Trash2, CheckCircle2, Pencil, X, Check } from "lucide-react";
-import { CoachLayout } from "@/components/CoachLayout";
+import { AccountMenu } from "@/components/AccountMenu";
 import { EmptyState, Panel, StatusBadge } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { auth } from "@/lib/store";
@@ -102,14 +102,59 @@ function RegisterTeamPage() {
   };
 
   return (
-    <CoachLayout>
-      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-        Coach portal
-      </p>
-      <h1 className="mt-2 text-3xl font-bold tracking-tight">Team registration</h1>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Submit your club details and roster. Entries appear as pending until an administrator reviews them.
-      </p>
+    <div className="min-h-screen bg-surface">
+      {/* ── Public Top Navigation Header (Matching standard layout) ── */}
+      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
+          <Link to="/" className="flex items-center gap-3">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-lift">
+              DS
+            </span>
+            <span className="leading-tight">
+              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
+                League Control
+              </span>
+            </span>
+          </Link>
+          <nav className="flex items-center gap-2">
+            <Link
+              to="/tournaments"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              Tournaments
+            </Link>
+            <Link
+              to="/matches"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              Matches
+            </Link>
+            <Link
+              to="/about"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              About
+            </Link>
+            <Link
+              to="/register-team"
+              className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary sm:block"
+            >
+              Register Team
+            </Link>
+            <AccountMenu />
+          </nav>
+        </div>
+      </header>
+
+      <main className="mx-auto w-full max-w-6xl px-6 py-10">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+          Coach portal
+        </p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground">Team registration</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Submit your club details and roster. Entries appear as pending until an administrator reviews them.
+        </p>
 
       {justSubmitted && (
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-success/25 bg-success-soft px-5 py-4 text-sm font-medium text-success">
@@ -305,7 +350,8 @@ function RegisterTeamPage() {
           Submit registration
         </button>
       </form>
-    </CoachLayout>
+      </main>
+    </div>
   );
 }
 

@@ -3,6 +3,8 @@ import { useMemo, useState } from "react";
 import { Trophy, Radio } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { EmptyState, Panel } from "@/components/ui-kit";
+import { AccountMenu } from "@/components/AccountMenu";
+import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { MatchStatus, Team, Tournament, TournamentMatch } from "@/lib/types";
 
@@ -124,8 +126,14 @@ function MatchesPage() {
           </Link>
           <nav className="flex items-center gap-2">
             <Link
+              to="/tournaments"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              Tournaments
+            </Link>
+            <Link
               to="/matches"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-foreground sm:block"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-bold text-foreground sm:block"
             >
               Matches
             </Link>
@@ -135,9 +143,15 @@ function MatchesPage() {
             >
               About
             </Link>
-            <Link to="/login" className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
-              Sign in
-            </Link>
+            {auth.current()?.role === "coach" && (
+              <Link
+                to="/register-team"
+                className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary hover:bg-primary/20 sm:block"
+              >
+                Register Team
+              </Link>
+            )}
+            <AccountMenu />
           </nav>
         </div>
       </header>

@@ -71,9 +71,9 @@ export interface DataStore {
   logAudit(action: string, performedBy: string, target: string, category: AuditLogEntry["category"], details?: string): void;
 }
 
-const STORAGE_KEY = "ds-league-state-v2";
-const ARCHIVE_KEY = "ds-league-archive-v2";
-const CHANNEL = "ds-league-channel-v2";
+const STORAGE_KEY = "ds-league-state-v3";
+const ARCHIVE_KEY = "ds-league-archive-v3";
+const CHANNEL = "ds-league-channel-v3";
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -81,6 +81,15 @@ function nextPowerOf2(n: number): number {
   let p = 1;
   while (p < n) p *= 2;
   return Math.max(p, 2);
+}
+
+function getMatchSchedule(round: number, slot: number): { scheduledDate: string; scheduledTime: string } {
+  const dates = ["AUG 6, 2026", "AUG 7, 2026", "AUG 8, 2026", "AUG 9, 2026"];
+  const times = ["14:00 PM", "15:30 PM", "17:00 PM", "18:30 PM", "20:00 PM"];
+
+  const dateStr = dates[Math.min(round - 1, dates.length - 1)] ?? "AUG 6, 2026";
+  const timeStr = times[slot % times.length] ?? "14:00 PM";
+  return { scheduledDate: dateStr, scheduledTime: timeStr };
 }
 
 function advanceWinner(matches: TournamentMatch[], match: TournamentMatch) {
@@ -104,9 +113,11 @@ function generateBracket(teamIds: string[]): TournamentMatch[] {
   const matches: TournamentMatch[] = [];
   let slot = 0;
   for (const teamId of byeTeams) {
-    matches.push({ id: uid(), round: 1, slot: slot++, teamAId: teamId, teamBId: null, winnerId: teamId, isBye: true });
+    const sched = getMatchSchedule(1, slot);
+    matches.push({ id: uid(), round: 1, slot: slot++, teamAId: teamId, teamBId: null, winnerId: teamId, isBye: true, ...sched });
   }
   for (let i = 0; i < playingTeams.length; i += 2) {
+    const sched = getMatchSchedule(1, slot);
     matches.push({
       id: uid(),
       round: 1,
@@ -115,6 +126,7 @@ function generateBracket(teamIds: string[]): TournamentMatch[] {
       teamBId: playingTeams[i + 1] ?? null,
       winnerId: null,
       isBye: false,
+      ...sched,
     });
   }
 
@@ -123,7 +135,8 @@ function generateBracket(teamIds: string[]): TournamentMatch[] {
   while (roundSize > 1) {
     const nextSize = roundSize / 2;
     for (let s = 0; s < nextSize; s++) {
-      matches.push({ id: uid(), round, slot: s, teamAId: null, teamBId: null, winnerId: null, isBye: false });
+      const sched = getMatchSchedule(round, s);
+      matches.push({ id: uid(), round, slot: s, teamAId: null, teamBId: null, winnerId: null, isBye: false, ...sched });
     }
     roundSize = nextSize;
     round++;
@@ -158,6 +171,7 @@ function generateManualBracket(
 
     const isBye = !teamAId || !teamBId;
     const winnerId = isBye ? (teamAId || teamBId || null) : null;
+    const sched = getMatchSchedule(1, slot);
 
     matches.push({
       id: uid(),
@@ -167,6 +181,7 @@ function generateManualBracket(
       teamBId,
       winnerId,
       isBye,
+      ...sched,
     });
   }
 
@@ -177,7 +192,8 @@ function generateManualBracket(
   let round = 2;
   while (roundSize >= 1) {
     for (let s = 0; s < roundSize; s++) {
-      matches.push({ id: uid(), round, slot: s, teamAId: null, teamBId: null, winnerId: null, isBye: false });
+      const sched = getMatchSchedule(round, s);
+      matches.push({ id: uid(), round, slot: s, teamAId: null, teamBId: null, winnerId: null, isBye: false, ...sched });
     }
     if (roundSize === 1) break;
     roundSize = roundSize / 2;
@@ -505,10 +521,47 @@ export const initialAuditLogs = [
   },
 ];
 
+export const initialTournaments: Tournament[] = [
+  {
+    id: "tour-001",
+    name: "2026 National Drone Soccer Championship",
+    category: "Open",
+    status: "active",
+    teamIds: ["t1", "t2", "t3", "t4", "t5", "t6", "t7", "t8"],
+    matchmakingType: "auto",
+    teamQuota: 8,
+    createdAt: Date.now() - 86400000 * 7,
+    matches: [
+      { id: "m101", round: 1, slot: 0, teamAId: "t1", teamBId: "t2", winnerId: null, isBye: false, scheduledDate: "AUG 6, 2026", scheduledTime: "14:00 PM" },
+      { id: "m102", round: 1, slot: 1, teamAId: "t3", teamBId: "t4", winnerId: null, isBye: false, scheduledDate: "AUG 6, 2026", scheduledTime: "15:30 PM" },
+      { id: "m103", round: 1, slot: 2, teamAId: "t5", teamBId: "t6", winnerId: null, isBye: false, scheduledDate: "AUG 6, 2026", scheduledTime: "17:00 PM" },
+      { id: "m104", round: 1, slot: 3, teamAId: "t7", teamBId: "t8", winnerId: null, isBye: false, scheduledDate: "AUG 6, 2026", scheduledTime: "18:30 PM" },
+      { id: "m105", round: 2, slot: 0, teamAId: null, teamBId: null, winnerId: null, isBye: false, scheduledDate: "AUG 7, 2026", scheduledTime: "15:00 PM" },
+      { id: "m106", round: 2, slot: 1, teamAId: null, teamBId: null, winnerId: null, isBye: false, scheduledDate: "AUG 7, 2026", scheduledTime: "16:30 PM" },
+      { id: "m107", round: 3, slot: 0, teamAId: null, teamBId: null, winnerId: null, isBye: false, scheduledDate: "AUG 8, 2026", scheduledTime: "18:00 PM" },
+    ],
+  },
+  {
+    id: "tour-002",
+    name: "Intercollegiate Drone Cup 2026",
+    category: "Collegiate",
+    status: "active",
+    teamIds: ["t3", "t8"],
+    matchmakingType: "manual",
+    teamQuota: 4,
+    createdAt: Date.now() - 86400000 * 3,
+    matches: [
+      { id: "m201", round: 1, slot: 0, teamAId: "t3", teamBId: "t8", winnerId: null, isBye: false, scheduledDate: "AUG 9, 2026", scheduledTime: "16:00 PM" },
+      { id: "m202", round: 1, slot: 1, teamAId: "t1", teamBId: null, winnerId: "t1", isBye: true, scheduledDate: "AUG 9, 2026", scheduledTime: "17:30 PM" },
+      { id: "m203", round: 2, slot: 0, teamAId: "t1", teamBId: null, winnerId: null, isBye: false, scheduledDate: "AUG 10, 2026", scheduledTime: "18:00 PM" },
+    ],
+  },
+];
+
 export const initialState: AppState = {
   teams: initialTeams,
   players: initialPlayers,
-  tournaments: [],
+  tournaments: initialTournaments,
   match: initialMatch,
   events: [],
   announcements: initialAnnouncements,
@@ -932,19 +985,46 @@ export const store: DataStore & { hydrate: () => void } = new LocalStore();
 
 const AUTH_KEY = "ds-league-auth-v1";
 
+export function detectRoleForEmail(email: string): UserRole {
+  const normalized = email.trim().toLowerCase();
+  const state = store.getState();
+  const found = (state.users || []).find((u: AppUser) => u.email.toLowerCase() === normalized);
+  if (found) {
+    if (found.role === "admin") return "admin";
+    if (found.role === "referee") return "referee";
+    if (found.role === "coach") return "coach";
+  }
+  if (normalized.includes("admin")) return "admin";
+  if (normalized.includes("referee")) return "referee";
+  return "coach";
+}
+
 export const auth = {
-  login(email: string, role: UserRole): AuthUser {
+  login(email: string, role?: UserRole): AuthUser {
+    const resolvedRole = role || detectRoleForEmail(email);
     const user: AuthUser = {
-      id: `user_${email.trim().toLowerCase()}`, name: email.split("@")[0] || "dev-admin", email, role, token: `mock.${uid()}.${uid()}`,
+      id: `user_${email.trim().toLowerCase()}`,
+      name: email.split("@")[0] || "user",
+      email,
+      role: resolvedRole,
+      token: `mock.${uid()}.${uid()}`,
     };
     window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
     return user;
   },
   current(): AuthUser | null {
     if (typeof window === "undefined") return null;
-    try { const raw = window.localStorage.getItem(AUTH_KEY); return raw ? (JSON.parse(raw) as AuthUser) : null; } catch { return null; }
+    try {
+      const raw = window.localStorage.getItem(AUTH_KEY);
+      return raw ? (JSON.parse(raw) as AuthUser) : null;
+    } catch {
+      return null;
+    }
   },
-  logout() { window.localStorage.removeItem(AUTH_KEY); },
+  logout() {
+    window.localStorage.removeItem(AUTH_KEY);
+  },
 };
 
-export const homeForRole = (role: UserRole) => role === "referee" ? "/referee" : role === "coach" ? "/register-team" : "/admin";
+export const homeForRole = (role: UserRole) =>
+  role === "referee" ? "/referee" : role === "coach" ? "/" : "/admin";

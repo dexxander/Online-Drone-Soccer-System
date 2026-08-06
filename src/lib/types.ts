@@ -139,6 +139,8 @@ export interface TournamentMatch {
   teamBId: string | null;
   winnerId: string | null;
   isBye: boolean;
+  scheduledDate?: string | undefined;
+  scheduledTime?: string | undefined;
 }
 
 export type MatchmakingType = "auto" | "manual";
