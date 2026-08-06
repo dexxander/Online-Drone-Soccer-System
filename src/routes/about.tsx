@@ -1,5 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Target, Users, Camera, Github, Linkedin, Mail } from "lucide-react";
+import DroneArena from "@/components/DroneArena";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -114,22 +115,30 @@ function AboutPage() {
 
       {/* ── Purpose ── */}
       <section className="border-b border-border">
-        <div className="mx-auto w-full max-w-6xl px-6 py-16">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
-            <Target className="size-3.5" /> About this project
-          </span>
-          <h1 className="mt-5 max-w-2xl text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
-            One shared source of truth for a drone soccer match day.
-          </h1>
-          <p className="mt-5 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-            {/* PLACEHOLDER copy — replace with your real project description. */}
-            Drone Soccer League Control exists to take a league's match day off spreadsheets and
-            walkie-talkies and put it in one connected system. Coaches register their teams and
-            rosters, admins approve entries and build tournament brackets, referees run the clock
-            and score from pitchside, and every call is broadcast to the live scoreboard instantly —
-            all reading from the same shared state, so nobody in the venue is ever looking at stale
-            numbers.
-          </p>
+        <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-2 lg:gap-14">
+          {/* Copy */}
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-primary">
+              <Target className="size-3.5" /> About this project
+            </span>
+            <h1 className="mt-5 text-3xl font-bold leading-tight tracking-tight text-foreground sm:text-4xl">
+              One shared source of truth for a drone soccer match day.
+            </h1>
+            <p className="mt-5 text-[15px] leading-relaxed text-muted-foreground">
+              {/* PLACEHOLDER copy — replace with your real project description. */}
+              Drone Soccer League Control exists to take a league's match day off spreadsheets and
+              walkie-talkies and put it in one connected system. Coaches register their teams and
+              rosters, admins approve entries and build tournament brackets, referees run the clock
+              and score from pitchside, and every call is broadcast to the live scoreboard instantly —
+              all reading from the same shared state, so nobody in the venue is ever looking at stale
+              numbers.
+            </p>
+          </div>
+
+          {/* Live drone arena — drag the drones through the goals */}
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border shadow-card sm:aspect-video">
+            <DroneArena />
+          </div>
         </div>
       </section>
 
