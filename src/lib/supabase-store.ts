@@ -14,7 +14,7 @@ export function toSnake(obj: any): any {
     Object.entries(obj).map(([k, v]) => {
       const snakeKey = k.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
       let val = toSnake(v);
-      if ((k === 'createdAt' || k === 'updatedAt' || k === 'timestamp') && typeof val === 'number') {
+      if ((k === 'createdAt' || k === 'updatedAt') && typeof val === 'number') {
         val = new Date(val).toISOString();
       }
       return [snakeKey, val];
@@ -29,8 +29,11 @@ export function toCamel(obj: any): any {
     Object.entries(obj).map(([k, v]) => {
       const camelKey = k.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
       let val = toCamel(v);
-      if ((camelKey === 'createdAt' || camelKey === 'updatedAt' || camelKey === 'timestamp' || camelKey === 'runningSince') && typeof val === 'string') {
+      if ((camelKey === 'createdAt' || camelKey === 'updatedAt') && typeof val === 'string') {
         val = new Date(val).getTime();
+      }
+      if ((camelKey === 'timestamp' || camelKey === 'runningSince') && typeof val === 'string') {
+        val = Number(val);
       }
       return [camelKey, val];
     })
@@ -39,7 +42,15 @@ export function toCamel(obj: any): any {
 
 // ─── ID + bracket helpers (self-contained, no store.ts import) ──────────────
 
-const uid = () => Math.random().toString(36).slice(2, 10);
+// All application IDs map to Supabase uuid columns.
+const uid = () => {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+};
 
 function nextPowerOf2(n: number): number {
   let p = 1;
@@ -205,6 +216,7 @@ export class SupabaseStore implements DataStore {
   private hydrated = false;
   private hydrationError: string | null = null;
   private matchArchive: Record<string, { match: Match; events: MatchEvent[] }> = {};
+  private writeQueue = Promise.resolve();
 
   getHydrationError() { return this.hydrationError; }
 
@@ -213,15 +225,7 @@ export class SupabaseStore implements DataStore {
     this.hydrated = true;
 
     try {
-      const [
-        { data: users },
-        { data: teams },
-        { data: players },
-        { data: announcements },
-        { data: tournaments },
-        { data: auditLogs },
-        { data: tournamentMatches }
-      ] = await Promise.all([
+      const responses = await Promise.all([
         supabase.from('users').select('*'),
         supabase.from('teams').select('*'),
         supabase.from('players').select('*'),
@@ -230,6 +234,9 @@ export class SupabaseStore implements DataStore {
         supabase.from('audit_logs').select('*'),
         supabase.from('tournament_matches').select('*')
       ]);
+      const firstError = responses.find((response) => response.error)?.error;
+      if (firstError) throw firstError;
+      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches] = responses.map((response) => response.data);
 
       const camelTournaments = toCamel(tournaments || []);
       const camelMatches = toCamel(tournamentMatches || []);
@@ -270,6 +277,15 @@ export class SupabaseStore implements DataStore {
     this.listeners.forEach((l) => l());
   }
 
+  private persist(label: string, operation: () => PromiseLike<{ error: unknown | null }>) {
+    this.writeQueue = this.writeQueue.then(async () => {
+      const { error } = await operation();
+      if (error) throw error;
+    }).catch((error) => {
+      console.error(`Supabase ${label} failed:`, error);
+    });
+  }
+
   private commit(next: AppState) {
     this.state = next;
     this.notify();
@@ -297,14 +313,14 @@ export class SupabaseStore implements DataStore {
   addTeam(input: Omit<Team, "id" | "status" | "createdAt">) {
     const team: Team = { ...input, id: uid(), status: "pending", createdAt: Date.now() };
     this.commit({ ...this.state, teams: [team, ...this.state.teams] });
-    supabase.from('teams').insert(toSnake(team)).then();
+    this.persist('team insert', () => supabase.from('teams').insert(toSnake(team)));
     return team;
   }
 
   addPlayers(teamId: string, players: Array<Omit<Player, "id" | "teamId" | "status" | "createdAt">>) {
     const rows: Player[] = players.map((p) => ({ ...p, id: uid(), teamId, status: "pending" as const, createdAt: Date.now() }));
     this.commit({ ...this.state, players: [...rows, ...this.state.players] });
-    supabase.from('players').insert(rows.map(toSnake)).then();
+    this.persist('player insert', () => supabase.from('players').insert(rows.map(toSnake)));
   }
 
   setTeamStatus(id: string, status: EntityStatus) {
@@ -313,28 +329,28 @@ export class SupabaseStore implements DataStore {
       teams: this.state.teams.map((t) => (t.id === id ? { ...t, status } : t)),
       players: this.state.players.map((p) => (p.teamId === id ? { ...p, status } : p)),
     });
-    supabase.from('teams').update({ status }).eq('id', id).then();
-    supabase.from('players').update({ status }).eq('team_id', id).then();
+    this.persist('team status update', () => supabase.from('teams').update({ status }).eq('id', id));
+    this.persist('player status update', () => supabase.from('players').update({ status }).eq('team_id', id));
   }
 
   setPlayerStatus(id: string, status: EntityStatus) {
     this.commit({ ...this.state, players: this.state.players.map((p) => (p.id === id ? { ...p, status } : p)) });
-    supabase.from('players').update({ status }).eq('id', id).then();
+    this.persist('player status update', () => supabase.from('players').update({ status }).eq('id', id));
   }
 
   updatePlayer(id: string, patch: Partial<Omit<Player, "id" | "createdAt">>) {
     this.commit({ ...this.state, players: this.state.players.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
-    supabase.from('players').update(toSnake(patch)).eq('id', id).then();
+    this.persist('player update', () => supabase.from('players').update(toSnake(patch)).eq('id', id));
   }
 
   removePlayer(id: string) {
     this.commit({ ...this.state, players: this.state.players.filter((p) => p.id !== id) });
-    supabase.from('players').delete().eq('id', id).then();
+    this.persist('player delete', () => supabase.from('players').delete().eq('id', id));
   }
 
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>) {
     this.commit({ ...this.state, teams: this.state.teams.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
-    supabase.from('teams').update(toSnake(patch)).eq('id', id).then();
+    this.persist('team update', () => supabase.from('teams').update(toSnake(patch)).eq('id', id));
   }
 
   removeTeam(id: string) {
@@ -343,7 +359,7 @@ export class SupabaseStore implements DataStore {
       teams: this.state.teams.filter((t) => t.id !== id),
       players: this.state.players.filter((p) => p.teamId !== id),
     });
-    supabase.from('teams').delete().eq('id', id).then();
+    this.persist('team delete', () => supabase.from('teams').delete().eq('id', id));
   }
 
   // ─── Tournaments ────────────────────────────────────────────────────────
@@ -380,8 +396,10 @@ export class SupabaseStore implements DataStore {
     const tMatches = (mapped.matches || []).map((m: any) => ({ ...m, tournament_id: mapped.id }));
     delete mapped.matches;
     delete mapped.team_ids;
-    supabase.from('tournaments').insert(mapped).then(() => {
-      if (tMatches.length) supabase.from('tournament_matches').insert(tMatches).then();
+    this.persist('tournament insert', async () => {
+      const result = await supabase.from('tournaments').insert(mapped);
+      if (!result.error && tMatches.length) return supabase.from('tournament_matches').insert(tMatches);
+      return result;
     });
 
     return tournament;
@@ -404,10 +422,12 @@ export class SupabaseStore implements DataStore {
 
     const t = tournaments.find((x) => x.id === tournamentId);
     if (t) {
-      supabase.from('tournaments').update({ matchmaking_type: matchmakingType }).eq('id', tournamentId).then(() => {
-        supabase.from('tournament_matches').delete().eq('tournament_id', tournamentId).then(() => {
-          supabase.from('tournament_matches').insert(t.matches.map(m => toSnake({ ...m, tournamentId }))).then();
-        });
+      this.persist('tournament matchmaking update', async () => {
+        const updateResult = await supabase.from('tournaments').update({ matchmaking_type: matchmakingType }).eq('id', tournamentId);
+        if (updateResult.error) return updateResult;
+        const deleteResult = await supabase.from('tournament_matches').delete().eq('tournament_id', tournamentId);
+        if (deleteResult.error) return deleteResult;
+        return supabase.from('tournament_matches').insert(t.matches.map(m => toSnake({ ...m, tournamentId })));
       });
     }
   }
@@ -430,14 +450,14 @@ export class SupabaseStore implements DataStore {
     const t = tournaments.find(x => x.id === tournamentId);
     if (t) {
       t.matches.forEach(m => {
-        supabase.from('tournament_matches').update(toSnake(m)).eq('id', m.id).then();
+        this.persist('tournament match update', () => supabase.from('tournament_matches').update(toSnake(m)).eq('id', m.id));
       });
     }
   }
 
   removeTournament(id: string) {
     this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
-    supabase.from('tournaments').delete().eq('id', id).then();
+    this.persist('tournament delete', () => supabase.from('tournaments').delete().eq('id', id));
   }
 
   // ─── Live Match Slots ───────────────────────────────────────────────────
@@ -558,18 +578,18 @@ export class SupabaseStore implements DataStore {
   addAnnouncement(input: Omit<Announcement, "id" | "createdAt">): Announcement {
     const ann: Announcement = { ...input, id: uid(), createdAt: Date.now() };
     this.commit({ ...this.state, announcements: [ann, ...(this.state.announcements || [])] });
-    supabase.from('announcements').insert(toSnake(ann)).then();
+    this.persist('announcement insert', () => supabase.from('announcements').insert(toSnake(ann)));
     return ann;
   }
 
   updateAnnouncement(id: string, patch: Partial<Omit<Announcement, "id" | "createdAt">>) {
     this.commit({ ...this.state, announcements: (this.state.announcements || []).map((a) => a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a) });
-    supabase.from('announcements').update(toSnake(patch)).eq('id', id).then();
+    this.persist('announcement update', () => supabase.from('announcements').update(toSnake(patch)).eq('id', id));
   }
 
   removeAnnouncement(id: string) {
     this.commit({ ...this.state, announcements: (this.state.announcements || []).filter((a) => a.id !== id) });
-    supabase.from('announcements').delete().eq('id', id).then();
+    this.persist('announcement delete', () => supabase.from('announcements').delete().eq('id', id));
   }
 
   togglePinAnnouncement(id: string) {
@@ -582,22 +602,23 @@ export class SupabaseStore implements DataStore {
   addUser(input: Omit<AppUser, "id" | "createdAt">): AppUser {
     const newUser: AppUser = { ...input, id: uid(), createdAt: Date.now() };
     this.commit({ ...this.state, users: [newUser, ...(this.state.users || [])] });
+    this.persist('user insert', () => supabase.from('users').insert(toSnake(newUser)));
     return newUser;
   }
 
   updateUserRole(id: string, role: UserTag) {
     this.commit({ ...this.state, users: (this.state.users || []).map((u) => (u.id === id ? { ...u, role } : u)) });
-    supabase.from('users').update({ role }).eq('id', id).then();
+    this.persist('user role update', () => supabase.from('users').update({ role }).eq('id', id));
   }
 
   updateUserStatus(id: string, status: AppUser["status"]) {
     this.commit({ ...this.state, users: (this.state.users || []).map((u) => (u.id === id ? { ...u, status } : u)) });
-    supabase.from('users').update({ status }).eq('id', id).then();
+    this.persist('user status update', () => supabase.from('users').update({ status }).eq('id', id));
   }
 
   removeUser(id: string) {
     this.commit({ ...this.state, users: (this.state.users || []).filter((u) => u.id !== id) });
-    supabase.from('users').delete().eq('id', id).then();
+    this.persist('user delete', () => supabase.from('users').delete().eq('id', id));
   }
 
   logAudit(action: string, performedBy: string, target: string, category: AuditLogEntry["category"], details?: string) {
@@ -607,6 +628,6 @@ export class SupabaseStore implements DataStore {
       ...(details ? { details } : {}),
     };
     this.commit({ ...this.state, auditLogs: [entry, ...(this.state.auditLogs || [])].slice(0, 200) });
-    supabase.from('audit_logs').insert(toSnake(entry)).then();
+    this.persist('audit log insert', () => supabase.from('audit_logs').insert(toSnake(entry)));
   }
 }
