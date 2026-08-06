@@ -1115,7 +1115,8 @@ class LocalStore implements DataStore {
   }
 }
 
-export const store: DataStore & { hydrate: () => void } = new LocalStore();
+import { SupabaseStore } from "./supabase-store";
+export const store: DataStore & { hydrate: () => void } = new SupabaseStore();
 
 const AUTH_KEY = "ds-league-auth-v1";
 
@@ -1133,18 +1134,39 @@ export function detectRoleForEmail(email: string): UserRole {
   return "coach";
 }
 
+import { supabase } from "./supabase";
+
 export const auth = {
-  login(email: string, role?: UserRole): AuthUser {
-    const resolvedRole = role || detectRoleForEmail(email);
+  async login(email: string, password?: string): Promise<AuthUser> {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password: password || 'password123' });
+    if (error) throw error;
+    
+    // Fetch role from users table
+    const { data: userRow } = await supabase.from('users').select('role, name').eq('id', data.user.id).single();
+    const role = userRow?.role || 'user';
+    
     const user: AuthUser = {
-      id: `user_${email.trim().toLowerCase()}`,
-      name: email.split("@")[0] || "user",
+      id: data.user.id,
+      name: userRow?.name || email.split("@")[0],
       email,
-      role: resolvedRole,
-      token: `mock.${uid()}.${uid()}`,
+      role: role as UserRole,
+      token: data.session.access_token,
     };
     window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
     return user;
+  },
+  async register(email: string, name: string, role: string, password?: string) {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: password || 'password123',
+      options: {
+        data: { name, role }
+      }
+    });
+    if (error) throw error;
+    
+    // Auto-login after register
+    return this.login(email, password || 'password123');
   },
   current(): AuthUser | null {
     if (typeof window === "undefined") return null;
@@ -1155,7 +1177,8 @@ export const auth = {
       return null;
     }
   },
-  logout() {
+  async logout() {
+    await supabase.auth.signOut();
     window.localStorage.removeItem(AUTH_KEY);
   },
 };

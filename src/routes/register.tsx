@@ -30,14 +30,19 @@ function RegisterPage() {
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm({ ...form, [k]: e.target.value });
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) return setError("Full name is required.");
     if (!form.email.includes("@")) return setError("Enter a valid email address.");
     if (form.password.length < 6) return setError("Password must be at least 6 characters.");
     if (form.password !== form.confirm) return setError("Passwords do not match.");
-    auth.login(form.email, role);
-    navigate({ to: homeForRole(role) });
+    
+    try {
+      const loggedUser = await auth.register(form.email, form.name, role, form.password);
+      navigate({ to: homeForRole(role) });
+    } catch (err: any) {
+      setError(err.message || "Registration failed. Please try again.");
+    }
   };
 
   return (

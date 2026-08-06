@@ -22,14 +22,18 @@ function LoginPage() {
   const [password, setPassword] = useState("password");
   const [error, setError] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.includes("@") || password.length < 4) {
       setError("Enter a valid email and a password of at least 4 characters.");
       return;
     }
-    const loggedUser = auth.login(email);
-    navigate({ to: homeForRole(loggedUser.role) });
+    try {
+      const loggedUser = await auth.login(email, password);
+      navigate({ to: homeForRole(loggedUser.role) });
+    } catch (err: any) {
+      setError(err.message || "Failed to sign in. Please check your credentials.");
+    }
   };
 
   return (

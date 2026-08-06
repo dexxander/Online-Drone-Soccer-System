@@ -30,19 +30,28 @@ function HiddenAdminAuthPage() {
   const [signUpError, setSignUpError] = useState("");
 
   // Sign In Submit
-  const handleSignIn = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signInEmail.includes("@") || signInPassword.length < 4) {
       setSignInError("Please enter a valid administrator email and password.");
       return;
     }
     setSignInError("");
-    auth.login(signInEmail, "admin");
-    navigate({ to: "/admin" });
+    try {
+      const user = await auth.login(signInEmail, signInPassword);
+      if (user.role !== "admin") {
+        await auth.logout();
+        setSignInError("Unauthorized: Account does not have admin privileges.");
+        return;
+      }
+      navigate({ to: "/admin" });
+    } catch (err: any) {
+      setSignInError(err.message || "Failed to sign in.");
+    }
   };
 
   // Sign Up Submit
-  const handleSignUp = (e: React.FormEvent) => {
+  const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!signUpName.trim()) return setSignUpError("Full name is required.");
     if (!signUpEmail.includes("@")) return setSignUpError("Enter a valid email address.");
@@ -52,16 +61,12 @@ function HiddenAdminAuthPage() {
     }
 
     setSignUpError("");
-    // Register user in store as admin
-    store.addUser({
-      name: signUpName.trim(),
-      email: signUpEmail.trim(),
-      role: "admin",
-      status: "active",
-    });
-
-    auth.login(signUpEmail, "admin");
-    navigate({ to: "/admin" });
+    try {
+      const user = await auth.register(signUpEmail, signUpName.trim(), "admin", signUpPassword);
+      navigate({ to: "/admin" });
+    } catch (err: any) {
+      setSignUpError(err.message || "Failed to create admin account.");
+    }
   };
 
   return (
