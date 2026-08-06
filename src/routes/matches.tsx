@@ -135,6 +135,12 @@ function MatchesPage() {
             >
               Live scoreboard
             </Link>
+            <Link
+              to="/about"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              About
+            </Link>
             <Link to="/login" className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground">
               Sign in
             </Link>
