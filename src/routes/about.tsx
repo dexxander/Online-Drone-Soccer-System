@@ -136,7 +136,7 @@ function AboutPage() {
           </div>
 
           {/* Live drone arena — drag the drones through the goals */}
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border shadow-card sm:aspect-video">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl sm:aspect-video">
             <DroneArena />
           </div>
         </div>

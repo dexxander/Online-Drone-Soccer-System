@@ -72,9 +72,10 @@ const DRONES = {
   },
 };
 
-// Zero-G Box Dimensions (Wide X, Z restricted for 2.5D)
-const BOX_WIDTH = 50;
-const BOX_HEIGHT = 22;
+// Zero-G Box Dimensions (Wide X, Z restricted for 2.5D) — invisible bounds,
+// no wireframe is drawn for these anymore.
+const BOX_WIDTH = 62;
+const BOX_HEIGHT = 27;
 const BOX_DEPTH = 4.5; // unchanged — keeps the 2.5D depth feel
 
 type DroneArenaProps = {
@@ -109,7 +110,7 @@ export default function DroneArena({
     const scene = new THREE.Scene();
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 54);
+    camera.position.set(0, 0, 66);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -168,8 +169,8 @@ export default function DroneArena({
     const GOAL_THICKNESS = 0.4;
 
     const goalsData = [
-      { name: "RED", pos: new THREE.Vector3(-15, 0, 0), color: 0xff3333, score: 0, mesh: null as THREE.Mesh | null, cooldown: 0 },
-      { name: "BLUE", pos: new THREE.Vector3(15, 0, 0), color: 0x3388ff, score: 0, mesh: null as THREE.Mesh | null, cooldown: 0 },
+      { name: "RED", pos: new THREE.Vector3(-19, 0, 0), color: 0xff3333, score: 0, mesh: null as THREE.Mesh | null, cooldown: 0 },
+      { name: "BLUE", pos: new THREE.Vector3(19, 0, 0), color: 0x3388ff, score: 0, mesh: null as THREE.Mesh | null, cooldown: 0 },
     ];
 
     goalsData.forEach((g) => {
