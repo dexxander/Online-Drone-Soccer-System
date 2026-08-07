@@ -23,6 +23,7 @@ import { Switch } from "@/components/ui/switch";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
 import type { Match, MatchEventType, MatchSlot, MatchSlotId, PenaltyType, TournamentMatch } from "@/lib/types";
+import { calculateEffectivePenalties } from "@/lib/penalties";
 
 import {
   auth,
@@ -619,6 +620,7 @@ function NavCard({ href, onClick, icon, label, active, danger, external }: any) 
 
 function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, roster }: any) {
   const isPrimary = accentColor === "primary";
+  const effectivePenalties = calculateEffectivePenalties(penalties);
 
   return (
     <div className={cn("flex flex-col rounded-xl border bg-background p-6 shadow-card transition-opacity", disabled ? "opacity-75 border-border" : "border-border")}>
@@ -651,9 +653,11 @@ function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, pe
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Penalty Entry</h3>
 
-          <div className="flex gap-1">
-            {penalties.map((p: any) => (
-              <span key={p.id} className={cn("h-4 w-3 rounded-sm shadow-sm", p.type === "Major" ? "bg-warning" : p.type === "Technical" ? "bg-destructive" : "bg-muted-foreground")} />
+          <div className="flex items-center gap-1">
+            {effectivePenalties.isDisqualified ? (
+              <span className="rounded bg-destructive/10 px-2 py-1 text-[10px] font-bold uppercase text-destructive">Disqualified</span>
+            ) : effectivePenalties.badges.map((badge, index) => (
+              <span key={`${badge}-${index}`} className={cn("h-4 w-3 rounded-sm shadow-sm", badge === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
             ))}
           </div>
         </div>

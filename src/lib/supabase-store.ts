@@ -1,7 +1,7 @@
 import { supabase } from "./supabase";
 import type {
   AppState, Team, Player, Tournament, TournamentMatch, Announcement, AppUser, AuditLogEntry,
-  MatchSlot, MatchSlotId, Match, MatchEvent, MatchEventType, PenaltyType,
+  MatchSlot, MatchSlotId, Match, MatchEvent, MatchEventType, Penalty, PenaltyType,
   EntityStatus, UserTag, MatchmakingType, TeamCategory
 } from "./types";
 
@@ -51,6 +51,17 @@ const uid = () => {
     return v.toString(16);
   });
 };
+
+function currentAuditActor() {
+  if (typeof window === "undefined") return "system";
+  try {
+    const raw = window.localStorage.getItem("ds-league-auth-v1");
+    const user = raw ? JSON.parse(raw) : null;
+    return user?.email || user?.name || "system";
+  } catch {
+    return "system";
+  }
+}
 
 function nextPowerOf2(n: number): number {
   let p = 1;
@@ -219,6 +230,7 @@ export class SupabaseStore implements DataStore {
   private matchArchive: Record<string, { match: Match; events: MatchEvent[] }> = {};
   private writeQueue = Promise.resolve();
   private persistedEventIds = new Set<string>();
+  private persistedPenaltyIds = new Set<string>();
 
   getHydrationError() { return this.hydrationError; }
 
@@ -310,6 +322,7 @@ export class SupabaseStore implements DataStore {
     const changedSlot = matches.find((slot) => slot.slotId === slotId)!;
     this.persistMatchSlot(changedSlot);
     if (patch.events !== undefined) this.persistMatchEvents(changedSlot.slotId, changedSlot.events);
+    if (patch.match !== undefined) this.persistMatchPenalties(changedSlot.slotId, changedSlot.match.penalties);
   }
 
   private applyMatchSlots(rows: any[], eventRows: any[] = [], penaltyRows: any[] = []) {
@@ -324,6 +337,7 @@ export class SupabaseStore implements DataStore {
         .filter((penalty) => penalty.slotId === slot.slotId)
         .map((penalty) => ({ ...penalty, matchId: penalty.matchId || row.tournamentMatchId || slot.match.id }));
       events.forEach((event) => this.persistedEventIds.add(event.id));
+      slotPenalties.forEach((penalty) => this.persistedPenaltyIds.add(penalty.id));
       return {
         ...slot,
         match: {
@@ -398,6 +412,21 @@ export class SupabaseStore implements DataStore {
     });
   }
 
+  private persistMatchPenalties(slotId: MatchSlotId, penalties: Penalty[]) {
+    const newPenalties = penalties.filter((penalty) => !this.persistedPenaltyIds.has(penalty.id));
+    newPenalties.forEach((penalty) => {
+      this.persistedPenaltyIds.add(penalty.id);
+      const row = {
+        id: penalty.id,
+        slot_id: slotId,
+        side: penalty.side,
+        type: penalty.type,
+        created_at: penalty.createdAt,
+      };
+      this.persist('penalty insert', () => supabase.from('penalties').insert(row));
+    });
+  }
+
   private log(type: MatchEventType, message: string, matchId: string, events: MatchEvent[]): MatchEvent[] {
     const event: MatchEvent = { id: uid(), matchId, type, message, createdAt: Date.now() };
     return [event, ...events].slice(0, 50);
@@ -409,6 +438,7 @@ export class SupabaseStore implements DataStore {
     const team: Team = { ...input, id: uid(), status: "pending", createdAt: Date.now() };
     this.commit({ ...this.state, teams: [team, ...this.state.teams] });
     this.persist('team insert', () => supabase.from('teams').insert(toSnake(team)));
+    this.logAudit("Team created", currentAuditActor(), team.name, "Team", `Coach: ${team.coachName}`);
     return team;
   }
 
@@ -416,6 +446,7 @@ export class SupabaseStore implements DataStore {
     const rows: Player[] = players.map((p) => ({ ...p, id: uid(), teamId, status: "pending" as const, createdAt: Date.now() }));
     this.commit({ ...this.state, players: [...rows, ...this.state.players] });
     this.persist('player insert', () => supabase.from('players').insert(rows.map(toSnake)));
+    this.logAudit("Players added", currentAuditActor(), teamId, "Team", `${rows.length} player(s) added`);
   }
 
   setTeamStatus(id: string, status: EntityStatus) {
@@ -426,26 +457,31 @@ export class SupabaseStore implements DataStore {
     });
     this.persist('team status update', () => supabase.from('teams').update({ status }).eq('id', id));
     this.persist('player status update', () => supabase.from('players').update({ status }).eq('team_id', id));
+    this.logAudit("Team status updated", currentAuditActor(), id, "Team", `Status: ${status}`);
   }
 
   setPlayerStatus(id: string, status: EntityStatus) {
     this.commit({ ...this.state, players: this.state.players.map((p) => (p.id === id ? { ...p, status } : p)) });
     this.persist('player status update', () => supabase.from('players').update({ status }).eq('id', id));
+    this.logAudit("Player status updated", currentAuditActor(), id, "Team", `Status: ${status}`);
   }
 
   updatePlayer(id: string, patch: Partial<Omit<Player, "id" | "createdAt">>) {
     this.commit({ ...this.state, players: this.state.players.map((p) => (p.id === id ? { ...p, ...patch } : p)) });
     this.persist('player update', () => supabase.from('players').update(toSnake(patch)).eq('id', id));
+    this.logAudit("Player updated", currentAuditActor(), id, "Team");
   }
 
   removePlayer(id: string) {
     this.commit({ ...this.state, players: this.state.players.filter((p) => p.id !== id) });
     this.persist('player delete', () => supabase.from('players').delete().eq('id', id));
+    this.logAudit("Player deleted", currentAuditActor(), id, "Team");
   }
 
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>) {
     this.commit({ ...this.state, teams: this.state.teams.map((t) => (t.id === id ? { ...t, ...patch } : t)) });
     this.persist('team update', () => supabase.from('teams').update(toSnake(patch)).eq('id', id));
+    this.logAudit("Team updated", currentAuditActor(), id, "Team");
   }
 
   removeTeam(id: string) {
@@ -455,6 +491,7 @@ export class SupabaseStore implements DataStore {
       players: this.state.players.filter((p) => p.teamId !== id),
     });
     this.persist('team delete', () => supabase.from('teams').delete().eq('id', id));
+    this.logAudit("Team deleted", currentAuditActor(), id, "Team");
   }
 
   // ─── Tournaments ────────────────────────────────────────────────────────
@@ -496,6 +533,7 @@ export class SupabaseStore implements DataStore {
       if (!result.error && tMatches.length) return supabase.from('tournament_matches').insert(tMatches);
       return result;
     });
+    this.logAudit("Tournament created", currentAuditActor(), tournament.name, "Tournament", `${teamIds.length} team(s)`);
 
     return tournament;
   }
@@ -553,6 +591,7 @@ export class SupabaseStore implements DataStore {
   removeTournament(id: string) {
     this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
     this.persist('tournament delete', () => supabase.from('tournaments').delete().eq('id', id));
+    this.logAudit("Tournament deleted", currentAuditActor(), id, "Tournament");
   }
 
   // ─── Live Match Slots ───────────────────────────────────────────────────
@@ -649,6 +688,7 @@ export class SupabaseStore implements DataStore {
     const name = side === "A" ? m.teamAName : m.teamBName;
     const events = this.log("penalty_issued", `${type} penalty — ${name}`, match.id, slot.events);
     this.commitSlot(slotId, { match, events });
+    this.logAudit("Penalty issued", currentAuditActor(), match.id, "System", `${type} penalty for ${name}`);
   }
 
   resetMatch(slotId: MatchSlotId) {
@@ -677,17 +717,20 @@ export class SupabaseStore implements DataStore {
     const ann: Announcement = { ...input, id: uid(), createdAt: Date.now() };
     this.commit({ ...this.state, announcements: [ann, ...(this.state.announcements || [])] });
     this.persist('announcement insert', () => supabase.from('announcements').insert(toSnake(ann)));
+    this.logAudit("Announcement created", currentAuditActor(), ann.title, "Announcement");
     return ann;
   }
 
   updateAnnouncement(id: string, patch: Partial<Omit<Announcement, "id" | "createdAt">>) {
     this.commit({ ...this.state, announcements: (this.state.announcements || []).map((a) => a.id === id ? { ...a, ...patch, updatedAt: Date.now() } : a) });
     this.persist('announcement update', () => supabase.from('announcements').update(toSnake(patch)).eq('id', id));
+    this.logAudit("Announcement updated", currentAuditActor(), id, "Announcement");
   }
 
   removeAnnouncement(id: string) {
     this.commit({ ...this.state, announcements: (this.state.announcements || []).filter((a) => a.id !== id) });
     this.persist('announcement delete', () => supabase.from('announcements').delete().eq('id', id));
+    this.logAudit("Announcement deleted", currentAuditActor(), id, "Announcement");
   }
 
   togglePinAnnouncement(id: string) {
@@ -707,16 +750,19 @@ export class SupabaseStore implements DataStore {
   updateUserRole(id: string, role: UserTag) {
     this.commit({ ...this.state, users: (this.state.users || []).map((u) => (u.id === id ? { ...u, role } : u)) });
     this.persist('user role update', () => supabase.from('users').update({ role }).eq('id', id));
+    this.logAudit("User role updated", currentAuditActor(), id, "User Management", `Role: ${role}`);
   }
 
   updateUserStatus(id: string, status: AppUser["status"]) {
     this.commit({ ...this.state, users: (this.state.users || []).map((u) => (u.id === id ? { ...u, status } : u)) });
     this.persist('user status update', () => supabase.from('users').update({ status }).eq('id', id));
+    this.logAudit("User status updated", currentAuditActor(), id, "User Management", `Status: ${status}`);
   }
 
   removeUser(id: string) {
     this.commit({ ...this.state, users: (this.state.users || []).filter((u) => u.id !== id) });
     this.persist('user delete', () => supabase.from('users').delete().eq('id', id));
+    this.logAudit("User deleted", currentAuditActor(), id, "User Management");
   }
 
   logAudit(action: string, performedBy: string, target: string, category: AuditLogEntry["category"], details?: string) {

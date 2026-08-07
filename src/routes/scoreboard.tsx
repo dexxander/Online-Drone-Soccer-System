@@ -5,6 +5,7 @@ import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWeb
 import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState, PRESENCE_TTL_MS } from "@/lib/store";
 import type { MatchSlot, Tournament } from "@/lib/types";
+import { calculateEffectivePenalties } from "@/lib/penalties";
 
 export const Route = createFileRoute("/scoreboard")({
   head: () => ({
@@ -36,38 +37,6 @@ function getMatchTitle(round: number, maxRound: number) {
   if (round === maxRound - 1) return "Semi-Finals";
   if (round === maxRound - 2) return "Quarter-Finals";
   return `Round ${round}`;
-}
-
-// --- PENALTY ESCALATION ENGINE ---
-function calculateEffectivePenalties(rawPenalties: any[]) {
-  let minor = 0; // Warnings
-  let major = 0; // Yellow Cards
-  let tech = 0;  // Red Cards (Disqualified)
-
-  rawPenalties.forEach(p => {
-    if (p.type === 'Minor') minor++;
-    if (p.type === 'Major') major++;
-    if (p.type === 'Technical') tech++;
-  });
-
-  // Escalation: 2 Warnings = 1 Yellow Card
-  major += Math.floor(minor / 2);
-  minor = minor % 2;
-
-  // Escalation: 2 Yellow Cards = 1 Red Card
-  tech += Math.floor(major / 2);
-  major = major % 2;
-
-  const isDisqualified = tech > 0;
-
-  // Build the visual badge array
-  const badges: string[] = [];
-  if (!isDisqualified) {
-    for (let i = 0; i < major; i++) badges.push('Yellow');
-    for (let i = 0; i < minor; i++) badges.push('Warning');
-  }
-
-  return { badges, isDisqualified };
 }
 
 /**
