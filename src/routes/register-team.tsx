@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { Plus, Trash2, CheckCircle2, Pencil, X, Check } from "lucide-react";
 import { AccountMenu } from "@/components/AccountMenu";
+import { NotificationMenu } from "@/components/NotificationMenu";
 import { EmptyState, Panel, StatusBadge } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { auth } from "@/lib/store";
@@ -136,12 +137,7 @@ function RegisterTeamPage() {
             >
               About
             </Link>
-            <Link
-              to="/register-team"
-              className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary sm:block"
-            >
-              Register Team
-            </Link>
+            <NotificationMenu />
             <AccountMenu />
           </nav>
         </div>

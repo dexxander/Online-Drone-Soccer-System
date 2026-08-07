@@ -3,6 +3,7 @@ import { Shield, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
+import { NotificationMenu } from "./NotificationMenu";
 
 type NavItem = {
   label: string;
@@ -75,6 +76,7 @@ export function CoachLayout({ children }: { children: ReactNode }) {
             </Link>
             <div className="hidden lg:block" />
             <div className="flex items-center gap-3">
+              <NotificationMenu />
               {user ? (
                 <>
                   <span className="hidden text-sm font-medium text-muted-foreground sm:inline">

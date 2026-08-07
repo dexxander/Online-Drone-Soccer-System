@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Target, Users, Camera, Github, Linkedin, Mail } from "lucide-react";
 import { AccountMenu } from "@/components/AccountMenu";
+import { NotificationMenu } from "@/components/NotificationMenu";
 import { auth } from "@/lib/store";
 import DroneArena from "@/components/DroneArena";
 
@@ -114,14 +115,7 @@ function AboutPage() {
             >
               About
             </Link>
-            {auth.current()?.role === "coach" && (
-              <Link
-                to="/register-team"
-                className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary hover:bg-primary/20 sm:block"
-              >
-                Register Team
-              </Link>
-            )}
+            <NotificationMenu />
             <AccountMenu />
           </nav>
         </div>

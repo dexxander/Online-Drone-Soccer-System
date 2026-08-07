@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import * as THREE from "three";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
+import { NotificationMenu } from "@/components/NotificationMenu";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -91,6 +92,7 @@ function Landing() {
             >
               About
             </Link>
+            <NotificationMenu />
             <AccountMenu />
           </nav>
         </div>

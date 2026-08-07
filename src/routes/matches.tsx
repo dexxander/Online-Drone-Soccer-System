@@ -4,6 +4,7 @@ import { Trophy, Radio } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { EmptyState, Panel } from "@/components/ui-kit";
 import { AccountMenu } from "@/components/AccountMenu";
+import { NotificationMenu } from "@/components/NotificationMenu";
 import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { MatchStatus, Team, Tournament, TournamentMatch } from "@/lib/types";
@@ -143,14 +144,7 @@ function MatchesPage() {
             >
               About
             </Link>
-            {auth.current()?.role === "coach" && (
-              <Link
-                to="/register-team"
-                className="hidden rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-bold text-primary hover:bg-primary/20 sm:block"
-              >
-                Register Team
-              </Link>
-            )}
+            <NotificationMenu />
             <AccountMenu />
           </nav>
         </div>
