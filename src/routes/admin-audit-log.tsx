@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Search, ScrollText, ShieldAlert, History, UserCheck, Activity } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
@@ -33,11 +33,17 @@ const categoryBadgeMap: Record<AuditLogEntry["category"], string> = {
 };
 
 function AdminAuditLogPage() {
-  const { state } = useMockWebSocket();
+  const { state, socket } = useMockWebSocket();
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<AuditLogEntry["category"] | "all">("all");
 
   const logs = state.auditLogs || [];
+
+  useEffect(() => {
+    void socket.refreshAuditLogs();
+    const id = setInterval(() => void socket.refreshAuditLogs(), 3000);
+    return () => clearInterval(id);
+  }, [socket]);
 
   const filtered = logs.filter((log) => {
     const matchesSearch =

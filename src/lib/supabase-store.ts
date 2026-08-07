@@ -218,6 +218,7 @@ export interface DataStore {
   updateUserStatus(id: string, status: AppUser["status"]): void;
   removeUser(id: string): void;
   logAudit(action: string, performedBy: string, target: string, category: AuditLogEntry["category"], details?: string): void;
+  refreshAuditLogs(): Promise<void>;
 }
 
 // ─── SupabaseStore ──────────────────────────────────────────────────────────
@@ -375,6 +376,16 @@ export class SupabaseStore implements DataStore {
       return;
     }
     this.applyMatchSlots(toCamel(data || []), toCamel(eventData || []), toCamel(penaltyData || []));
+    this.notify();
+  }
+
+  async refreshAuditLogs() {
+    const { data, error } = await supabase.from('audit_logs').select('*').order('timestamp', { ascending: false });
+    if (error) {
+      console.error('Supabase audit log refresh failed:', error);
+      return;
+    }
+    this.state = { ...this.state, auditLogs: toCamel(data || []) };
     this.notify();
   }
 
@@ -744,6 +755,7 @@ export class SupabaseStore implements DataStore {
     const newUser: AppUser = { ...input, id: uid(), createdAt: Date.now() };
     this.commit({ ...this.state, users: [newUser, ...(this.state.users || [])] });
     this.persist('user insert', () => supabase.from('users').insert(toSnake(newUser)));
+    this.logAudit("User created", currentAuditActor(), newUser.email, "User Management", `Role: ${newUser.role}`);
     return newUser;
   }
 
