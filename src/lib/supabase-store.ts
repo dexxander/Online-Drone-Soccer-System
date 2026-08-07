@@ -248,20 +248,24 @@ export class SupabaseStore implements DataStore {
         supabase.from('tournaments').select('*'),
         supabase.from('audit_logs').select('*'),
         supabase.from('tournament_matches').select('*'),
+        supabase.from('tournament_teams').select('*'),
         supabase.from('match_slots').select('*'),
         supabase.from('match_events').select('*').order('created_at', { ascending: false }),
         supabase.from('penalties').select('*').order('created_at', { ascending: false })
       ]);
       const firstError = responses.find((response) => response.error)?.error;
       if (firstError) throw firstError;
-      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches, matchSlots, matchEvents, penalties] = responses.map((response) => response.data);
+      const [users, teams, players, announcements, tournaments, auditLogs, tournamentMatches, tournamentTeams, matchSlots, matchEvents, penalties] = responses.map((response) => response.data);
 
       const camelTournaments = toCamel(tournaments || []);
       const camelMatches = toCamel(tournamentMatches || []);
+      const camelTournamentTeams = toCamel(tournamentTeams || []);
 
       const mappedTournaments = camelTournaments.map((t: any) => ({
         ...t,
-        teamIds: [], // will be populated below
+        teamIds: camelTournamentTeams
+          .filter((link: any) => link.tournamentId === t.id)
+          .map((link: any) => link.teamId),
         matches: camelMatches.filter((m: any) => m.tournamentId === t.id)
       }));
 
@@ -541,7 +545,13 @@ export class SupabaseStore implements DataStore {
     delete mapped.team_ids;
     this.persist('tournament insert', async () => {
       const result = await supabase.from('tournaments').insert(mapped);
-      if (!result.error && tMatches.length) return supabase.from('tournament_matches').insert(tMatches);
+      if (result.error) return result;
+      if (tMatches.length) {
+        const matchResult = await supabase.from('tournament_matches').insert(tMatches);
+        if (matchResult.error) return matchResult;
+      }
+      const teamLinks = teamIds.map((teamId) => ({ tournament_id: mapped.id, team_id: teamId }));
+      if (teamLinks.length) return supabase.from('tournament_teams').insert(teamLinks);
       return result;
     });
     this.logAudit("Tournament created", currentAuditActor(), tournament.name, "Tournament", `${teamIds.length} team(s)`);
