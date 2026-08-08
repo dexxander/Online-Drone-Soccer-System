@@ -146,9 +146,9 @@ function Landing() {
       {/* ── Stat strip ── */}
       <section className="border-b border-border bg-background">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-2 divide-x divide-border sm:grid-cols-4">
-          <Stat value="128" label="Registered clubs" />
-          <Stat value="1,940" label="Matches officiated" />
-          <Stat value="24" label="Arena displays" />
+          <Stat value="null" label="Registered clubs" />
+          <Stat value="null" label="Matches officiated" />
+          <Stat value="null" label="Arena displays" />
           <div className="flex flex-col justify-center px-6 py-6">
             <span className="inline-flex items-center gap-2 font-mono text-2xl font-bold tabular-nums text-warning">
               <span className="size-2 rounded-full bg-warning shadow-[0_0_8px_2px_var(--color-warning)]" />

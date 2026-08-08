@@ -157,11 +157,11 @@ function AboutPage() {
             <Users className="size-3.5" /> The team
           </span>
           <h2 className="mt-3 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
-            Built by three developers
+            Meet the developers
           </h2>
           <p className="mt-2 max-w-lg text-sm text-muted-foreground">
             {/* PLACEHOLDER copy */}
-            Meet the people behind this build.
+            The developers behind this SaaS platform.
           </p>
 
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
