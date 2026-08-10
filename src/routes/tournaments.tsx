@@ -148,7 +148,7 @@ function TournamentsUserPage() {
               to="/tickets"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
             >
-              Tickets 🎟️
+              Tickets
             </Link>
             <Link
               to="/about"
@@ -475,7 +475,7 @@ function TournamentsUserPage() {
                           search={{ tournamentId: t.id }}
                           className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary py-1.5 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs"
                         >
-                          🎟️ Book Ticket
+                          Book Ticket
                         </Link>
                       </div>
                     </div>

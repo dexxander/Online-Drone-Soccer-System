@@ -8,14 +8,15 @@ import {
   QrCode,
   CreditCard,
   Sparkles,
-  Info,
   Printer,
   X,
   User,
   Mail,
   Phone,
   ShieldAlert,
-  ChevronRight,
+  Users,
+  Minus,
+  Plus,
 } from "lucide-react";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -28,19 +29,12 @@ export const Route = createFileRoute("/tickets")({
       { title: "Spectator Tickets — Drone Soccer League Control" },
       {
         name: "description",
-        content: "Reserve your seat for live Drone Soccer tournaments. Free spectator registration & seating arrangement.",
+        content: "Register as a spectator for live Drone Soccer tournaments. Free seating admission & instant E-ticket pass.",
       },
     ],
   }),
   component: TicketsPage,
 });
-
-interface Seat {
-  id: string; // e.g. "A-1"
-  row: string;
-  number: number;
-  isOccupied: boolean;
-}
 
 type PricingMode = "free" | "paid";
 
@@ -58,12 +52,7 @@ export function TicketsPage() {
 
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(initialTournament);
   const [pricingMode, setPricingMode] = useState<PricingMode>("free");
-
-  // Selected Zone state
-  const [selectedZone, setSelectedZone] = useState<"Zone A" | "Zone B">("Zone A");
-
-  // Selected Seats state
-  const [selectedSeatIds, setSelectedSeatIds] = useState<string[]>([]);
+  const [ticketQuantity, setTicketQuantity] = useState<number>(1);
 
   // Spectator Form state
   const [visitorName, setVisitorName] = useState("");
@@ -77,43 +66,14 @@ export function TicketsPage() {
     visitorName: string;
     visitorEmail: string;
     tournamentName: string;
-    zone: string;
-    seats: string[];
+    quantity: number;
     issuedAt: string;
   } | null>(null);
-
-  // Pre-occupied mock seats
-  const occupiedSeatIds = useMemo(
-    () => new Set(["A-3", "A-4", "B-2", "B-7", "C-1", "C-8", "D-5"]),
-    []
-  );
-
-  // Generate seats grid (Rows A-D, Seats 1-8)
-  const rows = ["A", "B", "C", "D"];
-  const seatsPerRow = 8;
-
-  const toggleSeat = (seatId: string) => {
-    if (occupiedSeatIds.has(seatId)) return;
-    if (selectedSeatIds.includes(seatId)) {
-      setSelectedSeatIds(selectedSeatIds.filter((id) => id !== seatId));
-    } else {
-      if (selectedSeatIds.length >= 4) {
-        setFormError("Maximum 4 seats allowed per spectator booking.");
-        return;
-      }
-      setFormError("");
-      setSelectedSeatIds([...selectedSeatIds, seatId]);
-    }
-  };
 
   const handleBookingSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTournament) {
       setFormError("Please select a tournament.");
-      return;
-    }
-    if (selectedSeatIds.length === 0) {
-      setFormError("Please select at least 1 seat on the arena layout.");
       return;
     }
     if (!visitorName.trim()) {
@@ -133,8 +93,7 @@ export function TicketsPage() {
       visitorName: visitorName.trim(),
       visitorEmail: visitorEmail.trim(),
       tournamentName: selectedTournament.name,
-      zone: selectedZone,
-      seats: [...selectedSeatIds].sort(),
+      quantity: ticketQuantity,
       issuedAt: new Date().toLocaleString(),
     });
   };
@@ -172,7 +131,7 @@ export function TicketsPage() {
               to="/tickets"
               className="rounded-lg bg-primary/10 px-3 py-2 text-[13px] font-semibold text-primary"
             >
-              Tickets 🎟️
+              Tickets
             </Link>
             <Link
               to="/about"
@@ -192,13 +151,13 @@ export function TicketsPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-              <Sparkles className="size-3.5" /> Spectator & Visitor Portal
+              <Sparkles className="size-3.5" /> Spectator Registration Portal
             </span>
             <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-              Book Spectator Seats
+              Get Spectator Tickets
             </h1>
             <p className="mt-1 text-sm text-muted-foreground max-w-2xl">
-              Reserve your sitting position inside the drone match arena. Catch the live high-speed aerial goal action!
+              Register as a spectator for live Drone Soccer tournaments. All matches feature free open seating.
             </p>
           </div>
 
@@ -222,7 +181,7 @@ export function TicketsPage() {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <CreditCard className="size-4" /> Paid Tickets
+              <CreditCard className="size-4" /> Paid Option
             </button>
           </div>
         </div>
@@ -237,7 +196,7 @@ export function TicketsPage() {
                   💳 Payment Gateway Integration (UI Placeholder)
                 </h3>
                 <p className="mt-1 text-xs text-purple-700 dark:text-purple-300/80 leading-relaxed">
-                  Paid ticket options (e.g. VIP Front-Row Pass, Premium Lounge) are currently set up as a frontend placeholder. Banking and payment processing APIs will be connected in the backend later. You can toggle to <strong>Free Admission</strong> to test the full seating reservation and instant online E-Ticket generation.
+                  Paid ticket options are currently set up as a frontend placeholder. Banking and payment processing APIs will be connected in the backend later. You can switch to <strong>Free Admission</strong> to register as a spectator.
                 </p>
               </div>
             </div>
@@ -246,8 +205,8 @@ export function TicketsPage() {
 
         {/* ── Main Booking Grid ── */}
         <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-12">
-          {/* Left Column: Tournament & Seating Arrangement (8 cols) */}
-          <div className="space-y-6 lg:col-span-7 xl:col-span-8">
+          {/* Left Column: Tournament Selection & Free Seating Info (7 cols) */}
+          <div className="space-y-6 lg:col-span-7">
             {/* 1. Tournament Picker */}
             <div className="rounded-xl border border-border bg-background p-6 shadow-sm">
               <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
@@ -293,124 +252,64 @@ export function TicketsPage() {
               )}
             </div>
 
-            {/* 2. Interactive Seating Arrangement Map */}
-            <div className="rounded-xl border border-border bg-background p-6 shadow-sm">
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-4">
+            {/* 2. Free Seating Admission Details */}
+            <div className="rounded-xl border border-border bg-background p-6 shadow-sm space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-3">
+                <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Users className="size-4 text-primary" /> Step 2: Open Seating & Pass Quantity
+                </h2>
+                <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-600">
+                  Free Open Seating
+                </span>
+              </div>
+
+              {/* Free Seating Explanation Banner */}
+              <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 text-cyan-200">
+                <div className="flex items-center gap-2 font-bold text-sm text-cyan-300">
+                  <span>🏟️ Arena Open Seating Policy</span>
+                </div>
+                <p className="mt-1 text-xs text-cyan-200/80 leading-relaxed">
+                  All spectator seating in the drone flight arena gallery is <strong>free and open</strong> on a first-come, first-served basis. Registering your spectator pass ensures venue entry validation and smooth entry at the entrance gate.
+                </p>
+              </div>
+
+              {/* Pass Quantity Selector */}
+              <div className="flex items-center justify-between rounded-xl border border-border bg-muted/20 p-4">
                 <div>
-                  <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <Ticket className="size-4 text-primary" /> Step 2: Choose Your Seats
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    Click available seats to reserve your spectator position.
-                  </p>
+                  <h3 className="text-sm font-bold text-foreground">Number of Spectator Passes</h3>
+                  <p className="text-xs text-muted-foreground">Select total passes needed for you and your guests.</p>
                 </div>
 
-                {/* Zone Switcher */}
-                <div className="flex items-center rounded-lg border border-border bg-muted/50 p-1">
+                <div className="flex items-center gap-3">
                   <button
-                    onClick={() => setSelectedZone("Zone A")}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-                      selectedZone === "Zone A"
-                        ? "bg-background text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
+                    type="button"
+                    onClick={() => setTicketQuantity(Math.max(1, ticketQuantity - 1))}
+                    className="flex size-8 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-muted"
                   >
-                    Zone A (North Stand)
+                    <Minus className="size-4" />
                   </button>
-                  <button
-                    onClick={() => setSelectedZone("Zone B")}
-                    className={`rounded-md px-3 py-1 text-xs font-semibold transition-colors ${
-                      selectedZone === "Zone B"
-                        ? "bg-background text-foreground shadow-xs"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    Zone B (South Stand)
-                  </button>
-                </div>
-              </div>
-
-              {/* Arena Visual Header / Flight Cage */}
-              <div className="mt-6 flex flex-col items-center">
-                <div className="relative w-full max-w-md rounded-lg border border-cyan-500/40 bg-cyan-950/20 py-3 text-center shadow-[0_0_15px_rgba(6,182,212,0.15)]">
-                  <span className="font-mono text-xs font-bold uppercase tracking-[0.25em] text-cyan-400">
-                    🛸 DRONE MATCH FLIGHT CAGE / ARENA COURT 🛸
+                  <span className="font-mono text-base font-bold text-foreground w-6 text-center">
+                    {ticketQuantity}
                   </span>
-                  <p className="text-[10px] text-cyan-300/70">Safe high-density netting area</p>
-                </div>
-                <div className="my-3 text-[11px] font-semibold text-muted-foreground uppercase tracking-widest">
-                  ↑ SPECTATOR GALLERY SEATING ({selectedZone}) ↑
-                </div>
-              </div>
-
-              {/* Seats Grid */}
-              <div className="mt-4 flex flex-col items-center gap-3">
-                {rows.map((row) => (
-                  <div key={row} className="flex items-center gap-2 sm:gap-3">
-                    <span className="w-5 text-center font-mono text-xs font-bold text-muted-foreground">
-                      {row}
-                    </span>
-                    <div className="flex items-center gap-1.5 sm:gap-2">
-                      {Array.from({ length: seatsPerRow }).map((_, idx) => {
-                        const seatNumber = idx + 1;
-                        const seatId = `${row}-${seatNumber}`;
-                        const isOccupied = occupiedSeatIds.has(seatId);
-                        const isSelected = selectedSeatIds.includes(seatId);
-
-                        return (
-                          <button
-                            key={seatId}
-                            disabled={isOccupied}
-                            onClick={() => toggleSeat(seatId)}
-                            title={
-                              isOccupied
-                                ? `Seat ${seatId} is already booked`
-                                : isSelected
-                                ? `Seat ${seatId} selected`
-                                : `Select Seat ${seatId}`
-                            }
-                            className={`flex size-8 sm:size-9 items-center justify-center rounded-lg font-mono text-xs font-bold transition-all ${
-                              isOccupied
-                                ? "cursor-not-allowed bg-muted text-muted-foreground/40 border border-border/50 opacity-60"
-                                : isSelected
-                                ? "bg-primary text-primary-foreground ring-2 ring-primary ring-offset-2 scale-105 shadow-md"
-                                : "border border-border bg-background hover:border-primary hover:text-primary hover:scale-105"
-                            }`}
-                          >
-                            {seatNumber < 10 ? `0${seatNumber}` : seatNumber}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Seating Legend */}
-              <div className="mt-6 flex flex-wrap items-center justify-center gap-6 border-t border-border pt-4 text-xs">
-                <div className="flex items-center gap-2">
-                  <div className="size-4 rounded-md border border-border bg-background" />
-                  <span className="text-muted-foreground">Available</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="size-4 rounded-md bg-primary" />
-                  <span className="font-semibold text-primary">Selected</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="size-4 rounded-md bg-muted border border-border/50" />
-                  <span className="text-muted-foreground">Occupied</span>
+                  <button
+                    type="button"
+                    onClick={() => setTicketQuantity(Math.min(5, ticketQuantity + 1))}
+                    className="flex size-8 items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-muted"
+                  >
+                    <Plus className="size-4" />
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column: Spectator Details & Checkout Summary (4 cols) */}
-          <div className="lg:col-span-5 xl:col-span-4">
+          {/* Right Column: Spectator Details Form (5 cols) */}
+          <div className="lg:col-span-5">
             <div className="sticky top-24 rounded-xl border border-border bg-background p-6 shadow-card">
               <h2 className="text-base font-bold text-foreground border-b border-border pb-3 flex items-center justify-between">
-                <span>Booking Summary</span>
+                <span>Spectator Registration</span>
                 <span className="rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-bold text-emerald-600">
-                  {pricingMode === "free" ? "Free Admission" : "Paid Tier"}
+                  {pricingMode === "free" ? "Free Admission" : "Paid Option"}
                 </span>
               </h2>
 
@@ -431,16 +330,12 @@ export function TicketsPage() {
                     </span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Seating Zone:</span>
-                    <span className="font-semibold text-foreground">{selectedZone}</span>
+                    <span className="text-muted-foreground">Seating Format:</span>
+                    <span className="font-semibold text-foreground">Free Open Seating</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-muted-foreground">Picked Seats ({selectedSeatIds.length}):</span>
-                    <span className="font-bold text-primary">
-                      {selectedSeatIds.length > 0
-                        ? selectedSeatIds.sort().join(", ")
-                        : "No seats chosen"}
-                    </span>
+                    <span className="text-muted-foreground">Pass Quantity:</span>
+                    <span className="font-bold text-primary">{ticketQuantity} Spectator Pass{ticketQuantity > 1 ? "es" : ""}</span>
                   </div>
                   <div className="flex justify-between border-t border-border/60 pt-2 font-bold text-sm">
                     <span>Total Fee:</span>
@@ -509,7 +404,7 @@ export function TicketsPage() {
                   className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-primary-foreground shadow-lift transition-all hover:bg-primary/90"
                 >
                   <QrCode className="size-4" />
-                  {pricingMode === "free" ? "Generate Online Spectator E-Ticket" : "Proceed to Payment (Placeholder)"}
+                  {pricingMode === "free" ? "Register Spectator Ticket" : "Proceed to Payment (Placeholder)"}
                 </button>
 
                 <p className="text-[11px] text-center text-muted-foreground">
@@ -538,7 +433,7 @@ export function TicketsPage() {
                 OFFICIAL SPECTATOR PASS
               </span>
               <h2 className="mt-2 text-xl font-bold">{issuedTicket.tournamentName}</h2>
-              <p className="text-xs opacity-90">Arena Flight Cage Gallery · General Admission</p>
+              <p className="text-xs opacity-90">Arena Flight Cage Gallery · Free Seating</p>
             </div>
 
             {/* Ticket Content Body */}
@@ -549,7 +444,6 @@ export function TicketsPage() {
                   {/* Dynamic QR Code representation */}
                   <svg className="size-28" viewBox="0 0 100 100">
                     <rect width="100" height="100" fill="white" />
-                    {/* Pattern blocks */}
                     <path
                       d="M10,10 h30 v30 h-30 z M15,15 h20 v20 h-20 z M20,20 h10 v10 h-10 z"
                       fill="#0f172a"
@@ -585,12 +479,12 @@ export function TicketsPage() {
                   <span className="font-semibold text-foreground truncate block">{issuedTicket.visitorEmail}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[10px] uppercase">Seating Zone</span>
-                  <span className="font-bold text-primary">{issuedTicket.zone}</span>
+                  <span className="text-muted-foreground block text-[10px] uppercase">Seating Format</span>
+                  <span className="font-bold text-primary">Free Open Seating</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground block text-[10px] uppercase">Reserved Seats</span>
-                  <span className="font-bold text-emerald-600">{issuedTicket.seats.join(", ")}</span>
+                  <span className="text-muted-foreground block text-[10px] uppercase">Pass Quantity</span>
+                  <span className="font-bold text-emerald-600">{issuedTicket.quantity} Pass{issuedTicket.quantity > 1 ? "es" : ""}</span>
                 </div>
               </div>
 
@@ -607,13 +501,10 @@ export function TicketsPage() {
                   <Printer className="size-4" /> Print / Save Pass
                 </button>
                 <button
-                  onClick={() => {
-                    setIssuedTicket(null);
-                    setSelectedSeatIds([]);
-                  }}
+                  onClick={() => setIssuedTicket(null)}
                   className="flex-1 inline-flex items-center justify-center gap-2 rounded-lg bg-primary py-2 text-xs font-semibold text-primary-foreground hover:bg-primary/90"
                 >
-                  Book Another Seat
+                  Register Another
                 </button>
               </div>
             </div>

@@ -142,7 +142,7 @@ function MatchesPage() {
               to="/tickets"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
             >
-              Tickets 🎟️
+              Tickets
             </Link>
             <Link
               to="/about"
