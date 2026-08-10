@@ -139,12 +139,6 @@ function MatchesPage() {
               Matches
             </Link>
             <Link
-              to="/tickets"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Tickets
-            </Link>
-            <Link
               to="/about"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
             >
