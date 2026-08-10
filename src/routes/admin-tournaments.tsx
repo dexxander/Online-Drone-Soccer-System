@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert } from "lucide-react";
+import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert, ImagePlus } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
@@ -64,6 +64,15 @@ function AdminTournamentsPage() {
               {selected.status} · {selected.teamIds.length} Teams Registered
               {selected.teamQuota ? ` (Quota: ${selected.teamQuota})` : ""}
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selected.halfDurationMinutes ?? 5} min halves · {selected.halftimeDurationMinutes ?? 2} min half-time · {selected.warmupDurationMinutes ?? 5} min warm-up/testing · {selected.overtimeDurationMinutes ?? 3} min overtime
+            </p>
+            {(selected.bannerUrl || selected.logoUrl) && (
+              <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
+                {selected.bannerUrl && <img src={selected.bannerUrl} alt={`${selected.name} banner`} className="h-28 w-full object-cover" />}
+                {selected.logoUrl && <img src={selected.logoUrl} alt={`${selected.name} logo`} className="-mt-8 ml-5 size-16 rounded-xl border-4 border-background bg-background object-contain p-1" />}
+              </div>
+            )}
           </div>
 
           <button
@@ -201,11 +210,31 @@ function CreateTournamentForm({
   const [matchmakingType, setMatchmakingType] = useState<MatchmakingType>("auto");
   const [groupStageEnabled, setGroupStageEnabled] = useState(false);
   const [groupCount, setGroupCount] = useState(4);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [halfDurationMinutes, setHalfDurationMinutes] = useState(5);
+  const [halftimeDurationMinutes, setHalftimeDurationMinutes] = useState(2);
+  const [warmupDurationMinutes, setWarmupDurationMinutes] = useState(5);
+  const [overtimeDurationMinutes, setOvertimeDurationMinutes] = useState(3);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   // Manual Pairs state: array of { teamAId: string | null, teamBId: string | null }
   const [manualPairs, setManualPairs] = useState<Array<{ teamAId: string | null; teamBId: string | null }>>([]);
+
+  const readImage = (file: File, setter: (value: string) => void) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Images must be 2 MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setter(String(reader.result));
+    reader.readAsDataURL(file);
+  };
 
   // Auto initialize manual pairs based on selected teams or quota
   const initManualPairs = (chosenIds: string[]) => {
@@ -322,6 +351,12 @@ function CreateTournamentForm({
         ,groupStageEnabled
         ,groupCount
         ,2
+        ,logoUrl
+        ,bannerUrl
+        ,halfDurationMinutes
+        ,halftimeDurationMinutes
+        ,warmupDurationMinutes
+        ,overtimeDurationMinutes
       )
     );
     onClose();
@@ -382,6 +417,7 @@ function CreateTournamentForm({
               onChange={(e) => setTeamQuota(Number(e.target.value))}
             >
               <option value={4}>4 Teams (Semifinals)</option>
+              <option value={12}>12 Teams</option>
               <option value={8}>8 Teams (Quarterfinals)</option>
               <option value={16}>16 Teams (Round of 16)</option>
               <option value={32}>32 Teams (Round of 32)</option>
@@ -417,6 +453,27 @@ function CreateTournamentForm({
               >
                 <Settings2 className="size-4" /> Manual Matchmaking
               </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground"><ImagePlus className="size-4 text-primary" /> Tournament branding</div>
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-foreground">Logo (optional)<input type="file" accept="image/*" className="auth-input mt-1.5 text-xs" onChange={(e) => e.target.files?.[0] && readImage(e.target.files[0], setLogoUrl)} /></label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-foreground">Banner (optional)<input type="file" accept="image/*" className="auth-input mt-1.5 text-xs" onChange={(e) => e.target.files?.[0] && readImage(e.target.files[0], setBannerUrl)} /></label>
+              {(logoUrl || bannerUrl) && <div className="overflow-hidden rounded-lg border border-border bg-background">{bannerUrl && <img src={bannerUrl} alt="Banner preview" className="h-20 w-full object-cover" />}{logoUrl && <img src={logoUrl} alt="Logo preview" className="m-2 size-12 rounded-md object-contain" />}</div>}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <div className="mb-3 text-sm font-bold text-foreground">Match timing</div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs font-semibold text-foreground">Each half (min)<input type="number" min={1} max={60} className="auth-input mt-1" value={halfDurationMinutes} onChange={(e) => setHalfDurationMinutes(Number(e.target.value))} /></label>
+              <label className="text-xs font-semibold text-foreground">Half-time break<input type="number" min={0} max={30} className="auth-input mt-1" value={halftimeDurationMinutes} onChange={(e) => setHalftimeDurationMinutes(Number(e.target.value))} /></label>
+              <label className="text-xs font-semibold text-foreground">Warm-up / testing<input type="number" min={0} max={30} className="auth-input mt-1" value={warmupDurationMinutes} onChange={(e) => setWarmupDurationMinutes(Number(e.target.value))} /></label>
+              <label className="text-xs font-semibold text-foreground">Overtime (min)<input type="number" min={0} max={30} className="auth-input mt-1" value={overtimeDurationMinutes} onChange={(e) => setOvertimeDurationMinutes(Number(e.target.value))} /></label>
             </div>
           </div>
         </div>

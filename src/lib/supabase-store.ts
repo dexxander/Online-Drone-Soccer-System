@@ -233,7 +233,7 @@ export interface DataStore {
   removePlayer(id: string): void;
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>): void;
   removeTeam(id: string): void;
-  createTournament(name: string, teamIds: string[], category?: TeamCategory, matchmakingType?: MatchmakingType, teamQuota?: number, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>, groupStageEnabled?: boolean, groupCount?: number, qualifiersPerGroup?: number): Tournament;
+  createTournament(name: string, teamIds: string[], category?: TeamCategory, matchmakingType?: MatchmakingType, teamQuota?: number, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>, groupStageEnabled?: boolean, groupCount?: number, qualifiersPerGroup?: number, logoUrl?: string | null, bannerUrl?: string | null, halfDurationMinutes?: number, halftimeDurationMinutes?: number, warmupDurationMinutes?: number, overtimeDurationMinutes?: number): Tournament;
   regenerateTournamentMatchmaking(tournamentId: string, matchmakingType: MatchmakingType, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>): void;
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string): void;
   removeTournament(id: string): void;
@@ -560,7 +560,13 @@ export class SupabaseStore implements DataStore {
     manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>,
     groupStageEnabled = false,
     groupCount = 4,
-    qualifiersPerGroup = 2
+    qualifiersPerGroup = 2,
+    logoUrl = null,
+    bannerUrl = null,
+    halfDurationMinutes = 5,
+    halftimeDurationMinutes = 2,
+    warmupDurationMinutes = 5,
+    overtimeDurationMinutes = 3
   ) {
     const uniqueTeamIds = [...new Set(teamIds)].slice(0, 128);
     if (uniqueTeamIds.length < 2) throw new Error("A tournament requires at least 2 teams.");
@@ -582,6 +588,12 @@ export class SupabaseStore implements DataStore {
       ...(teamQuota ? { teamQuota } : {}),
       groupStageEnabled,
       ...(groupStageEnabled ? { groupCount, qualifiersPerGroup } : {}),
+      logoUrl,
+      bannerUrl,
+      halfDurationMinutes,
+      halftimeDurationMinutes,
+      warmupDurationMinutes,
+      overtimeDurationMinutes,
       createdAt: Date.now(),
       ...(category ? { category } : {}),
     };

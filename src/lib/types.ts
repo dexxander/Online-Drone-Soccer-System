@@ -191,5 +191,11 @@ export interface Tournament {
   groupStageEnabled?: boolean | undefined;
   groupCount?: number | undefined;
   qualifiersPerGroup?: number | undefined;
+  logoUrl?: string | null | undefined;
+  bannerUrl?: string | null | undefined;
+  halfDurationMinutes?: number | undefined;
+  halftimeDurationMinutes?: number | undefined;
+  warmupDurationMinutes?: number | undefined;
+  overtimeDurationMinutes?: number | undefined;
   createdAt: number;
 }
