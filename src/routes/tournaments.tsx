@@ -145,6 +145,12 @@ function TournamentsUserPage() {
               Matches
             </Link>
             <Link
+              to="/tickets"
+              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
+            >
+              Tickets 🎟️
+            </Link>
+            <Link
               to="/about"
               className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
             >
@@ -457,12 +463,19 @@ function TournamentsUserPage() {
                         </span>
                       </div>
 
-                      <div className="pt-1">
+                      <div className="pt-1 grid grid-cols-2 gap-2">
                         <Link
                           to="/matches"
-                          className="inline-flex w-full items-center justify-center gap-1 rounded-lg border border-border bg-background py-1.5 text-[11px] font-bold text-foreground hover:bg-primary hover:text-primary-foreground transition-colors shadow-xs"
+                          className="inline-flex items-center justify-center gap-1 rounded-lg border border-border bg-background py-1.5 text-[11px] font-bold text-foreground hover:bg-muted transition-colors shadow-xs"
                         >
-                          View Tournament Bracket <ChevronRight className="size-3" />
+                          View Bracket <ChevronRight className="size-3" />
+                        </Link>
+                        <Link
+                          to="/tickets"
+                          search={{ tournamentId: t.id }}
+                          className="inline-flex items-center justify-center gap-1 rounded-lg bg-primary py-1.5 text-[11px] font-bold text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs"
+                        >
+                          🎟️ Book Ticket
                         </Link>
                       </div>
                     </div>

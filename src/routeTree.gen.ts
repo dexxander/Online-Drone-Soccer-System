@@ -25,6 +25,7 @@ import { Route as RefereeRouteImport } from './routes/referee'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RegisterTeamRouteImport } from './routes/register-team'
 import { Route as ScoreboardRouteImport } from './routes/scoreboard'
+import { Route as TicketsRouteImport } from './routes/tickets'
 import { Route as TournamentsRouteImport } from './routes/tournaments'
 
 const IndexRoute = IndexRouteImport.update({
@@ -107,6 +108,11 @@ const ScoreboardRoute = ScoreboardRouteImport.update({
   path: '/scoreboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TicketsRoute = TicketsRouteImport.update({
+  id: '/tickets',
+  path: '/tickets',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TournamentsRoute = TournamentsRouteImport.update({
   id: '/tournaments',
   path: '/tournaments',
@@ -130,6 +136,7 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/tickets': typeof TicketsRoute
   '/tournaments': typeof TournamentsRoute
 }
 export interface FileRoutesByTo {
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/tickets': typeof TicketsRoute
   '/tournaments': typeof TournamentsRoute
 }
 export interface FileRoutesById {
@@ -169,6 +177,7 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/tickets': typeof TicketsRoute
   '/tournaments': typeof TournamentsRoute
 }
 export interface FileRouteTypes {
@@ -190,6 +199,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/tickets'
     | '/tournaments'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -209,6 +219,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/tickets'
     | '/tournaments'
   id:
     | '__root__'
@@ -228,6 +239,7 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/tickets'
     | '/tournaments'
   fileRoutesById: FileRoutesById
 }
@@ -248,6 +260,7 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   RegisterTeamRoute: typeof RegisterTeamRoute
   ScoreboardRoute: typeof ScoreboardRoute
+  TicketsRoute: typeof TicketsRoute
   TournamentsRoute: typeof TournamentsRoute
 }
 
@@ -365,6 +378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScoreboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tickets': {
+      id: '/tickets'
+      path: '/tickets'
+      fullPath: '/tickets'
+      preLoaderRoute: typeof TicketsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tournaments': {
       id: '/tournaments'
       path: '/tournaments'
@@ -392,6 +412,7 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   RegisterTeamRoute: RegisterTeamRoute,
   ScoreboardRoute: ScoreboardRoute,
+  TicketsRoute: TicketsRoute,
   TournamentsRoute: TournamentsRoute,
 }
 export const routeTree = rootRouteImport
