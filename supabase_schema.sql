@@ -69,6 +69,9 @@ CREATE TABLE public.tournaments (
   matchmaking_type matchmaking_type,
   team_quota INTEGER,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
+  ,group_stage_enabled BOOLEAN DEFAULT FALSE NOT NULL
+  ,group_count INTEGER
+  ,qualifiers_per_group INTEGER
 );
 
 -- Tournament Teams (Many-to-Many)
@@ -90,7 +93,16 @@ CREATE TABLE public.tournament_matches (
   is_bye BOOLEAN DEFAULT FALSE NOT NULL,
   scheduled_date TEXT,
   scheduled_time TEXT
+  ,phase TEXT DEFAULT 'knockout' NOT NULL
+  ,group_number INTEGER
 );
+
+-- Run these statements when upgrading an existing database created before group stages.
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS group_stage_enabled BOOLEAN DEFAULT FALSE NOT NULL;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS group_count INTEGER;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS qualifiers_per_group INTEGER;
+ALTER TABLE public.tournament_matches ADD COLUMN IF NOT EXISTS phase TEXT DEFAULT 'knockout' NOT NULL;
+ALTER TABLE public.tournament_matches ADD COLUMN IF NOT EXISTS group_number INTEGER;
 
 -- Match Slots
 CREATE TABLE public.match_slots (
