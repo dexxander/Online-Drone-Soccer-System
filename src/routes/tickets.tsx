@@ -218,33 +218,47 @@ export function TicketsPage() {
                   No active tournaments scheduled at the moment.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="max-h-60 overflow-y-auto space-y-2.5 pr-1">
                   {state.tournaments.map((t) => {
                     const isSelected = selectedTournament?.id === t.id;
                     return (
                       <button
                         key={t.id}
                         onClick={() => setSelectedTournament(t)}
-                        className={`group flex flex-col justify-between rounded-xl border p-4 text-left transition-all ${
+                        className={`w-full flex items-center justify-between rounded-xl border p-3.5 text-left transition-all ${
                           isSelected
                             ? "border-primary bg-primary/5 ring-2 ring-primary/20"
                             : "border-border bg-background hover:border-primary/50 hover:bg-muted/30"
                         }`}
                       >
-                        <div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-semibold text-primary uppercase tracking-wide">
-                              {t.category || "Open Division"}
-                            </span>
-                            {isSelected && <CheckCircle2 className="size-4 text-primary" />}
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`flex size-8 shrink-0 items-center justify-center rounded-lg border text-xs font-bold ${
+                              isSelected
+                                ? "border-primary/30 bg-primary/10 text-primary"
+                                : "border-border bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {isSelected ? <CheckCircle2 className="size-4 text-primary" /> : <Calendar className="size-4" />}
+                          </span>
+                          <div>
+                            <h3 className="text-sm font-bold text-foreground">
+                              {t.name}
+                            </h3>
+                            <div className="flex items-center gap-2 text-[11px] text-muted-foreground mt-0.5">
+                              <span>Division: <strong className="text-foreground">{t.category || "Open"}</strong></span>
+                              <span>·</span>
+                              <span className="flex items-center gap-1"><MapPin className="size-3" /> Arena Court A</span>
+                              <span>·</span>
+                              <span>{t.teamIds.length} Teams</span>
+                            </div>
                           </div>
-                          <h3 className="mt-1 text-sm font-bold text-foreground group-hover:text-primary transition-colors">
-                            {t.name}
-                          </h3>
                         </div>
-                        <div className="mt-3 flex items-center gap-2 text-[11px] text-muted-foreground">
-                          <MapPin className="size-3" /> Arena Court A · {t.teamIds.length} Teams
-                        </div>
+                        {isSelected && (
+                          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
+                            Selected
+                          </span>
+                        )}
                       </button>
                     );
                   })}
@@ -263,12 +277,12 @@ export function TicketsPage() {
                 </span>
               </div>
 
-              {/* Free Seating Explanation Banner */}
-              <div className="rounded-xl border border-cyan-500/30 bg-cyan-950/20 p-4 text-cyan-200">
-                <div className="flex items-center gap-2 font-bold text-sm text-cyan-300">
+              {/* Free Seating Explanation Banner (High-contrast White Background with Black Text) */}
+              <div className="rounded-xl border border-slate-200 bg-white p-4 text-slate-900 shadow-xs">
+                <div className="flex items-center gap-2 font-bold text-sm text-slate-900">
                   <span>🏟️ Arena Open Seating Policy</span>
                 </div>
-                <p className="mt-1 text-xs text-cyan-200/80 leading-relaxed">
+                <p className="mt-1.5 text-xs text-slate-700 leading-relaxed font-normal">
                   All spectator seating in the drone flight arena gallery is <strong>free and open</strong> on a first-come, first-served basis. Registering your spectator pass ensures venue entry validation and smooth entry at the entrance gate.
                 </p>
               </div>
