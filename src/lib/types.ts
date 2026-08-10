@@ -165,6 +165,8 @@ export type TournamentStatus = "draft" | "active" | "completed";
 
 export interface TournamentMatch {
   id: string;
+  phase?: "group" | "knockout" | undefined;
+  groupNumber?: number | undefined;
   round: number;
   slot: number;
   teamAId: string | null;
@@ -186,5 +188,14 @@ export interface Tournament {
   matches: TournamentMatch[];
   matchmakingType?: MatchmakingType | undefined;
   teamQuota?: number | undefined;
+  groupStageEnabled?: boolean | undefined;
+  groupCount?: number | undefined;
+  qualifiersPerGroup?: number | undefined;
+  logoUrl?: string | null | undefined;
+  bannerUrl?: string | null | undefined;
+  halfDurationMinutes?: number | undefined;
+  halftimeDurationMinutes?: number | undefined;
+  warmupDurationMinutes?: number | undefined;
+  overtimeDurationMinutes?: number | undefined;
   createdAt: number;
 }

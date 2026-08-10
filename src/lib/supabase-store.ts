@@ -88,6 +88,46 @@ function advanceWinner(matches: TournamentMatch[], match: TournamentMatch) {
   else next.teamBId = match.winnerId;
 }
 
+function generateGroupStage(teamIds: string[], groupCount: number): TournamentMatch[] {
+  const groups = Array.from({ length: Math.max(1, Math.min(groupCount, teamIds.length)) }, () => [] as string[]);
+  [...new Set(teamIds)].sort(() => Math.random() - 0.5).forEach((teamId, index) => groups[index % groups.length]?.push(teamId));
+  const matches: TournamentMatch[] = [];
+  groups.forEach((group, groupIndex) => {
+    let slot = 0;
+    for (let i = 0; i < group.length; i++) {
+      for (let j = i + 1; j < group.length; j++) {
+        const sched = getMatchSchedule(1, matches.length);
+        matches.push({
+          id: uid(), phase: "group", groupNumber: groupIndex + 1, round: 1, slot: slot++,
+          teamAId: group[i] ?? null, teamBId: group[j] ?? null, winnerId: null, isBye: false, ...sched,
+        });
+      }
+    }
+  });
+  return matches;
+}
+
+function groupQualifiedTeams(tournament: Tournament): string[] | null {
+  const groupMatches = tournament.matches.filter((m) => m.phase === "group");
+  if (!groupMatches.length || groupMatches.some((m) => !m.winnerId)) return null;
+  const groups = new Map<number, string[]>();
+  groupMatches.forEach((match) => {
+    const group = match.groupNumber ?? 1;
+    const list = groups.get(group) ?? [];
+    if (match.teamAId && !list.includes(match.teamAId)) list.push(match.teamAId);
+    if (match.teamBId && !list.includes(match.teamBId)) list.push(match.teamBId);
+    groups.set(group, list);
+  });
+  const qualifiers = tournament.qualifiersPerGroup ?? 2;
+  const points = new Map<string, number>();
+  groupMatches.forEach((match) => {
+    if (match.winnerId) points.set(match.winnerId, (points.get(match.winnerId) ?? 0) + 3);
+  });
+  return [...groups.entries()].flatMap(([_, ids]) => ids
+    .sort((a, b) => (points.get(b) ?? 0) - (points.get(a) ?? 0))
+    .slice(0, Math.min(qualifiers, ids.length)));
+}
+
 function generateBracket(teamIds: string[]): TournamentMatch[] {
   const shuffled = [...new Set(teamIds)].sort(() => Math.random() - 0.5);
   const size = nextPowerOf2(shuffled.length);
@@ -193,7 +233,7 @@ export interface DataStore {
   removePlayer(id: string): void;
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>): void;
   removeTeam(id: string): void;
-  createTournament(name: string, teamIds: string[], category?: TeamCategory, matchmakingType?: MatchmakingType, teamQuota?: number, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>): Tournament;
+  createTournament(name: string, teamIds: string[], category?: TeamCategory, matchmakingType?: MatchmakingType, teamQuota?: number, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>, groupStageEnabled?: boolean, groupCount?: number, qualifiersPerGroup?: number, logoUrl?: string | null, bannerUrl?: string | null, halfDurationMinutes?: number, halftimeDurationMinutes?: number, warmupDurationMinutes?: number, overtimeDurationMinutes?: number): Tournament;
   regenerateTournamentMatchmaking(tournamentId: string, matchmakingType: MatchmakingType, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>): void;
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string): void;
   removeTournament(id: string): void;
@@ -517,21 +557,43 @@ export class SupabaseStore implements DataStore {
     category?: TeamCategory,
     matchmakingType: MatchmakingType = "auto",
     teamQuota?: number,
-    manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>
+    manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>,
+    groupStageEnabled = false,
+    groupCount = 4,
+    qualifiersPerGroup = 2,
+    logoUrl = null,
+    bannerUrl = null,
+    halfDurationMinutes = 5,
+    halftimeDurationMinutes = 2,
+    warmupDurationMinutes = 5,
+    overtimeDurationMinutes = 3
   ) {
-    const matches =
+    const uniqueTeamIds = [...new Set(teamIds)].slice(0, 128);
+    if (uniqueTeamIds.length < 2) throw new Error("A tournament requires at least 2 teams.");
+    if (teamQuota && (teamQuota < 2 || teamQuota > 128)) throw new Error("Tournament team quota must be between 2 and 128.");
+    const matches = groupStageEnabled
+      ? generateGroupStage(uniqueTeamIds, groupCount)
+      :
       matchmakingType === "manual" && manualPairs && manualPairs.length > 0
         ? generateManualBracket(manualPairs)
-        : generateBracket(teamIds);
+        : generateBracket(uniqueTeamIds);
 
     const tournament: Tournament = {
       id: uid(),
       name,
       status: "active",
-      teamIds,
+      teamIds: uniqueTeamIds,
       matches,
       matchmakingType,
       ...(teamQuota ? { teamQuota } : {}),
+      groupStageEnabled,
+      ...(groupStageEnabled ? { groupCount, qualifiersPerGroup } : {}),
+      logoUrl,
+      bannerUrl,
+      halfDurationMinutes,
+      halftimeDurationMinutes,
+      warmupDurationMinutes,
+      overtimeDurationMinutes,
       createdAt: Date.now(),
       ...(category ? { category } : {}),
     };
@@ -550,11 +612,11 @@ export class SupabaseStore implements DataStore {
         const matchResult = await supabase.from('tournament_matches').insert(tMatches);
         if (matchResult.error) return matchResult;
       }
-      const teamLinks = teamIds.map((teamId) => ({ tournament_id: mapped.id, team_id: teamId }));
+      const teamLinks = uniqueTeamIds.map((teamId) => ({ tournament_id: mapped.id, team_id: teamId }));
       if (teamLinks.length) return supabase.from('tournament_teams').insert(teamLinks);
       return result;
     });
-    this.logAudit("Tournament created", currentAuditActor(), tournament.name, "Tournament", `${teamIds.length} team(s)`);
+    this.logAudit("Tournament created", currentAuditActor(), tournament.name, "Tournament", `${uniqueTeamIds.length} team(s)`);
 
     return tournament;
   }
@@ -587,14 +649,25 @@ export class SupabaseStore implements DataStore {
   }
 
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string) {
+    const previousMatchIds = new Set(this.state.tournaments.find(x => x.id === tournamentId)?.matches.map(m => m.id) ?? []);
     const tournaments = this.state.tournaments.map((t) => {
       if (t.id !== tournamentId) return t;
       const matches = t.matches.map((m) => ({ ...m }));
       const match = matches.find((m) => m.id === matchId);
       if (!match) return t;
       match.winnerId = winnerId;
+      if (match.phase === "group") {
+        const updated = { ...t, matches };
+        const qualified = groupQualifiedTeams(updated);
+        if (qualified) {
+          const knockout = generateBracket(qualified).map((m) => ({ ...m, phase: "knockout" as const }));
+          return { ...updated, matches: [...matches.filter((m) => m.phase !== "knockout"), ...knockout], status: "active" as const };
+        }
+        return { ...updated, matches, status: "active" as const };
+      }
       advanceWinner(matches, match);
-      const finalMatch = matches.reduce((a, b) => (b.round > a.round ? b : a));
+      const knockoutMatches = matches.filter((m) => (m.phase ?? "knockout") === "knockout");
+      const finalMatch = knockoutMatches.reduce((a, b) => (b.round > a.round ? b : a));
       const status: Tournament["status"] = finalMatch.winnerId ? "completed" : "active";
       return { ...t, matches, status };
     });
@@ -603,9 +676,13 @@ export class SupabaseStore implements DataStore {
     // Sync all affected matches to Supabase
     const t = tournaments.find(x => x.id === tournamentId);
     if (t) {
-      t.matches.forEach(m => {
+      const newMatches = t.matches.filter((m) => !previousMatchIds.has(m.id));
+      t.matches.filter((m) => previousMatchIds.has(m.id)).forEach(m => {
         this.persist('tournament match update', () => supabase.from('tournament_matches').update(toSnake(m)).eq('id', m.id));
       });
+      if (newMatches.length) {
+        this.persist('tournament knockout insert', () => supabase.from('tournament_matches').insert(newMatches.map(m => toSnake({ ...m, tournamentId }))));
+      }
     }
   }
 
@@ -668,12 +745,13 @@ export class SupabaseStore implements DataStore {
     // Advance winner in tournament
     nextState.tournaments = nextState.tournaments.map((t) => {
       const tMatch = t.matches.find((tm) => tm.id === match.id);
-      if (tMatch && !tMatch.winnerId) {
+      if (tMatch && !tMatch.winnerId && tMatch.phase !== "group") {
         if (match.scoreA > match.scoreB) tMatch.winnerId = tMatch.teamAId;
         else if (match.scoreB > match.scoreA) tMatch.winnerId = tMatch.teamBId;
         if (tMatch.winnerId) {
           advanceWinner(t.matches, tMatch);
-          const finalMatch = t.matches.reduce((a, b) => (b.round > a.round ? b : a));
+          const knockoutMatches = t.matches.filter((m) => (m.phase ?? "knockout") === "knockout");
+          const finalMatch = knockoutMatches.reduce((a, b) => (b.round > a.round ? b : a));
           t.status = finalMatch.winnerId ? "completed" : "active";
         }
       }

@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert } from "lucide-react";
+import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert, ImagePlus } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
@@ -54,11 +54,25 @@ function AdminTournamentsPage() {
                   </>
                 )}
               </span>
+              {selected.groupStageEnabled && (
+                <span className="inline-flex items-center rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-0.5 text-xs font-semibold text-amber-700">
+                  Group Stage
+                </span>
+              )}
             </div>
             <p className="mt-1 text-sm capitalize text-muted-foreground">
               {selected.status} · {selected.teamIds.length} Teams Registered
               {selected.teamQuota ? ` (Quota: ${selected.teamQuota})` : ""}
             </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {selected.halfDurationMinutes ?? 5} min halves · {selected.halftimeDurationMinutes ?? 2} min half-time · {selected.warmupDurationMinutes ?? 5} min warm-up/testing · {selected.overtimeDurationMinutes ?? 3} min overtime
+            </p>
+            {(selected.bannerUrl || selected.logoUrl) && (
+              <div className="mt-4 overflow-hidden rounded-xl border border-border bg-muted/20">
+                {selected.bannerUrl && <img src={selected.bannerUrl} alt={`${selected.name} banner`} className="h-28 w-full object-cover" />}
+                {selected.logoUrl && <img src={selected.logoUrl} alt={`${selected.name} logo`} className="-mt-8 ml-5 size-16 rounded-xl border-4 border-background bg-background object-contain p-1" />}
+              </div>
+            )}
           </div>
 
           <button
@@ -69,7 +83,8 @@ function AdminTournamentsPage() {
           </button>
         </div>
 
-        <div className="mt-8">
+        <div className="mt-8 space-y-6">
+          {selected.groupStageEnabled && <GroupStage tournament={selected} teams={state.teams} emit={emit} />}
           <Bracket tournament={selected} teams={state.teams} emit={emit} />
         </div>
 
@@ -193,11 +208,33 @@ function CreateTournamentForm({
   const [category, setCategory] = useState<TeamCategory>("Open");
   const [teamQuota, setTeamQuota] = useState<number>(4);
   const [matchmakingType, setMatchmakingType] = useState<MatchmakingType>("auto");
+  const [groupStageEnabled, setGroupStageEnabled] = useState(false);
+  const [groupCount, setGroupCount] = useState(4);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [halfDurationMinutes, setHalfDurationMinutes] = useState(5);
+  const [halftimeDurationMinutes, setHalftimeDurationMinutes] = useState(2);
+  const [warmupDurationMinutes, setWarmupDurationMinutes] = useState(5);
+  const [overtimeDurationMinutes, setOvertimeDurationMinutes] = useState(3);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [error, setError] = useState("");
 
   // Manual Pairs state: array of { teamAId: string | null, teamBId: string | null }
   const [manualPairs, setManualPairs] = useState<Array<{ teamAId: string | null; teamBId: string | null }>>([]);
+
+  const readImage = (file: File, setter: (value: string) => void) => {
+    if (!file.type.startsWith("image/")) {
+      setError("Please choose an image file.");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Images must be 2 MB or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setter(String(reader.result));
+    reader.readAsDataURL(file);
+  };
 
   // Auto initialize manual pairs based on selected teams or quota
   const initManualPairs = (chosenIds: string[]) => {
@@ -254,6 +291,14 @@ function CreateTournamentForm({
       setError("Select at least 2 teams.");
       return;
     }
+    if (selectedTeamIds.length > 128) {
+      setError("A tournament can include a maximum of 128 teams.");
+      return;
+    }
+    if (groupStageEnabled && selectedTeamIds.length < groupCount * 2) {
+      setError("Select at least two teams per group.");
+      return;
+    }
 
     if (matchmakingType === "manual") {
       if (manualPairs.length === 0) {
@@ -303,6 +348,15 @@ function CreateTournamentForm({
         matchmakingType,
         teamQuota,
         matchmakingType === "manual" ? manualPairs : undefined
+        ,groupStageEnabled
+        ,groupCount
+        ,2
+        ,logoUrl
+        ,bannerUrl
+        ,halfDurationMinutes
+        ,halftimeDurationMinutes
+        ,warmupDurationMinutes
+        ,overtimeDurationMinutes
       )
     );
     onClose();
@@ -313,7 +367,7 @@ function CreateTournamentForm({
       <div className="flex items-center justify-between border-b border-border pb-4">
         <div>
           <h2 className="text-base font-bold text-foreground">Create New Tournament</h2>
-          <p className="text-xs text-muted-foreground">Configure team quota and select matchmaking type.</p>
+          <p className="text-xs text-muted-foreground">Choose up to 128 teams, then decide whether they start in groups or the knockout bracket.</p>
         </div>
         <button onClick={onClose} className="rounded-lg p-1 text-muted-foreground hover:bg-muted">
           <X className="size-5" />
@@ -363,9 +417,12 @@ function CreateTournamentForm({
               onChange={(e) => setTeamQuota(Number(e.target.value))}
             >
               <option value={4}>4 Teams (Semifinals)</option>
+              <option value={12}>12 Teams</option>
               <option value={8}>8 Teams (Quarterfinals)</option>
               <option value={16}>16 Teams (Round of 16)</option>
               <option value={32}>32 Teams (Round of 32)</option>
+              <option value={64}>64 Teams (Round of 64)</option>
+              <option value={128}>128 Teams (Round of 128)</option>
             </select>
           </div>
 
@@ -400,10 +457,52 @@ function CreateTournamentForm({
           </div>
         </div>
 
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-bold text-foreground"><ImagePlus className="size-4 text-primary" /> Tournament branding</div>
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-foreground">Logo (optional)<input type="file" accept="image/*" className="auth-input mt-1.5 text-xs" onChange={(e) => e.target.files?.[0] && readImage(e.target.files[0], setLogoUrl)} /></label>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-foreground">Banner (optional)<input type="file" accept="image/*" className="auth-input mt-1.5 text-xs" onChange={(e) => e.target.files?.[0] && readImage(e.target.files[0], setBannerUrl)} /></label>
+              {(logoUrl || bannerUrl) && <div className="overflow-hidden rounded-lg border border-border bg-background">{bannerUrl && <img src={bannerUrl} alt="Banner preview" className="h-20 w-full object-cover" />}{logoUrl && <img src={logoUrl} alt="Logo preview" className="m-2 size-12 rounded-md object-contain" />}</div>}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <div className="mb-3 text-sm font-bold text-foreground">Match timing</div>
+            <div className="grid grid-cols-2 gap-3">
+              <label className="text-xs font-semibold text-foreground">Each half (min)<input type="number" min={1} max={60} className="auth-input mt-1" value={halfDurationMinutes} onChange={(e) => setHalfDurationMinutes(Number(e.target.value))} /></label>
+              <label className="text-xs font-semibold text-foreground">Half-time break<input type="number" min={0} max={30} className="auth-input mt-1" value={halftimeDurationMinutes} onChange={(e) => setHalftimeDurationMinutes(Number(e.target.value))} /></label>
+              <label className="text-xs font-semibold text-foreground">Warm-up / testing<input type="number" min={0} max={30} className="auth-input mt-1" value={warmupDurationMinutes} onChange={(e) => setWarmupDurationMinutes(Number(e.target.value))} /></label>
+              <label className="text-xs font-semibold text-foreground">Overtime (min)<input type="number" min={0} max={30} className="auth-input mt-1" value={overtimeDurationMinutes} onChange={(e) => setOvertimeDurationMinutes(Number(e.target.value))} /></label>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+          <label className="flex cursor-pointer items-center gap-3 text-sm font-semibold text-foreground">
+            <input
+              type="checkbox"
+              className="size-4 rounded border-border text-primary"
+              checked={groupStageEnabled}
+              onChange={(e) => setGroupStageEnabled(e.target.checked)}
+            />
+            Include group stage before knockout bracket
+          </label>
+          <p className="mt-1 pl-7 text-xs text-muted-foreground">Teams play each other within their group. The top two teams from each group advance automatically.</p>
+          {groupStageEnabled && (
+            <div className="mt-3 max-w-xs pl-7">
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-foreground">Number of groups</label>
+              <select className="auth-input" value={groupCount} onChange={(e) => setGroupCount(Number(e.target.value))}>
+                {[2, 4, 8, 16].map((count) => <option key={count} value={count}>{count} Groups</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
         {/* Select Teams Section */}
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-foreground flex items-center justify-between">
-            <span>Select Teams for Tournament ({selectedTeamIds.length} / {teamQuota} Selected)</span>
+            <span>Select Teams for Tournament ({selectedTeamIds.length} / {Math.min(teamQuota, 128)} Selected)</span>
             {selectedTeamIds.length > teamQuota && (
               <span className="text-destructive font-normal text-xs">Exceeds team quota!</span>
             )}
@@ -426,7 +525,13 @@ function CreateTournamentForm({
                       type="checkbox"
                       className="size-4 rounded border-border text-primary"
                       checked={selectedTeamIds.includes(t.id)}
-                      onChange={() => toggleTeamSelect(t.id)}
+                      onChange={() => {
+                        if (!selectedTeamIds.includes(t.id) && selectedTeamIds.length >= 128) {
+                          setError("A tournament can include a maximum of 128 teams.");
+                          return;
+                        }
+                        toggleTeamSelect(t.id);
+                      }}
                     />
                     <span>{t.name}</span>
                   </div>
@@ -724,6 +829,54 @@ function ReMatchmakingModal({
   );
 }
 
+function GroupStage({
+  tournament,
+  teams,
+  emit,
+}: {
+  tournament: Tournament;
+  teams: Team[];
+  emit: ReturnType<typeof useMockWebSocket>["emit"];
+}) {
+  const teamName = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "—" : "TBD");
+  const groupMatches = tournament.matches.filter((m) => m.phase === "group");
+  const groupCount = tournament.groupCount ?? Math.max(1, ...groupMatches.map((m) => m.groupNumber ?? 1));
+  const groups = Array.from({ length: groupCount }, (_, index) => groupMatches.filter((m) => m.groupNumber === index + 1));
+
+  return (
+    <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 shadow-sm">
+      <div className="mb-5 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-foreground">Group Stage</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Top {tournament.qualifiersPerGroup ?? 2} teams from each group qualify for the knockout bracket.</p>
+        </div>
+        <span className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-700">
+          {groupMatches.filter((m) => m.winnerId).length} / {groupMatches.length} decided
+        </span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {groups.map((matches, index) => (
+          <div key={index} className="rounded-xl border border-border bg-background p-3">
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-foreground">Group {String.fromCharCode(65 + index)}</h3>
+            <div className="space-y-2">
+              {matches.length === 0 ? <p className="text-xs text-muted-foreground">No matches</p> : matches.map((match) => (
+                <div key={match.id} className="rounded-lg border border-border/70 p-2 text-xs">
+                  <div className="flex items-center justify-between gap-2"><span className={match.winnerId === match.teamAId ? "font-bold text-emerald-600" : ""}>{teamName(match.teamAId)}</span>{match.winnerId === match.teamAId && "✓"}</div>
+                  <div className="my-1 border-t border-border" />
+                  <div className="flex items-center justify-between gap-2"><span className={match.winnerId === match.teamBId ? "font-bold text-emerald-600" : ""}>{teamName(match.teamBId)}</span>{match.winnerId === match.teamBId && "✓"}</div>
+                  {!match.winnerId && match.teamAId && match.teamBId && (
+                    <div className="mt-2 flex gap-1"><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamAId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamAId)} wins</button><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamBId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamBId)} wins</button></div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Bracket({
   tournament,
   teams,
@@ -734,7 +887,16 @@ function Bracket({
   emit: ReturnType<typeof useMockWebSocket>["emit"];
 }) {
   const teamName = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "—" : null);
-  const rounds = Math.max(...tournament.matches.map((m) => m.round));
+  const knockoutMatches = tournament.matches.filter((m) => (m.phase ?? "knockout") === "knockout");
+  if (knockoutMatches.length === 0) {
+    return (
+      <div className="rounded-2xl border border-border bg-muted/20 p-8 text-center">
+        <p className="font-semibold text-foreground">Knockout bracket is waiting for group results</p>
+        <p className="mt-1 text-sm text-muted-foreground">The qualifying teams will be placed here after all group matches are decided.</p>
+      </div>
+    );
+  }
+  const rounds = Math.max(...knockoutMatches.map((m) => m.round));
 
   const getRoundTitle = (r: number) => {
     if (r === rounds) return "FINAL";
@@ -749,7 +911,7 @@ function Bracket({
         {/* Round Headers */}
         <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
           {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
-            const matchesCount = tournament.matches.filter((m) => m.round === round).length;
+            const matchesCount = knockoutMatches.filter((m) => m.round === round).length;
             return (
               <div key={round} className="w-[260px] flex items-center justify-between">
                 <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
@@ -769,7 +931,7 @@ function Bracket({
         {/* Bracket Columns */}
         <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
           {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
-            const matches = tournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+            const matches = knockoutMatches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
             const isLast = round === rounds;
 
             // Group matches into pairs for Round 1, 2, etc.
