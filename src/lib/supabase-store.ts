@@ -596,10 +596,37 @@ export class SupabaseStore implements DataStore {
 
     this.commit({ ...this.state, tournaments: [tournament, ...this.state.tournaments] });
 
-    const mapped = toSnake({ ...tournament });
-    const tMatches = (mapped.matches || []).map((m: any) => ({ ...m, tournament_id: mapped.id }));
-    delete mapped.matches;
-    delete mapped.team_ids;
+    // Keep the database payload aligned with the deployed Supabase schema.
+    // The client model also contains UI-only bracket/group fields, but sending
+    // those fields to PostgREST makes the entire tournament insert fail when
+    // the corresponding columns do not exist in the database.
+    const mapped = {
+      id: tournament.id,
+      name: tournament.name,
+      category: tournament.category ?? null,
+      status: tournament.status,
+      matchmaking_type: tournament.matchmakingType ?? null,
+      team_quota: tournament.teamQuota ?? null,
+      created_at: new Date(tournament.createdAt).toISOString(),
+      logo_url: tournament.logoUrl ?? null,
+      banner_url: tournament.bannerUrl ?? null,
+      half_duration_minutes: tournament.halfDurationMinutes ?? 5,
+      halftime_duration_minutes: tournament.halftimeDurationMinutes ?? 2,
+      warmup_duration_minutes: tournament.warmupDurationMinutes ?? 5,
+      overtime_duration_minutes: tournament.overtimeDurationMinutes ?? 3,
+    };
+    const tMatches = tournament.matches.map((match) => ({
+      id: match.id,
+      tournament_id: tournament.id,
+      round: match.round,
+      slot: match.slot,
+      team_a_id: match.teamAId,
+      team_b_id: match.teamBId,
+      winner_id: match.winnerId,
+      is_bye: match.isBye,
+      scheduled_date: match.scheduledDate ?? null,
+      scheduled_time: match.scheduledTime ?? null,
+    }));
     this.persist('tournament insert', async () => {
       const result = await supabase.from('tournaments').insert(mapped);
       if (result.error) return result;
