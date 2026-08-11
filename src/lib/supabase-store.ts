@@ -258,6 +258,7 @@ export interface DataStore {
   removeUser(id: string): void;
   logAudit(action: string, performedBy: string, target: string, category: AuditLogEntry["category"], details?: string): void;
   refreshAuditLogs(): Promise<void>;
+  changeMatchPhase(slotId: MatchSlotId, phase: string): void;
 }
 
 // ─── SupabaseStore ──────────────────────────────────────────────────────────
@@ -804,6 +805,18 @@ export class SupabaseStore implements DataStore {
     this.commitSlot(slotId, { match, events: [] });
     // Reset DB Scores directly
     this.persist('reset scores', () => supabase.from('match_slots').update({ score_a: 0, score_b: 0 }).eq('slot_id', slotId));
+  }
+
+  changeMatchPhase(slotId: MatchSlotId, phase: string) {
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
+    // Reset the clock, pause the match, but KEEP the scores
+    const match: Match = { ...m, status: "scheduled", elapsedMs: 0, runningSince: null };
+    // Log a phase change event so the scoreboard knows what time limit to use
+    const events = this.log("match_paused" as any, `PHASE_CHANGE:${phase}`, match.id, slot.events);
+    
+    this.commitSlot(slotId, { match, events });
+    this.persist('reset timer for phase', () => supabase.from('match_slots').update({ status: 'scheduled', elapsed_ms: 0, running_since: null }).eq('slot_id', slotId));
   }
 
   // =====================================================================================

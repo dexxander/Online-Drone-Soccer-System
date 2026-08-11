@@ -42,8 +42,7 @@ export const Route = createFileRoute("/referee")({
   component: RefereePage,
 });
 
-const phases = ["Testing", "1st Half", "Half Time", "2nd Half"] as const;
-const MATCH_DURATION_MS = 3 * 60 * 1000;
+const phases = ["Testing", "1st Half", "Half Time", "2nd Half", "Overtime"] as const;
 
 const penaltyButtons: { label: string; type: PenaltyType; style: string }[] = [
   { label: "Warning", type: "Minor", style: "bg-muted text-foreground border border-border hover:bg-accent" },
@@ -59,10 +58,15 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
+// Intercept the event feed to figure out what phase the match is currently in
+function getCurrentPhase(events: any[]) {
+  const phaseEvent = events.find((e) => e.message.startsWith("PHASE_CHANGE:"));
+  return phaseEvent ? phaseEvent.message.replace("PHASE_CHANGE:", "") : "Testing";
+}
+
 function RefereePage() {
   const { state, emit, socket } = useMockWebSocket();
 
-  // Simple UI pause timer to prevent the screen from flickering when clicking fast
   const lastActionTime = useRef<number>(0);
   const safeEmit = useCallback((action: string, callback: any) => {
     lastActionTime.current = Date.now();
@@ -75,25 +79,17 @@ function RefereePage() {
 
   const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control">("tournaments");
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
-  
-  // Modal state for confirming if referee wants to co-officiate a shared court
   const [joinConfirm, setJoinConfirm] = useState<{ slotId: MatchSlotId, matchId: string } | null>(null);
-
-  // Which court (match slot) this control page is currently driving.
   const [slotId, setSlotId] = useState<MatchSlotId>(1);
 
   const activeSlot = matchSlots.find((s) => s.slotId === slotId) ?? matchSlots[0];
   const rawMatch = safeMatch(activeSlot.match);
   const events = Array.isArray(activeSlot.events) ? activeSlot.events : [];
 
-  // =========================================================================
-  // OPTIMISTIC UI: Instant Local Screen Updates
-  // =========================================================================
   const [optimisticScoreA, setOptimisticScoreA] = useState(rawMatch.scoreA);
   const [optimisticScoreB, setOptimisticScoreB] = useState(rawMatch.scoreB);
 
   useEffect(() => {
-    // Only pull the server score if the referee hasn't clicked a button recently
     if (Date.now() - lastActionTime.current > 1500) {
       setOptimisticScoreA(rawMatch.scoreA);
       setOptimisticScoreB(rawMatch.scoreB);
@@ -104,17 +100,28 @@ function RefereePage() {
   const teams = Array.isArray(state.teams) ? state.teams : [];
   const players = Array.isArray(state.players) ? state.players : [];
 
-  const elapsedMs = useMatchClock(rawMatch.elapsedMs, rawMatch.runningSince);
-  const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
-
   const live = rawMatch.status === "live";
   const isFinished = rawMatch.status === "finished";
 
-  // Background polling (Pauses briefly after clicks to let the DB process the math)
+  // --- DYNAMIC TIMING CONNECTION ---
+  const currentPhase = getCurrentPhase(events);
+  const activeTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === rawMatch.id));
+  
+  let activeDurationMinutes = 3; // Fallback
+  if (activeTournament) {
+    if (currentPhase === "Testing") activeDurationMinutes = activeTournament.warmupDurationMinutes ?? 5;
+    else if (currentPhase === "Half Time") activeDurationMinutes = activeTournament.halftimeDurationMinutes ?? 2;
+    else if (currentPhase === "Overtime") activeDurationMinutes = activeTournament.overtimeDurationMinutes ?? 3;
+    else activeDurationMinutes = activeTournament.halfDurationMinutes ?? 5; // 1st or 2nd Half
+  }
+
+  const MATCH_DURATION_MS = activeDurationMinutes * 60 * 1000;
+  const elapsedMs = useMatchClock(rawMatch.elapsedMs, rawMatch.runningSince);
+  const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
+
   useEffect(() => {
     void socket.refreshMatchSlots();
     const id = setInterval(() => {
-      // Only pull fresh data if it's been at least 1.5 seconds since the referee last clicked a button
       if (Date.now() - lastActionTime.current > 1500) {
         void socket.refreshMatchSlots();
       }
@@ -122,7 +129,6 @@ function RefereePage() {
     return () => clearInterval(id);
   }, [socket]);
 
-  // Presence heartbeat
   useEffect(() => {
     if (viewMode !== "control") return;
     emit("touchSlotPresence", (s) => s.touchSlotPresence(slotId));
@@ -190,7 +196,6 @@ function RefereePage() {
         setViewMode("control");
         return;
       }
-
       setJoinConfirm({ slotId: existingSlotForMatch.slotId, matchId });
       return;
     }
@@ -209,7 +214,6 @@ function RefereePage() {
     setViewMode("control");
   };
 
-  const activePhase = isFinished ? 3 : live || rawMatch.status === "paused" ? 1 : 0;
   const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
   const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
   
@@ -218,7 +222,6 @@ function RefereePage() {
   const dynamicCoachA = getDynamicCoach(rawMatch.teamAName);
   const dynamicCoachB = getDynamicCoach(rawMatch.teamBName);
 
-  const activeTournament = tournaments.find(t => t.id === activeTournamentId);
   const rounds = activeTournament
     ? Array.from(new Set(activeTournament.matches.map(m => m.round))).sort((a, b) => a - b)
     : [];
@@ -231,7 +234,7 @@ function RefereePage() {
         {/* ── Main Column ── */}
         <div className="flex-1 space-y-6">
 
-          {/* ── Global Scoreboard Controls (Always Visible) ── */}
+          {/* ── Global Scoreboard Controls ── */}
           <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-background p-4 shadow-card">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Monitor className="size-5" />
@@ -309,13 +312,9 @@ function RefereePage() {
           </div>
 
           {viewMode === "tournaments" ? (
-            /* ── 1. TOURNAMENT LIST VIEW ── */
             <Panel title="Active Tournaments">
               {tournaments.length === 0 ? (
-                <EmptyState
-                  title="No active tournaments"
-                  description="Tournaments generated in the Admin dashboard will appear here."
-                />
+                <EmptyState title="No active tournaments" description="Tournaments generated in the Admin dashboard will appear here." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -328,11 +327,7 @@ function RefereePage() {
                     </thead>
                     <tbody>
                       {tournaments.map((t) => (
-                        <tr
-                          key={t.id}
-                          onClick={() => handleOpenBracket(t.id)}
-                          className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/30"
-                        >
+                        <tr key={t.id} onClick={() => handleOpenBracket(t.id)} className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/30">
                           <td className="px-5 py-4 font-semibold text-foreground">{t.name}</td>
                           <td className="px-5 py-4">
                             <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", t.status === "completed" ? "bg-success/20 text-success" : "bg-primary/20 text-primary")}>
@@ -350,18 +345,12 @@ function RefereePage() {
               )}
             </Panel>
           ) : viewMode === "bracket" && activeTournament ? (
-            /* ── 2. VISUAL BRACKET VIEW ── */
             <Panel title={`Bracket: ${activeTournament.name}`}>
               <div className="p-5">
-                <button
-                  onClick={() => setViewMode("tournaments")}
-                  className="mb-4 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground"
-                >
+                <button onClick={() => setViewMode("tournaments")} className="mb-4 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
                   <ChevronLeft className="size-3.5" /> Back to Tournaments
                 </button>
-
                 <div className="flex flex-col gap-6 overflow-x-auto pb-4">
-                  {/* Round Headers */}
                   <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
                     {rounds.map((round) => (
                       <div key={round} className="w-[280px] flex items-center justify-between">
@@ -374,8 +363,6 @@ function RefereePage() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Bracket Columns */}
                   <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
                     {rounds.map((round) => {
                       const matches = activeTournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
@@ -385,7 +372,6 @@ function RefereePage() {
                         const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
                         pairs.push(pair);
                       }
-
                       return (
                         <div key={round} className="w-[280px] flex flex-col justify-around">
                           {pairs.map((pair, pi) => (
@@ -394,30 +380,21 @@ function RefereePage() {
                                 const isPlayable = !m.isBye && Boolean(m.teamAId) && Boolean(m.teamBId) && !m.winnerId;
                                 const isCompleted = m.winnerId !== null;
                                 const isClickable = isPlayable || (isCompleted && !m.isBye);
-
                                 const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
                                 const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
-
                                 const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
                                 const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
-
                                 const liveSlot = matchSlots.find((slot) => slot.match.id === m.id);
                                 const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : "-"));
                                 const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : "-"));
-
                                 const hasWinner = !!m.winnerId;
-
                                 return (
                                   <div key={m.id} className="relative py-2 z-10">
                                     <div
-                                      className={cn(
-                                        "relative flex flex-col rounded-xl border p-3 shadow-sm transition-all",
-                                        isClickable ? "border-primary/50 bg-primary/5 hover:border-primary cursor-pointer" : "border-border bg-muted/20 opacity-80"
-                                      )}
+                                      className={cn("relative flex flex-col rounded-xl border p-3 shadow-sm transition-all", isClickable ? "border-primary/50 bg-primary/5 hover:border-primary cursor-pointer" : "border-border bg-muted/20 opacity-80")}
                                       onClick={() => isClickable && handleSelectMatch(m.id, m.teamAId, m.teamBId)}
                                     >
                                       <div className="flex flex-col gap-2">
-                                        {/* Team A Slot */}
                                         <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamAWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
                                           <div className="flex items-center gap-2">
                                             <span className={displayTeamA === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamA}</span>
@@ -425,8 +402,6 @@ function RefereePage() {
                                           </div>
                                           <span className="font-mono text-muted-foreground">{scoreA}</span>
                                         </div>
-
-                                        {/* Team B Slot */}
                                         <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamBWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
                                           <div className="flex items-center gap-2">
                                             <span className={displayTeamB === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamB}</span>
@@ -435,55 +410,19 @@ function RefereePage() {
                                           <span className="font-mono text-muted-foreground">{scoreB}</span>
                                         </div>
                                       </div>
-
-                                      {isPlayable && !liveSlot && (
-                                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-primary px-3 py-0.5 text-[9px] font-bold uppercase text-primary-foreground shadow-sm">
-                                          Officiate Match
-                                        </div>
-                                      )}
-                                      {isPlayable && liveSlot && (
-                                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-indigo-500 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm border border-indigo-400">
-                                          {liveSlot.slotId === slotId ? `Resume Court ${liveSlot.slotId}` : `Switch to Court ${liveSlot.slotId}`}
-                                        </div>
-                                      )}
-                                      {isCompleted && !m.isBye && (
-                                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-600 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">
-                                          Review Match
-                                        </div>
-                                      )}
-                                      {m.isBye && (
-                                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-muted-foreground/80 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">
-                                          Auto-Advance
-                                        </div>
-                                      )}
+                                      {isPlayable && !liveSlot && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-primary px-3 py-0.5 text-[9px] font-bold uppercase text-primary-foreground shadow-sm">Officiate Match</div>}
+                                      {isPlayable && liveSlot && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-indigo-500 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm border border-indigo-400">{liveSlot.slotId === slotId ? `Resume Court ${liveSlot.slotId}` : `Switch to Court ${liveSlot.slotId}`}</div>}
+                                      {isCompleted && !m.isBye && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-600 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">Review Match</div>}
+                                      {m.isBye && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-muted-foreground/80 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">Auto-Advance</div>}
                                     </div>
-
-                                    {/* Horizontal Line extending right from match box */}
-                                    {!isLast && (
-                                      <div
-                                        className={`absolute -right-8 top-1/2 h-[2.5px] w-8 -translate-y-1/2 transition-colors ${
-                                          hasWinner ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
-                                        }`}
-                                      />
-                                    )}
+                                    {!isLast && <div className={`absolute -right-8 top-1/2 h-[2.5px] w-8 -translate-y-1/2 transition-colors ${hasWinner ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />}
                                   </div>
                                 );
                               })}
-
-                              {/* Bracket Spine Connector for the Pair */}
                               {!isLast && (
                                 <>
-                                  <div
-                                    className={`absolute -right-8 top-[25%] bottom-[25%] w-[2.5px] z-0 transition-colors ${
-                                      pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
-                                    }`}
-                                  />
-                                  {/* Forward Stem to Next Round */}
-                                  <div
-                                    className={`absolute -right-16 top-1/2 h-[2.5px] w-8 -translate-y-1/2 z-0 transition-colors ${
-                                      pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
-                                    }`}
-                                  />
+                                  <div className={`absolute -right-8 top-[25%] bottom-[25%] w-[2.5px] z-0 transition-colors ${pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                                  <div className={`absolute -right-16 top-1/2 h-[2.5px] w-8 -translate-y-1/2 z-0 transition-colors ${pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
                                 </>
                               )}
                             </div>
@@ -520,13 +459,16 @@ function RefereePage() {
 
               {/* Match Clock Tile */}
               <div className="flex flex-col items-center rounded-xl border border-border bg-background p-6 shadow-card lg:p-8">
-                <div className="mb-6 flex w-full max-w-lg rounded-lg bg-muted p-1">
-                  {phases.map((phase, i) => (
+                <div className="mb-6 flex w-full max-w-lg gap-1 rounded-lg bg-muted p-1">
+                  {phases.map((phase) => (
                     <button
                       key={phase}
+                      onClick={() => {
+                          safeEmit("updateMatch", (s: any) => s.changeMatchPhase(slotId, phase));
+                      }}
                       className={cn(
-                        "flex-1 rounded-md px-4 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                        i === activePhase ? "border border-border bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-accent"
+                        "flex-1 rounded-md px-2 py-2 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider transition-colors",
+                        phase === currentPhase ? "border border-border bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-accent"
                       )}
                     >
                       {phase}
@@ -534,7 +476,9 @@ function RefereePage() {
                   ))}
                 </div>
 
-                <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Countdown Timer</div>
+                <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                  {currentPhase} Countdown
+                </div>
                 <div className="mb-8 font-mono text-7xl font-bold tabular-nums leading-none tracking-tight text-destructive lg:text-8xl">
                   {formatClock(remainingMs)}
                 </div>
@@ -641,10 +585,14 @@ function RefereePage() {
                 )}
                 <ul className="space-y-1">
                   {events.map((evt, idx) => {
+                    const isPhaseChange = evt.message.startsWith("PHASE_CHANGE:");
                     let labelColor = "text-muted-foreground";
                     let messageColor = "text-foreground";
 
-                    if (evt.type === "score_changed") {
+                    if (isPhaseChange) {
+                      labelColor = "text-indigo-500";
+                      messageColor = "text-indigo-600 dark:text-indigo-400 font-bold";
+                    } else if (evt.type === "score_changed") {
                       labelColor = "text-emerald-600 dark:text-emerald-500";
                       messageColor = "text-emerald-600 dark:text-emerald-500 font-bold";
                     } else if (evt.type === "penalty_issued") {
@@ -674,13 +622,15 @@ function RefereePage() {
                       >
                         <div className="mb-1 flex items-start justify-between">
                           <span className={cn("text-[11px] font-bold uppercase tracking-wider", labelColor)}>
-                            {eventLabel(evt.type)}
+                            {isPhaseChange ? "PHASE" : eventLabel(evt.type)}
                           </span>
                           <span className="font-mono text-[12px] text-muted-foreground">
                             {new Date(evt.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                           </span>
                         </div>
-                        <p className={cn("text-sm", messageColor)}>{evt.message}</p>
+                        <p className={cn("text-sm", messageColor)}>
+                          {isPhaseChange ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}` : evt.message}
+                        </p>
                       </li>
                     );
                   })}

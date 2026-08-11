@@ -17,8 +17,6 @@ export const Route = createFileRoute("/scoreboard")({
   component: Scoreboard,
 });
 
-const MATCH_DURATION_MS = 3 * 60 * 1000;
-
 function getTeamDetailsByName(name: string, dynamicTeams: any[]) {
   if (!name || name === "TBD") return { initials: "TB", logo: undefined };
 
@@ -37,6 +35,12 @@ function getMatchTitle(round: number, maxRound: number) {
   if (round === maxRound - 1) return "Semi-Finals";
   if (round === maxRound - 2) return "Quarter-Finals";
   return `Round ${round}`;
+}
+
+// Intercept the event feed to figure out what phase the match is currently in
+function getCurrentPhase(events: any[]) {
+  const phaseEvent = events.find((e) => e.message.startsWith("PHASE_CHANGE:"));
+  return phaseEvent ? phaseEvent.message.replace("PHASE_CHANGE:", "") : "Testing";
 }
 
 function useTick(intervalMs: number) {
@@ -64,11 +68,7 @@ function Scoreboard() {
   const teams = Array.isArray(state.teams) ? state.teams : [];
   const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
 
-  // PURE MANUAL CONTROL: Only show courts where the referee flipped the visibility switch ON.
-  // This prevents desynced clocks or presence timeouts from infinitely displaying old matches.
   const visibleSlots = slots.filter((slot) => slot.visibleOnScoreboard);
-
-  // Properly check if any visible slot's match status is live or paused
   const anyLive = visibleSlots.some((slot) => slot.match.status === "live" || slot.match.status === "paused");
 
   return (
@@ -148,6 +148,20 @@ function MatchBoard({
   const m = slot.match;
   const events = Array.isArray(slot.events) ? slot.events : [];
 
+  const activeTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === m.id));
+  
+  // --- DYNAMIC TIMING CONNECTION ---
+  const currentPhase = getCurrentPhase(events);
+  let activeDurationMinutes = 3; // Fallback
+  if (activeTournament) {
+    if (currentPhase === "Testing") activeDurationMinutes = activeTournament.warmupDurationMinutes ?? 5;
+    else if (currentPhase === "Half Time") activeDurationMinutes = activeTournament.halftimeDurationMinutes ?? 2;
+    else if (currentPhase === "Overtime") activeDurationMinutes = activeTournament.overtimeDurationMinutes ?? 3;
+    else activeDurationMinutes = activeTournament.halfDurationMinutes ?? 5; // 1st or 2nd Half
+  }
+
+  const MATCH_DURATION_MS = activeDurationMinutes * 60 * 1000;
+
   const elapsedMs = useMatchClock(m.elapsedMs, m.runningSince);
   const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
 
@@ -160,7 +174,6 @@ function MatchBoard({
   const penaltiesA = calculateEffectivePenalties(rawPenaltiesA);
   const penaltiesB = calculateEffectivePenalties(rawPenaltiesB);
 
-  const activeTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === m.id));
   const tMatch = activeTournament?.matches.find((tm) => tm.id === m.id);
   const maxRound = activeTournament ? Math.max(...activeTournament.matches.map((tm) => tm.round)) : 1;
   const currentRound = tMatch?.round || 1;
@@ -224,6 +237,8 @@ function MatchBoard({
           <p className="py-6 text-center text-sm text-muted-foreground">No match events yet.</p>
         ) : (
           events.slice(0, isFull ? 4 : 3).map((evt) => {
+            const isPhaseChange = evt.message.startsWith("PHASE_CHANGE:");
+            
             const isTeamA = m.teamAName && evt.message.includes(m.teamAName);
             const isTeamB = m.teamBName && evt.message.includes(m.teamBName);
 
@@ -231,11 +246,12 @@ function MatchBoard({
             if (isTeamA && !isTeamB) side = isSwapped ? 'right' : 'left';
             else if (isTeamB && !isTeamA) side = isSwapped ? 'left' : 'right';
 
-            let uiType: 'goal' | 'penalty' | 'system' = 'system';
+            let uiType: 'goal' | 'penalty' | 'system' | 'phase' = 'system';
             let penaltyLevel: 'warning' | 'yellow' | 'red' | null = null;
 
-            if (evt.type === 'score_changed') uiType = 'goal';
-            if (evt.type === 'penalty_issued') {
+            if (isPhaseChange) uiType = 'phase';
+            else if (evt.type === 'score_changed') uiType = 'goal';
+            else if (evt.type === 'penalty_issued') {
               uiType = 'penalty';
               if (evt.message.includes('Minor')) penaltyLevel = 'warning';
               else if (evt.message.includes('Major')) penaltyLevel = 'yellow';
@@ -243,13 +259,14 @@ function MatchBoard({
             }
 
             const timeStr = new Date(evt.createdAt).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
+            const finalMessage = isPhaseChange ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}` : evt.message;
 
             return (
               <EventLogItem
                 key={evt.id}
                 type={uiType}
                 penaltyLevel={penaltyLevel}
-                message={evt.message}
+                message={finalMessage}
                 time={timeStr}
                 side={side}
               />
@@ -265,7 +282,7 @@ function MatchBoard({
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
           <span className={cn("h-1.5 w-1.5 rounded-full", (m.status === "live" || m.status === "paused") ? "animate-pulse bg-primary" : "bg-muted-foreground")} />
-          Court {slot.slotId}
+          Court {slot.slotId} — {currentPhase}
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -296,7 +313,7 @@ function MatchBoard({
         <p className={cn("font-mono font-bold tabular-nums text-destructive", clockTextClass)}>
           {formatClock(remainingMs)}
         </p>
-        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Time Remaining</p>
+        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">{currentPhase} Time Remaining</p>
       </div>
 
       <div className={cn("grid gap-6", isFull ? "md:grid-cols-[1fr_2fr_1fr]" : "sm:grid-cols-2")}>
@@ -312,11 +329,14 @@ function MatchBoard({
 
 // --- UTILITY UI COMPONENTS ---
 
-function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal' | 'penalty' | 'system', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center' }) {
+function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal' | 'penalty' | 'system' | 'phase', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center' }) {
   let colorClass = 'border-border text-foreground bg-background';
   let indicatorColor = 'text-muted-foreground';
 
-  if (type === 'goal') {
+  if (type === 'phase') {
+    colorClass = 'border-indigo-500/30 text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 font-bold';
+    indicatorColor = 'text-indigo-500';
+  } else if (type === 'goal') {
     colorClass = 'border-emerald-500/30 text-emerald-700 dark:text-emerald-500 bg-emerald-500/10 font-bold';
     indicatorColor = 'text-emerald-600 dark:text-emerald-500';
   } else if (type === 'penalty') {
