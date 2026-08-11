@@ -16,7 +16,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
 import { EmptyState, Panel } from "@/components/ui-kit";
 import { Switch } from "@/components/ui/switch";
@@ -60,7 +60,14 @@ function getMatchTitle(round: number, maxRound: number) {
 }
 
 function RefereePage() {
-  const { state, emit } = useMockWebSocket();
+  const { state, emit, socket } = useMockWebSocket();
+
+  // Simple UI pause timer to prevent the screen from flickering when clicking fast
+  const lastActionTime = useRef<number>(0);
+  const safeEmit = useCallback((action: string, callback: any) => {
+    lastActionTime.current = Date.now();
+    emit(action, callback);
+  }, [emit]);
 
   const matchSlots: MatchSlot[] = Array.isArray(state.matches) && state.matches.length === 2
     ? state.matches
@@ -68,14 +75,30 @@ function RefereePage() {
 
   const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control">("tournaments");
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
-  // Which court (match slot) this control page is currently driving. Up to
-  // two control pages — one per court — can run at the same time, each
-  // independently controlling its own match.
+  
+  // Modal state for confirming if referee wants to co-officiate a shared court
+  const [joinConfirm, setJoinConfirm] = useState<{ slotId: MatchSlotId, matchId: string } | null>(null);
+
+  // Which court (match slot) this control page is currently driving.
   const [slotId, setSlotId] = useState<MatchSlotId>(1);
 
   const activeSlot = matchSlots.find((s) => s.slotId === slotId) ?? matchSlots[0];
   const rawMatch = safeMatch(activeSlot.match);
   const events = Array.isArray(activeSlot.events) ? activeSlot.events : [];
+
+  // =========================================================================
+  // OPTIMISTIC UI: Instant Local Screen Updates
+  // =========================================================================
+  const [optimisticScoreA, setOptimisticScoreA] = useState(rawMatch.scoreA);
+  const [optimisticScoreB, setOptimisticScoreB] = useState(rawMatch.scoreB);
+
+  useEffect(() => {
+    // Only pull the server score if the referee hasn't clicked a button recently
+    if (Date.now() - lastActionTime.current > 1500) {
+      setOptimisticScoreA(rawMatch.scoreA);
+      setOptimisticScoreB(rawMatch.scoreB);
+    }
+  }, [rawMatch.scoreA, rawMatch.scoreB]);
 
   const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
   const teams = Array.isArray(state.teams) ? state.teams : [];
@@ -87,10 +110,19 @@ function RefereePage() {
   const live = rawMatch.status === "live";
   const isFinished = rawMatch.status === "finished";
 
-  // Presence heartbeat: while this tab is actually on the live control
-  // dashboard for `slotId`, let the rest of the app (mainly the public
-  // scoreboard) know this court's control page is open. Stops the moment
-  // the referee navigates away, switches courts, or closes the tab.
+  // Background polling (Pauses briefly after clicks to let the DB process the math)
+  useEffect(() => {
+    void socket.refreshMatchSlots();
+    const id = setInterval(() => {
+      // Only pull fresh data if it's been at least 1.5 seconds since the referee last clicked a button
+      if (Date.now() - lastActionTime.current > 1500) {
+        void socket.refreshMatchSlots();
+      }
+    }, 1000);
+    return () => clearInterval(id);
+  }, [socket]);
+
+  // Presence heartbeat
   useEffect(() => {
     if (viewMode !== "control") return;
     emit("touchSlotPresence", (s) => s.touchSlotPresence(slotId));
@@ -151,11 +183,28 @@ function RefereePage() {
   };
 
   const handleSelectMatch = (matchId: string, teamAId: string | null, teamBId: string | null) => {
+    const existingSlotForMatch = matchSlots.find((s) => s.match.id === matchId);
+
+    if (existingSlotForMatch) {
+      if (existingSlotForMatch.slotId === slotId) {
+        setViewMode("control");
+        return;
+      }
+
+      setJoinConfirm({ slotId: existingSlotForMatch.slotId, matchId });
+      return;
+    }
+
+    if (activeSlot.match.status === "live" || activeSlot.match.status === "paused") {
+      alert("This court is currently running an active match. Please end it or switch to an empty court to start a new match.");
+      return;
+    }
+
     const teamAName = getTeamName(teamAId);
     const teamBName = getTeamName(teamBId);
 
     if (rawMatch.id !== matchId) {
-      emit("setupLiveMatch", (s) => s.setupLiveMatch(slotId, matchId, teamAName, teamBName));
+      safeEmit("setupLiveMatch", (s: any) => s.setupLiveMatch(slotId, matchId, teamAName, teamBName));
     }
     setViewMode("control");
   };
@@ -174,7 +223,6 @@ function RefereePage() {
     ? Array.from(new Set(activeTournament.matches.map(m => m.round))).sort((a, b) => a - b)
     : [];
   const maxRound = Math.max(...rounds, 0);
-  const minRound = Math.min(...rounds, 0);
 
   return (
     <RefereeLayout match={rawMatch} slotId={slotId}>
@@ -183,8 +231,35 @@ function RefereePage() {
         {/* ── Main Column ── */}
         <div className="flex-1 space-y-6">
 
-          {/* ── Court Selector ── up to 2 matches can run at once; this
-              picks which one THIS control page drives. ── */}
+          {/* ── Global Scoreboard Controls (Always Visible) ── */}
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-background p-4 shadow-card">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Monitor className="size-5" />
+              <span className="text-xs font-bold uppercase tracking-widest text-foreground">Scoreboard Output</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {matchSlots.map((slot) => (
+                <label key={slot.slotId} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted">
+                  <div className="flex items-center gap-1.5">
+                    {slot.visibleOnScoreboard ? (
+                      <Eye className="size-4 text-primary" strokeWidth={2.5} />
+                    ) : (
+                      <EyeOff className="size-4 text-muted-foreground" strokeWidth={2.5} />
+                    )}
+                    <span className={cn("text-[11px] font-bold uppercase tracking-wider", slot.visibleOnScoreboard ? "text-primary" : "text-muted-foreground")}>
+                      Court {slot.slotId}
+                    </span>
+                  </div>
+                  <Switch
+                    checked={slot.visibleOnScoreboard}
+                    onCheckedChange={(checked) => safeEmit("setSlotVisibility", (s: any) => s.setSlotVisibility(slot.slotId, checked))}
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Court Selector ── */}
           <div className="grid grid-cols-2 gap-4">
             {matchSlots.map((slot) => {
               const m = safeMatch(slot.match);
@@ -204,20 +279,22 @@ function RefereePage() {
                       Court {slot.slotId}
                     </span>
                     <div className="flex items-center gap-2">
-                      {slot.visibleOnScoreboard ? (
-                        <Eye className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                      ) : (
-                        <EyeOff className="size-3.5 text-muted-foreground" strokeWidth={2} />
-                      )}
-                      {isLive && (
-                        <span className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-primary">
-                          <Radio className="size-3" strokeWidth={2.5} /> Live
-                        </span>
-                      )}
+                      <span className={cn("flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider", isLive ? "text-primary" : "text-muted-foreground")}>
+                        <Radio className="size-3" strokeWidth={2.5} /> {isLive ? "Live" : "Standby"}
+                      </span>
                     </div>
                   </div>
                   <p className="mt-1 truncate text-sm font-semibold text-foreground">
-                    {m.teamAName} <span className="font-normal text-muted-foreground">vs</span> {m.teamBName}
+                    {m.teamAName && m.teamBName && m.teamAName !== "TBD" ? (
+                      <span className="flex items-center gap-1.5">
+                        <span className={m.status === "finished" ? "opacity-50" : ""}>{m.teamAName}</span>
+                        <span className="font-normal text-muted-foreground text-xs">vs</span>
+                        <span className={m.status === "finished" ? "opacity-50" : ""}>{m.teamBName}</span>
+                        {m.status === "finished" && <span className="text-[9px] font-bold uppercase text-destructive">(Finished)</span>}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground italic text-xs font-normal">No match assigned</span>
+                    )}
                   </p>
                 </button>
               );
@@ -324,8 +401,9 @@ function RefereePage() {
                                 const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
                                 const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
 
-                                const scoreA = m.isBye ? "-" : (rawMatch.id === m.id ? rawMatch.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : "-"));
-                                const scoreB = m.isBye ? "-" : (rawMatch.id === m.id ? rawMatch.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : "-"));
+                                const liveSlot = matchSlots.find((slot) => slot.match.id === m.id);
+                                const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : "-"));
+                                const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : "-"));
 
                                 const hasWinner = !!m.winnerId;
 
@@ -358,9 +436,14 @@ function RefereePage() {
                                         </div>
                                       </div>
 
-                                      {isPlayable && (
+                                      {isPlayable && !liveSlot && (
                                         <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-primary px-3 py-0.5 text-[9px] font-bold uppercase text-primary-foreground shadow-sm">
                                           Officiate Match
+                                        </div>
+                                      )}
+                                      {isPlayable && liveSlot && (
+                                        <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-indigo-500 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm border border-indigo-400">
+                                          {liveSlot.slotId === slotId ? `Resume Court ${liveSlot.slotId}` : `Switch to Court ${liveSlot.slotId}`}
                                         </div>
                                       )}
                                       {isCompleted && !m.isBye && (
@@ -424,25 +507,14 @@ function RefereePage() {
                 </button>
 
                 <div className="flex items-center gap-3">
+                  <span className={cn("rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-widest border", live || rawMatch.status === "paused" ? "bg-primary/10 text-primary border-primary/20" : "bg-muted text-muted-foreground border-border")}>
+                    {live || rawMatch.status === "paused" ? "Live" : "Standby"}
+                  </span>
                   {isFinished && (
-                    <span className="rounded bg-destructive/10 px-4 py-1.5 font-bold uppercase tracking-widest text-destructive">
+                    <span className="rounded bg-destructive/10 px-4 py-1.5 font-bold uppercase tracking-widest text-destructive text-[11px]">
                       Match Concluded (Read-Only)
                     </span>
                   )}
-                  <label className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
-                    {activeSlot.visibleOnScoreboard ? (
-                      <Eye className="size-4 text-primary" strokeWidth={2} />
-                    ) : (
-                      <EyeOff className="size-4 text-muted-foreground" strokeWidth={2} />
-                    )}
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
-                      Show on Scoreboard
-                    </span>
-                    <Switch
-                      checked={activeSlot.visibleOnScoreboard}
-                      onCheckedChange={(checked) => emit("setSlotVisibility", (s) => s.setSlotVisibility(slotId, checked))}
-                    />
-                  </label>
                 </div>
               </div>
 
@@ -470,8 +542,8 @@ function RefereePage() {
                 <div className="flex w-full flex-wrap justify-center gap-4">
                   <button
                     onClick={() => {
-                      if (rawMatch.status === "paused") emit("updateMatch", (s) => s.resumeMatch(slotId));
-                      else emit("updateMatch", (s) => s.startMatch(slotId));
+                      if (rawMatch.status === "paused") safeEmit("updateMatch", (s: any) => s.resumeMatch(slotId));
+                      else safeEmit("updateMatch", (s: any) => s.startMatch(slotId));
                     }}
                     disabled={live || isFinished}
                     className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-lg font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
@@ -479,14 +551,14 @@ function RefereePage() {
                     <Play className="size-5" fill="currentColor" /> Start
                   </button>
                   <button
-                    onClick={() => emit("updateMatch", (s) => s.pauseMatch(slotId))}
+                    onClick={() => safeEmit("updateMatch", (s: any) => s.pauseMatch(slotId))}
                     disabled={!live || isFinished}
                     className="inline-flex items-center gap-2 rounded-xl border-2 border-border bg-background px-6 py-3 text-lg font-bold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Pause className="size-5" /> Pause
                   </button>
                   <button
-                    onClick={() => emit("updateMatch", (s) => s.endMatch(slotId))}
+                    onClick={() => safeEmit("updateMatch", (s: any) => s.endMatch(slotId))}
                     disabled={rawMatch.status === "scheduled" || isFinished}
                     className="ml-auto inline-flex items-center gap-2 rounded-xl bg-destructive px-6 py-3 text-lg font-bold text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/85 disabled:cursor-not-allowed disabled:opacity-40 lg:ml-8"
                   >
@@ -503,12 +575,18 @@ function RefereePage() {
                   initials={teamAInfo.initials}
                   logo={teamAInfo.logo}
                   accentColor="primary"
-                  score={rawMatch.scoreA}
+                  score={optimisticScoreA}
                   penalties={rawMatch.penalties.filter(p => p.side === "A")}
                   disabled={isFinished}
-                  onDecrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "A", -1))}
-                  onIncrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "A", 1))}
-                  onPenalty={(type: PenaltyType) => emit("updateMatch", (s) => s.issuePenalty(slotId, "A", type))}
+                  onDecrement={() => {
+                    setOptimisticScoreA(prev => Math.max(0, prev - 1));
+                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "A", -1));
+                  }}
+                  onIncrement={() => {
+                    setOptimisticScoreA(prev => prev + 1);
+                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1));
+                  }}
+                  onPenalty={(type: PenaltyType) => safeEmit("updateMatch", (s: any) => s.issuePenalty(slotId, "A", type))}
                   roster={dynamicRosterA}
                   coach={dynamicCoachA}
                 />
@@ -518,12 +596,18 @@ function RefereePage() {
                   initials={teamBInfo.initials}
                   logo={teamBInfo.logo}
                   accentColor="destructive"
-                  score={rawMatch.scoreB}
+                  score={optimisticScoreB}
                   penalties={rawMatch.penalties.filter(p => p.side === "B")}
                   disabled={isFinished}
-                  onDecrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "B", -1))}
-                  onIncrement={() => emit("updateMatch", (s) => s.adjustScore(slotId, "B", 1))}
-                  onPenalty={(type: PenaltyType) => emit("updateMatch", (s) => s.issuePenalty(slotId, "B", type))}
+                  onDecrement={() => {
+                    setOptimisticScoreB(prev => Math.max(0, prev - 1));
+                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "B", -1));
+                  }}
+                  onIncrement={() => {
+                    setOptimisticScoreB(prev => prev + 1);
+                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1));
+                  }}
+                  onPenalty={(type: PenaltyType) => safeEmit("updateMatch", (s: any) => s.issuePenalty(slotId, "B", type))}
                   roster={dynamicRosterB}
                   coach={dynamicCoachB}
                 />
@@ -534,13 +618,13 @@ function RefereePage() {
 
         {/* ── Right Column: Event Feed ── */}
         {(viewMode === "control") && (
-          <div className="flex w-full flex-col gap-6 xl:w-80">
-            <div className="flex min-h-[400px] flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-card">
+          <div className="flex w-full flex-col gap-6 xl:sticky xl:top-6 xl:h-[calc(100vh-48px)] xl:w-80">
+            <div className="flex h-full flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-card">
               <div className="flex items-center justify-between border-b border-border bg-muted/50 p-4">
                 <h3 className="text-lg font-bold text-foreground">Event Feed</h3>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => emit("resetMatch", (s) => s.resetMatch(slotId))}
+                    onClick={() => safeEmit("resetMatch", (s: any) => s.resetMatch(slotId))}
                     disabled={isFinished}
                     className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
                   >
@@ -556,31 +640,86 @@ function RefereePage() {
                   </p>
                 )}
                 <ul className="space-y-1">
-                  {events.map((evt, idx) => (
-                    <li
-                      key={evt.id}
-                      className={cn(
-                        "rounded-lg p-3 transition-colors",
-                        idx === 0 ? "border border-primary/20 bg-primary/5" : "border-b border-border/20 hover:bg-muted/50"
-                      )}
-                    >
-                      <div className="mb-1 flex items-start justify-between">
-                        <span className={cn("text-[11px] font-bold uppercase tracking-wider", eventLabelColor(evt.type))}>
-                          {eventLabel(evt.type)}
-                        </span>
-                        <span className="font-mono text-[12px] text-muted-foreground">
-                          {new Date(evt.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground">{evt.message}</p>
-                    </li>
-                  ))}
+                  {events.map((evt, idx) => {
+                    let labelColor = "text-muted-foreground";
+                    let messageColor = "text-foreground";
+
+                    if (evt.type === "score_changed") {
+                      labelColor = "text-emerald-600 dark:text-emerald-500";
+                      messageColor = "text-emerald-600 dark:text-emerald-500 font-bold";
+                    } else if (evt.type === "penalty_issued") {
+                      if (evt.message.includes("Minor")) {
+                        labelColor = "text-slate-500";
+                        messageColor = "text-slate-600 dark:text-slate-400 font-bold";
+                      } else if (evt.message.includes("Major")) {
+                        labelColor = "text-yellow-600 dark:text-yellow-500";
+                        messageColor = "text-yellow-600 dark:text-yellow-500 font-bold";
+                      } else if (evt.message.includes("Technical")) {
+                        labelColor = "text-red-600 dark:text-red-500";
+                        messageColor = "text-red-600 dark:text-red-500 font-bold";
+                      }
+                    } else if (evt.type === "match_started" || evt.type === "match_resumed") {
+                      labelColor = "text-emerald-600 dark:text-emerald-500";
+                    } else if (evt.type === "match_ended") {
+                      labelColor = "text-destructive";
+                    }
+
+                    return (
+                      <li
+                        key={evt.id}
+                        className={cn(
+                          "rounded-lg p-3 transition-colors",
+                          idx === 0 ? "border border-primary/20 bg-primary/5" : "border-b border-border/20 hover:bg-muted/50"
+                        )}
+                      >
+                        <div className="mb-1 flex items-start justify-between">
+                          <span className={cn("text-[11px] font-bold uppercase tracking-wider", labelColor)}>
+                            {eventLabel(evt.type)}
+                          </span>
+                          <span className="font-mono text-[12px] text-muted-foreground">
+                            {new Date(evt.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                          </span>
+                        </div>
+                        <p className={cn("text-sm", messageColor)}>{evt.message}</p>
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             </div>
           </div>
         )}
       </div>
+
+      {/* Join Confirmation Modal */}
+      {joinConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-bold text-foreground">Change Court to Co-Officiate?</h3>
+            <p className="mb-6 text-sm text-muted-foreground">
+              You are currently assigned to <strong>Court {slotId}</strong>. This match is already active on <strong>Court {joinConfirm.slotId}</strong>. Do you want to change to Court {joinConfirm.slotId} to officiate together with the other referee?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setJoinConfirm(null)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setSlotId(joinConfirm.slotId);
+                  setViewMode("control");
+                  setJoinConfirm(null);
+                }}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90 shadow-sm"
+              >
+                Yes, Change to Court {joinConfirm.slotId}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RefereeLayout>
   );
 }
@@ -700,15 +839,5 @@ function eventLabel(type: MatchEventType): string {
     case "score_changed": return "GOAL";
     case "penalty_issued": return "PENALTY";
     default: return type;
-  }
-}
-
-function eventLabelColor(type: MatchEventType): string {
-  switch (type) {
-    case "score_changed": return "text-primary";
-    case "match_ended": return "text-destructive";
-    case "penalty_issued": return "text-warning";
-    case "match_started": case "match_resumed": return "text-success";
-    default: return "text-muted-foreground";
   }
 }

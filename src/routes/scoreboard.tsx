@@ -1,9 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Radio } from "lucide-react";
+import { ArrowLeftRight, Palette, Radio } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
-import { AVAILABLE_TEAMS, initialState, PRESENCE_TTL_MS } from "@/lib/store";
+import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
 import type { MatchSlot, Tournament } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
 
@@ -39,13 +39,6 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
-/**
- * Forces a re-render every `intervalMs` regardless of whether the shared
- * store has committed anything new. Needed because a slot's "is a control
- * page currently open?" status is time-based (its heartbeat can simply stop
- * arriving), so the scoreboard has to notice that on its own rather than
- * waiting for the next store update.
- */
 function useTick(intervalMs: number) {
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -58,9 +51,6 @@ function Scoreboard() {
   const { state, socket } = useMockWebSocket();
   useTick(1000);
 
-  // The referee and scoreboard may be open in different browser tabs, so
-  // they do not share the same in-memory store. Read the live slot rows from
-  // Supabase so score, status and referee presence stay synchronized.
   useEffect(() => {
     void socket.refreshMatchSlots();
     const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
@@ -74,31 +64,28 @@ function Scoreboard() {
   const teams = Array.isArray(state.teams) ? state.teams : [];
   const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
 
-  const now = Date.now();
+  // PURE MANUAL CONTROL: Only show courts where the referee flipped the visibility switch ON.
+  // This prevents desynced clocks or presence timeouts from infinitely displaying old matches.
+  const visibleSlots = slots.filter((slot) => slot.visibleOnScoreboard);
 
-  // A slot counts as "showable" when a referee control page is currently
-  // open on it (a recent presence heartbeat) AND the referee has left the
-  // "Show on Scoreboard" toggle on for it.
-  const openSlots = slots.filter((slot) => slot.lastActiveAt !== null && now - slot.lastActiveAt < PRESENCE_TTL_MS);
-  const visibleSlots = openSlots.filter((slot) => slot.visibleOnScoreboard);
-
-  const anyLive = visibleSlots.some((slot) => slot.match.status === "live");
+  // Properly check if any visible slot's match status is live or paused
+  const anyLive = visibleSlots.some((slot) => slot.match.status === "live" || slot.match.status === "paused");
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900">
-      <header className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-4 shadow-sm">
+    <div className="flex min-h-screen flex-col bg-background font-sans text-foreground">
+      <header className="flex items-center justify-between border-b border-border bg-background px-6 py-4 shadow-sm">
         <div className="flex items-center gap-6">
-          <h1 className="text-xl font-bold uppercase tracking-tight text-teal-800">
+          <h1 className="text-xl font-bold uppercase tracking-tight text-foreground">
             Drone Soccer Arena
           </h1>
           <div className="hidden items-center gap-2 md:flex">
-            <span className={cn("flex h-2 w-2 rounded-full", anyLive ? "animate-pulse bg-teal-500" : "bg-slate-300")}></span>
-            <span className={cn("text-xs font-bold uppercase tracking-widest", anyLive ? "text-teal-700" : "text-slate-400")}>
+            <span className={cn("flex h-2 w-2 rounded-full", anyLive ? "animate-pulse bg-primary" : "bg-muted-foreground")} />
+            <span className={cn("text-xs font-bold uppercase tracking-widest", anyLive ? "text-primary" : "text-muted-foreground")}>
               {anyLive ? "Live" : "Standby"}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-slate-400">
+        <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
           <Radio className="size-4" strokeWidth={2.5} />
           <span>{visibleSlots.length === 2 ? "2 Courts" : visibleSlots.length === 1 ? "1 Court" : "No Court Open"}</span>
         </div>
@@ -129,10 +116,10 @@ function Scoreboard() {
 
 function EmptyBoardState() {
   return (
-    <div className="mt-16 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-slate-200 bg-white p-16 text-center shadow-sm">
-      <span className="flex h-3 w-3 rounded-full bg-slate-300" />
-      <h2 className="text-xl font-bold uppercase tracking-widest text-slate-500">Waiting for a match</h2>
-      <p className="max-w-sm text-sm text-slate-400">
+    <div className="mt-16 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-background p-16 text-center shadow-sm">
+      <span className="flex h-3 w-3 rounded-full bg-muted-foreground/30" />
+      <h2 className="text-xl font-bold uppercase tracking-widest text-muted-foreground">Waiting for a match</h2>
+      <p className="max-w-sm text-sm text-muted-foreground/80">
         Open Match Control on the referee dashboard and switch on "Show on Scoreboard" for a court to see it appear here.
         Up to two courts can be shown at once.
       </p>
@@ -140,7 +127,7 @@ function EmptyBoardState() {
   );
 }
 
-// --- MATCH BOARD (one court's full scoreboard) ---
+// --- MATCH BOARD ---
 
 function MatchBoard({
   slot,
@@ -154,6 +141,8 @@ function MatchBoard({
   size: "full" | "split";
 }) {
   const [isSwapped, setIsSwapped] = useState(false);
+  const [colorScheme, setColorScheme] = useState<"default" | "swappedColors">("default");
+
   const isFull = size === "full";
 
   const m = slot.match;
@@ -183,64 +172,56 @@ function MatchBoard({
   const clockTextClass = isFull ? "text-7xl" : "text-5xl";
   const panelPadding = isFull ? "p-8" : "p-5";
 
-  const TeamAPanel = (
-    <div className={cn("relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm", panelPadding)}>
-      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
-        {teamAInfo.logo ? (
-          <img src={teamAInfo.logo} className="h-full w-full object-contain opacity-40 grayscale mix-blend-multiply" alt="" />
-        ) : (
-          <span className={cn("font-black leading-none text-slate-800 opacity-[0.09]", watermarkTextClass)}>{teamAInfo.initials}</span>
-        )}
-      </div>
-      <h3 className={cn("relative z-10 font-bold text-teal-700", isFull ? "text-xl" : "text-base")}>{m.teamAName}</h3>
-      <p className={cn("relative z-10 mt-4 font-mono font-bold leading-none tabular-nums text-slate-800", scoreTextClass)}>
-        {m.scoreA.toString().padStart(2, '0')}
-      </p>
-      <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
-        {penaltiesA.isDisqualified ? (
-          <span className="rounded bg-red-100 px-4 py-1 text-sm font-bold tracking-widest text-red-700 border border-red-200">DISQUALIFIED</span>
-        ) : (
-          penaltiesA.badges.map((b, i) => (
-            <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-yellow-400" : "bg-slate-300")} />
-          ))
-        )}
-      </div>
-    </div>
-  );
+  const leftColorType = colorScheme === "default" ? "primary" : "destructive";
+  const rightColorType = colorScheme === "default" ? "destructive" : "primary";
 
-  const TeamBPanel = (
-    <div className={cn("relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm", panelPadding)}>
-      <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
-        {teamBInfo.logo ? (
-          <img src={teamBInfo.logo} className="h-full w-full object-contain opacity-40 grayscale mix-blend-multiply" alt="" />
-        ) : (
-          <span className={cn("font-black leading-none text-slate-800 opacity-[0.09]", watermarkTextClass)}>{teamBInfo.initials}</span>
-        )}
+  const leftTeamName = isSwapped ? m.teamBName : m.teamAName;
+  const leftScore = isSwapped ? m.scoreB : m.scoreA;
+  const leftInfo = isSwapped ? teamBInfo : teamAInfo;
+  const leftPenalties = isSwapped ? penaltiesB : penaltiesA;
+
+  const rightTeamName = isSwapped ? m.teamAName : m.teamBName;
+  const rightScore = isSwapped ? m.scoreA : m.scoreB;
+  const rightInfo = isSwapped ? teamAInfo : teamBInfo;
+  const rightPenalties = isSwapped ? penaltiesA : penaltiesB;
+
+  const renderTeamPanel = (teamName: string, score: number, info: any, penalties: any, colorType: "primary" | "destructive") => {
+    const textColorClass = colorType === "primary" ? "text-primary" : "text-destructive";
+
+    return (
+      <div className={cn("relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm", panelPadding)}>
+        <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
+          {info.logo ? (
+            <img src={info.logo} className="h-full w-full object-contain opacity-[0.15] grayscale" alt="" />
+          ) : (
+            <span className={cn("font-black leading-none text-foreground opacity-[0.05]", watermarkTextClass)}>{info.initials}</span>
+          )}
+        </div>
+        <h3 className={cn("relative z-10 font-bold", textColorClass, isFull ? "text-xl" : "text-base")}>{teamName}</h3>
+        <p className={cn("relative z-10 mt-4 font-mono font-bold leading-none tabular-nums text-foreground", scoreTextClass)}>
+          {score.toString().padStart(2, '0')}
+        </p>
+        <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
+          {penalties.isDisqualified ? (
+            <span className="rounded bg-destructive/10 px-4 py-1 text-sm font-bold tracking-widest text-destructive border border-destructive/20">DISQUALIFIED</span>
+          ) : (
+            penalties.badges.map((b: string, i: number) => (
+              <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
+            ))
+          )}
+        </div>
       </div>
-      <h3 className={cn("relative z-10 font-bold text-orange-600", isFull ? "text-xl" : "text-base")}>{m.teamBName}</h3>
-      <p className={cn("relative z-10 mt-4 font-mono font-bold leading-none tabular-nums text-slate-800", scoreTextClass)}>
-        {m.scoreB.toString().padStart(2, '0')}
-      </p>
-      <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
-        {penaltiesB.isDisqualified ? (
-          <span className="rounded bg-red-100 px-4 py-1 text-sm font-bold tracking-widest text-red-700 border border-red-200">DISQUALIFIED</span>
-        ) : (
-          penaltiesB.badges.map((b, i) => (
-            <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-yellow-400" : "bg-slate-300")} />
-          ))
-        )}
-      </div>
-    </div>
-  );
+    );
+  };
 
   const EventLogPanel = (
-    <div className="flex flex-col overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm">
-      <div className="border-b border-slate-200 bg-slate-100 px-4 py-3">
-        <h3 className="text-xs font-bold uppercase tracking-widest text-slate-600">Event Log</h3>
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-background shadow-sm">
+      <div className="border-b border-border bg-muted/30 px-4 py-3">
+        <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Event Log</h3>
       </div>
       <div className="flex flex-col gap-3 overflow-hidden p-4">
         {events.length === 0 ? (
-          <p className="py-6 text-center text-sm text-slate-400">No match events yet.</p>
+          <p className="py-6 text-center text-sm text-muted-foreground">No match events yet.</p>
         ) : (
           events.slice(0, isFull ? 4 : 3).map((evt) => {
             const isTeamA = m.teamAName && evt.message.includes(m.teamAName);
@@ -282,36 +263,46 @@ function MatchBoard({
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-teal-50 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-teal-700">
-          <span className={cn("h-1.5 w-1.5 rounded-full", (m.status === "live") ? "animate-pulse bg-teal-500" : "bg-slate-300")} />
+        <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
+          <span className={cn("h-1.5 w-1.5 rounded-full", (m.status === "live" || m.status === "paused") ? "animate-pulse bg-primary" : "bg-muted-foreground")} />
           Court {slot.slotId}
         </span>
-        <button
-          onClick={() => setIsSwapped(!isSwapped)}
-          className="flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
-          title="Swap team sides visually"
-        >
-          <ArrowLeftRight className="size-4" strokeWidth={2.5} />
-          <span>Swap Sides</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setColorScheme(colorScheme === "default" ? "swappedColors" : "default")}
+            className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Toggle panel color (Blue / Red)"
+          >
+            <Palette className="size-4" strokeWidth={2.5} />
+            <span>Swap Color</span>
+          </button>
+          <button
+            onClick={() => setIsSwapped(!isSwapped)}
+            className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-xs font-bold uppercase tracking-widest text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Swap team sides visually"
+          >
+            <ArrowLeftRight className="size-4" strokeWidth={2.5} />
+            <span>Swap Sides</span>
+          </button>
+        </div>
       </div>
 
       <div className="text-center">
-        <h2 className={cn("font-bold uppercase tracking-widest text-teal-800", isFull ? "text-3xl" : "text-xl")}>{matchTitle}</h2>
-        <p className="mt-1 text-sm font-semibold uppercase tracking-widest text-slate-500">{tournamentName}</p>
+        <h2 className={cn("font-bold uppercase tracking-widest text-foreground", isFull ? "text-3xl" : "text-xl")}>{matchTitle}</h2>
+        <p className="mt-1 text-sm font-semibold uppercase tracking-widest text-muted-foreground">{tournamentName}</p>
       </div>
 
-      <div className="flex flex-col items-center justify-center rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
-        <p className={cn("font-mono font-bold tabular-nums text-slate-800", clockTextClass)}>
+      <div className="flex flex-col items-center justify-center rounded-xl border border-border bg-background p-6 shadow-sm">
+        <p className={cn("font-mono font-bold tabular-nums text-destructive", clockTextClass)}>
           {formatClock(remainingMs)}
         </p>
-        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-red-400">Time Remaining</p>
+        <p className="mt-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">Time Remaining</p>
       </div>
 
       <div className={cn("grid gap-6", isFull ? "md:grid-cols-[1fr_2fr_1fr]" : "sm:grid-cols-2")}>
-        {isSwapped ? TeamBPanel : TeamAPanel}
+        {renderTeamPanel(leftTeamName, leftScore, leftInfo, leftPenalties, leftColorType)}
         {isFull && EventLogPanel}
-        {isSwapped ? TeamAPanel : TeamBPanel}
+        {renderTeamPanel(rightTeamName, rightScore, rightInfo, rightPenalties, rightColorType)}
       </div>
 
       {!isFull && EventLogPanel}
@@ -322,22 +313,22 @@ function MatchBoard({
 // --- UTILITY UI COMPONENTS ---
 
 function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal' | 'penalty' | 'system', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center' }) {
-  let colorClass = 'border-slate-200 text-slate-500 bg-slate-50';
-  let indicatorColor = 'text-slate-400';
+  let colorClass = 'border-border text-foreground bg-background';
+  let indicatorColor = 'text-muted-foreground';
 
   if (type === 'goal') {
-    colorClass = 'border-green-400 text-green-800 bg-green-50/50';
-    indicatorColor = 'text-green-500';
+    colorClass = 'border-emerald-500/30 text-emerald-700 dark:text-emerald-500 bg-emerald-500/10 font-bold';
+    indicatorColor = 'text-emerald-600 dark:text-emerald-500';
   } else if (type === 'penalty') {
     if (penaltyLevel === 'warning') {
-      colorClass = 'border-slate-300 text-slate-700 bg-white';
+      colorClass = 'border-slate-400/30 text-slate-700 dark:text-slate-300 bg-slate-500/10 font-bold';
       indicatorColor = 'text-slate-500';
     } else if (penaltyLevel === 'yellow') {
-      colorClass = 'border-yellow-400 text-yellow-800 bg-yellow-50';
-      indicatorColor = 'text-yellow-500';
+      colorClass = 'border-yellow-500/40 text-yellow-700 dark:text-yellow-500 bg-yellow-500/10 font-bold';
+      indicatorColor = 'text-yellow-600 dark:text-yellow-500';
     } else if (penaltyLevel === 'red') {
-      colorClass = 'border-red-400 text-red-800 bg-red-50';
-      indicatorColor = 'text-red-600';
+      colorClass = 'border-red-500/30 text-red-700 dark:text-red-500 bg-red-500/10 font-bold';
+      indicatorColor = 'text-red-600 dark:text-red-500';
     }
   }
 
@@ -348,7 +339,7 @@ function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal
       </div>
 
       <div className="flex-1 text-center">
-        <p className="text-sm font-bold uppercase tracking-wide">
+        <p className="text-sm uppercase tracking-wide">
           {message}
         </p>
         <p className="mt-1 text-xs opacity-75">{time}</p>

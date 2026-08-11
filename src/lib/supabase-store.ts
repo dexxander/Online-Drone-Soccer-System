@@ -40,9 +40,8 @@ export function toCamel(obj: any): any {
   );
 }
 
-// ─── ID + bracket helpers (self-contained, no store.ts import) ──────────────
+// ─── ID + bracket helpers ───────────────────────────────────────────────────
 
-// All application IDs map to Supabase uuid columns.
 const uid = () => {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -220,7 +219,7 @@ export const emptyState: AppState = {
   auditLogs: [],
 };
 
-// ─── DataStore interface (inlined to avoid circular import) ─────────────────
+// ─── DataStore interface ────────────────────────────────────────────────────
 
 export interface DataStore {
   getState(): AppState;
@@ -322,7 +321,7 @@ export class SupabaseStore implements DataStore {
       this.notify();
     } catch (e) {
       console.error("Supabase hydration failed", e);
-      this.hydrated = false; // allow a retry on next subscribe() instead of getting stuck on emptyState forever
+      this.hydrated = false; 
       this.hydrationError = e instanceof Error ? e.message : String(e);
       this.notify();
     }
@@ -365,7 +364,9 @@ export class SupabaseStore implements DataStore {
     const primary = matches[0];
     this.commit({ ...this.state, matches, match: primary.match, events: primary.events });
     const changedSlot = matches.find((slot) => slot.slotId === slotId)!;
-    this.persistMatchSlot(changedSlot);
+    
+    // Core state DB save
+    if (patch.match !== undefined) this.persistMatchSlot(changedSlot);
     if (patch.events !== undefined) this.persistMatchEvents(changedSlot.slotId, changedSlot.events);
     if (patch.match !== undefined) this.persistMatchPenalties(changedSlot.slotId, changedSlot.match.penalties);
   }
@@ -433,23 +434,19 @@ export class SupabaseStore implements DataStore {
     this.notify();
   }
 
+  // =====================================================================================
+  // CRITICAL FIX 1: Removed scores and `.single()` from full row payload
+  // =====================================================================================
   private persistMatchSlot(slot: MatchSlot) {
     const row = {
-      slot_id: slot.slotId,
       tournament_match_id: slot.match.id,
       team_a_name: slot.match.teamAName,
       team_b_name: slot.match.teamBName,
-      score_a: slot.match.scoreA,
-      score_b: slot.match.scoreB,
       status: slot.match.status,
       elapsed_ms: slot.match.elapsedMs,
       running_since: slot.match.runningSince,
-      visible_on_scoreboard: slot.visibleOnScoreboard,
-      last_active_at: slot.lastActiveAt,
     };
-    // The schema seeds slots 1 and 2 and grants referees UPDATE access. Use
-    // UPDATE instead of upsert so RLS does not require INSERT permission.
-    this.persist('match slot update', () => supabase.from('match_slots').update(row).eq('slot_id', slot.slotId).select('slot_id').single());
+    this.persist('match slot update', () => supabase.from('match_slots').update(row).eq('slot_id', slot.slotId));
   }
 
   private persistMatchEvents(slotId: MatchSlotId, events: MatchEvent[]) {
@@ -487,7 +484,7 @@ export class SupabaseStore implements DataStore {
     return [event, ...events].slice(0, 50);
   }
 
-  // ─── Teams ──────────────────────────────────────────────────────────────
+  // ─── Teams & Tournaments ────────────────────────────────────────────────────────
 
   addTeam(input: Omit<Team, "id" | "status" | "createdAt">) {
     const team: Team = { ...input, id: uid(), status: "pending", createdAt: Date.now() };
@@ -549,8 +546,6 @@ export class SupabaseStore implements DataStore {
     this.logAudit("Team deleted", currentAuditActor(), id, "Team");
   }
 
-  // ─── Tournaments ────────────────────────────────────────────────────────
-
   createTournament(
     name: string,
     teamIds: string[],
@@ -600,7 +595,6 @@ export class SupabaseStore implements DataStore {
 
     this.commit({ ...this.state, tournaments: [tournament, ...this.state.tournaments] });
 
-    // Persist to Supabase
     const mapped = toSnake({ ...tournament });
     const tMatches = (mapped.matches || []).map((m: any) => ({ ...m, tournament_id: mapped.id }));
     delete mapped.matches;
@@ -673,7 +667,6 @@ export class SupabaseStore implements DataStore {
     });
     this.commit({ ...this.state, tournaments });
 
-    // Sync all affected matches to Supabase
     const t = tournaments.find(x => x.id === tournamentId);
     if (t) {
       const newMatches = t.matches.filter((m) => !previousMatchIds.has(m.id));
@@ -702,6 +695,8 @@ export class SupabaseStore implements DataStore {
     }
     const match: Match = defaultMatch(tournamentMatchId, teamAName, teamBName);
     this.commitSlot(slotId, { match, events: [] });
+    // Reset DB Scores directly
+    this.persist('reset scores', () => supabase.from('match_slots').update({ score_a: 0, score_b: 0 }).eq('slot_id', slotId));
   }
 
   startMatch(slotId: MatchSlotId) {
@@ -742,7 +737,6 @@ export class SupabaseStore implements DataStore {
     const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, match, events: nextEvents } : s)) as [MatchSlot, MatchSlot];
     const nextState: AppState = { ...this.state, matches, match: matches[0].match, events: matches[0].events };
 
-    // Advance winner in tournament
     nextState.tournaments = nextState.tournaments.map((t) => {
       const tMatch = t.matches.find((tm) => tm.id === match.id);
       if (tMatch && !tMatch.winnerId && tMatch.phase !== "group") {
@@ -758,7 +752,6 @@ export class SupabaseStore implements DataStore {
       return t;
     });
 
-    // Archive
     this.matchArchive[match.id] = { match, events: nextEvents };
 
     this.commit(nextState);
@@ -767,6 +760,9 @@ export class SupabaseStore implements DataStore {
     this.persistMatchEvents(slotId, nextEvents);
   }
 
+  // =====================================================================================
+  // CRITICAL FIX 2: ATOMIC RPC SCORE INCREMENTS
+  // =====================================================================================
   adjustScore(slotId: MatchSlotId, side: "A" | "B", delta: number) {
     const slot = this.getSlot(slotId);
     const m = slot.match;
@@ -774,8 +770,20 @@ export class SupabaseStore implements DataStore {
     const value = Math.max(0, m[key] + delta);
     const match: Match = { ...m, [key]: value } as Match;
     const name = side === "A" ? m.teamAName : m.teamBName;
-    const events = this.log("score_changed", `${name} score ${delta > 0 ? "+" : "-"}1 (now ${value})`, match.id, slot.events);
-    this.commitSlot(slotId, { match, events });
+    const events = this.log("score_changed", `${name} score ${delta > 0 ? "+" : "-"}1`, match.id, slot.events);
+    
+    // Update local state instantly so the referee doesn't feel a delay
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, match, events } : s)) as [MatchSlot, MatchSlot];
+    this.commit({ ...this.state, matches, match: matches[0].match, events: matches[0].events });
+
+    // Send targeted atomic update to DB
+    this.persist('atomic score update', () => supabase.rpc('increment_slot_score', {
+      p_slot_id: slotId,
+      p_side: side,
+      p_delta: delta
+    }));
+    
+    this.persistMatchEvents(slotId, events);
   }
 
   issuePenalty(slotId: MatchSlotId, side: "A" | "B", type: PenaltyType) {
@@ -794,20 +802,31 @@ export class SupabaseStore implements DataStore {
     const slot = this.getSlot(slotId);
     const match: Match = { ...slot.match, scoreA: 0, scoreB: 0, status: "scheduled", elapsedMs: 0, runningSince: null, penalties: [] };
     this.commitSlot(slotId, { match, events: [] });
+    // Reset DB Scores directly
+    this.persist('reset scores', () => supabase.from('match_slots').update({ score_a: 0, score_b: 0 }).eq('slot_id', slotId));
   }
 
+  // =====================================================================================
+  // CRITICAL FIX 3: TARGETED DB PATCHES FOR PRESENCE & VISIBILITY
+  // =====================================================================================
   setSlotVisibility(slotId: MatchSlotId, visible: boolean) {
-    this.commitSlot(slotId, { visibleOnScoreboard: visible });
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, visibleOnScoreboard: visible } : s)) as [MatchSlot, MatchSlot];
+    this.commit({ ...this.state, matches });
+    this.persist('visibility update', () => supabase.from('match_slots').update({ visible_on_scoreboard: visible }).eq('slot_id', slotId));
   }
 
   touchSlotPresence(slotId: MatchSlotId) {
-    this.commitSlot(slotId, { lastActiveAt: Date.now() });
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, lastActiveAt: Date.now() } : s)) as [MatchSlot, MatchSlot];
+    this.commit({ ...this.state, matches });
+    this.persist('presence update', () => supabase.from('match_slots').update({ last_active_at: Date.now() }).eq('slot_id', slotId));
   }
 
   releaseSlotPresence(slotId: MatchSlotId) {
     const slot = this.getSlot(slotId);
     if (slot.lastActiveAt === null) return;
-    this.commitSlot(slotId, { lastActiveAt: null });
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, lastActiveAt: null } : s)) as [MatchSlot, MatchSlot];
+    this.commit({ ...this.state, matches });
+    this.persist('presence release', () => supabase.from('match_slots').update({ last_active_at: null }).eq('slot_id', slotId));
   }
 
   // ─── Announcements ─────────────────────────────────────────────────────
