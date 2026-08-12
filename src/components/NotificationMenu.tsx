@@ -4,7 +4,6 @@ import {
   Bell,
   CheckCircle2,
   XCircle,
-  Clock,
   Trophy,
   Zap,
   Radio,
@@ -28,7 +27,7 @@ export interface CoachNotification {
   type:
     | "team_approved"
     | "team_rejected"
-    | "team_pending"
+    | "player_approved"
     | "tournament_joined"
     | "tournament_started"
     | "match_live"
@@ -97,17 +96,21 @@ export function NotificationMenu() {
           link: "/register-team",
           read: readIds.has(`team-rejected-${team.id}`),
         });
-      } else if (team.status === "pending") {
-        list.push({
-          id: `team-pending-${team.id}`,
-          title: "Team Registration Pending",
-          message: `Registration for "${team.name}" is pending admin review.`,
-          type: "team_pending",
-          timestamp: team.createdAt || Date.now() - 7200000,
-          link: "/register-team",
-          read: readIds.has(`team-pending-${team.id}`),
-        });
       }
+
+      (state.players || [])
+        .filter((player) => player.teamId === team.id && player.status === "approved")
+        .forEach((player) => {
+          list.push({
+            id: `player-approved-${player.id}`,
+            title: "Player Approved!",
+            message: `Player "${player.name}" on "${team.name}" has been approved by the league administration.`,
+            type: "player_approved",
+            timestamp: player.createdAt || Date.now() - 3600000,
+            link: "/register-team",
+            read: readIds.has(`player-approved-${player.id}`),
+          });
+        });
 
       // 2. Tournament Joined & Active Notifications for team
       (state.tournaments || []).forEach((t) => {
@@ -256,7 +259,7 @@ export function NotificationMenu() {
               const iconMap = {
                 team_approved: <CheckCircle2 className="size-4 text-emerald-500" />,
                 team_rejected: <XCircle className="size-4 text-destructive" />,
-                team_pending: <Clock className="size-4 text-amber-500" />,
+                player_approved: <CheckCircle2 className="size-4 text-emerald-500" />,
                 tournament_joined: <Trophy className="size-4 text-primary" />,
                 tournament_started: <Zap className="size-4 text-amber-500 animate-bounce" />,
                 match_live: <Radio className="size-4 text-destructive animate-pulse" />,

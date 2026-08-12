@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { LogoMark } from "@/components/LogoMark";
+import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 
 type NavItem = {
   label: string;
@@ -49,6 +50,9 @@ export function DashboardLayout({
 }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
+  const { state } = useMockWebSocket();
+  const pendingTeams = state.teams.filter((team) => team.status === "pending").length;
+  const pendingPlayers = state.players.filter((player) => player.status === "pending").length;
 
   const signOut = () => {
     auth.logout();
@@ -78,7 +82,17 @@ export function DashboardLayout({
               const inner = (
                 <>
                   <item.icon className="size-[18px]" strokeWidth={1.8} />
-                  {item.label}
+                  <span>{item.label}</span>
+                  {item.label === "Teams" && pendingTeams > 0 && (
+                    <span className="ml-auto rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning">
+                      ({pendingTeams})
+                    </span>
+                  )}
+                  {item.label === "Players" && pendingPlayers > 0 && (
+                    <span className="ml-auto rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning">
+                      ({pendingPlayers})
+                    </span>
+                  )}
                 </>
               );
               return item.to ? (

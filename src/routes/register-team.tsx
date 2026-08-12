@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Trash2, CheckCircle2, Pencil, X, Check } from "lucide-react";
 import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationMenu } from "@/components/NotificationMenu";
@@ -64,6 +64,12 @@ function RegisterTeamPage() {
   const [players, setPlayers] = useState<PlayerDraft[]>([emptyPlayer(), emptyPlayer(), emptyPlayer()]);
   const [error, setError] = useState("");
   const [justSubmitted, setJustSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (!justSubmitted) return;
+    const timeout = window.setTimeout(() => setJustSubmitted(false), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [justSubmitted]);
 
   const myTeams: Team[] = user ? state.teams.filter((t) => t.ownerId === user.id) : [];
 
@@ -152,7 +158,10 @@ function RegisterTeamPage() {
         </p>
 
       {justSubmitted && (
-        <div className="mt-6 flex items-center gap-3 rounded-xl border border-success/25 bg-success-soft px-5 py-4 text-sm font-medium text-success">
+        <div
+          role="status"
+          className="fixed right-6 top-20 z-50 flex max-w-sm items-center gap-3 rounded-xl border border-success/25 bg-background px-5 py-4 text-sm font-medium text-success shadow-card"
+        >
           <CheckCircle2 className="size-5 shrink-0" />
           Team registered successfully — it is now waiting for admin approval.
         </div>
