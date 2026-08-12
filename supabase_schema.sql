@@ -226,12 +226,17 @@ CREATE POLICY "Admins can insert audit logs" ON public.audit_logs FOR INSERT WIT
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
 BEGIN
-  INSERT INTO public.users (id, name, email, role)
+  INSERT INTO public.users (id, name, email, role, status)
   VALUES (
     new.id,
     COALESCE(new.raw_user_meta_data->>'name', 'New User'),
     new.email,
-    COALESCE((new.raw_user_meta_data->>'role')::user_role, 'user'::user_role)
+    COALESCE((new.raw_user_meta_data->>'role')::user_role, 'user'::user_role),
+    CASE
+      WHEN COALESCE((new.raw_user_meta_data->>'role')::user_role, 'user'::user_role) = 'referee'::user_role
+        THEN 'pending'
+      ELSE 'active'
+    END
   );
   RETURN new;
 END;

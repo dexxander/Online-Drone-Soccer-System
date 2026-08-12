@@ -83,6 +83,11 @@ export const auth = {
       await supabase.auth.signOut();
       throw new Error("Your account has been suspended. Please contact an administrator.");
     }
+
+    if (userRow?.role === "referee" && userRow?.status === "pending") {
+      await supabase.auth.signOut();
+      throw new Error("Your account is pending approval. Please wait for an administrator to approve your referee account.");
+    }
     
     // If the database returns null or there's an error, fallback to 'user'
     const role = userRow?.role || 'user';

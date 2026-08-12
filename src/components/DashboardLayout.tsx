@@ -53,6 +53,7 @@ export function DashboardLayout({
   const { state } = useMockWebSocket();
   const pendingTeams = state.teams.filter((team) => team.status === "pending").length;
   const pendingPlayers = state.players.filter((player) => player.status === "pending").length;
+  const pendingReferees = state.users.filter((user) => user.role === "referee" && user.status === "pending").length;
 
   const signOut = () => {
     auth.logout();
@@ -84,13 +85,18 @@ export function DashboardLayout({
                   <item.icon className="size-[18px]" strokeWidth={1.8} />
                   <span>{item.label}</span>
                   {item.label === "Teams" && pendingTeams > 0 && (
-                    <span className="ml-auto rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning">
+                    <span className="ml-auto animate-pulse rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning transition-all duration-200 hover:scale-110 hover:bg-warning/25 hover:shadow-sm">
                       ({pendingTeams})
                     </span>
                   )}
                   {item.label === "Players" && pendingPlayers > 0 && (
-                    <span className="ml-auto rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning">
+                    <span className="ml-auto animate-pulse rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning transition-all duration-200 hover:scale-110 hover:bg-warning/25 hover:shadow-sm">
                       ({pendingPlayers})
+                    </span>
+                  )}
+                  {item.label === "Users" && pendingReferees > 0 && (
+                    <span className="ml-auto animate-pulse rounded-full bg-warning/15 px-1.5 py-0.5 text-[11px] font-bold text-warning transition-all duration-200 hover:scale-110 hover:bg-warning/25 hover:shadow-sm">
+                      ({pendingReferees})
                     </span>
                   )}
                 </>
