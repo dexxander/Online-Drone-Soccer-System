@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { ShieldCheck, Lock, KeyRound } from "lucide-react";
 import { auth, homeForRole, store } from "@/lib/store";
+import { LogoMark } from "@/components/LogoMark";
 
 export const Route = createFileRoute("/admin-login")({
   head: () => ({
@@ -74,9 +75,7 @@ function HiddenAdminAuthPage() {
       <div className="w-full max-w-md space-y-6">
         {/* Brand Header */}
         <Link to="/" className="flex items-center justify-center gap-3 group">
-          <span className="flex size-10 items-center justify-center rounded-xl bg-primary text-sm font-bold text-primary-foreground shadow-lift">
-            DS
-          </span>
+          <LogoMark className="size-10 shadow-lift" />
           <div className="text-left">
             <span className="block text-sm font-extrabold text-foreground">DRONE SOCCER</span>
             <span className="block font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-primary">

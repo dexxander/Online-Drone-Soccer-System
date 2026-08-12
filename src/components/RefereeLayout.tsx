@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
 import type { Match, MatchSlotId } from "@/lib/types";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
+import { LogoMark } from "@/components/LogoMark";
 
 function getMatchTitle(round: number, maxRound: number) {
   if (maxRound === 1) return "Exhibition Match";
@@ -37,9 +38,9 @@ export function RefereeLayout({ children, match, slotId }: { children: ReactNode
         <div className="flex items-center gap-4">
           <Link
             to="/"
-            className="mr-2 flex size-10 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground"
+            className="mr-2 flex size-10 items-center justify-center"
           >
-            DS
+            <LogoMark className="size-10" />
           </Link>
           <h1 className="hidden text-2xl font-bold tracking-tight text-foreground lg:block">
             {tournamentName}

@@ -21,6 +21,7 @@ import {
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationMenu } from "@/components/NotificationMenu";
+import { LogoMark } from "@/components/LogoMark";
 import type { Tournament } from "@/lib/types";
 
 export const Route = createFileRoute("/tickets")({
@@ -104,9 +105,7 @@ export function TicketsPage() {
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
           <Link to="/" className="flex items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-lift">
-              DS
-            </span>
+            <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
               <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">

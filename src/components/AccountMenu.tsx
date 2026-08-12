@@ -43,6 +43,7 @@ export function AccountMenu() {
 
   useEffect(() => {
     setUser(auth.current());
+    return auth.subscribe(() => setUser(auth.current()));
   }, []);
 
   if (!user) {

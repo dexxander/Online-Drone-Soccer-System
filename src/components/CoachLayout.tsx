@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import { NotificationMenu } from "./NotificationMenu";
+import { LogoMark } from "@/components/LogoMark";
 
 type NavItem = {
   label: string;
@@ -28,9 +29,7 @@ export function CoachLayout({ children }: { children: ReactNode }) {
       <div className="flex min-h-screen">
         <aside className="hidden w-64 shrink-0 flex-col border-r border-border bg-background lg:flex">
           <Link to="/" className="flex items-center gap-3 border-b border-border px-5 py-4">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-              DS
-            </span>
+            <LogoMark />
             <span className="leading-tight">
               <span className="block text-sm font-bold text-foreground">Drone Soccer</span>
               <span className="block text-xs text-muted-foreground">Coach Portal</span>
@@ -69,9 +68,7 @@ export function CoachLayout({ children }: { children: ReactNode }) {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex h-[61px] items-center justify-between border-b border-border bg-background px-6">
             <Link to="/" className="flex items-center gap-2 lg:hidden">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
-                DS
-              </span>
+              <LogoMark className="size-8" />
               <span className="text-sm font-bold">Drone Soccer</span>
             </Link>
             <div className="hidden lg:block" />

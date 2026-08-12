@@ -2,6 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { auth, homeForRole } from "@/lib/store";
 import type { UserRole } from "@/lib/types";
+import { LogoMark } from "@/components/LogoMark";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -96,9 +97,7 @@ export function AuthShell({
     <div className="flex min-h-screen items-center justify-center bg-surface px-4 py-12">
       <div className="w-full max-w-md">
         <Link to="/" className="mb-8 flex items-center justify-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-            DS
-          </span>
+          <LogoMark />
           <span className="text-sm font-bold">Drone Soccer League Control</span>
         </Link>
         <div className="rounded-2xl border border-border bg-background p-7 shadow-card">

@@ -41,6 +41,13 @@ export const rosterB = [
 export const coachB = "M. Rossi";
 
 const AUTH_KEY = "ds-league-auth-v1";
+const AUTH_CHANGE_EVENT = "ds-league-auth-change";
+
+function notifyAuthChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event(AUTH_CHANGE_EVENT));
+  }
+}
 
 export function detectRoleForEmail(email: string): UserRole {
   const normalized = email.trim().toLowerCase();
@@ -79,6 +86,7 @@ export const auth = {
       token: data.session.access_token,
     };
     window.localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+    notifyAuthChange();
     return user;
   },
   async register(email: string, name: string, role: string, password?: string) {
@@ -103,9 +111,20 @@ export const auth = {
       return null;
     }
   },
+  subscribe(listener: () => void) {
+    if (typeof window === "undefined") return () => undefined;
+    const handleChange = () => listener();
+    window.addEventListener(AUTH_CHANGE_EVENT, handleChange);
+    window.addEventListener("storage", handleChange);
+    return () => {
+      window.removeEventListener(AUTH_CHANGE_EVENT, handleChange);
+      window.removeEventListener("storage", handleChange);
+    };
+  },
   async logout() {
-    await supabase.auth.signOut();
     window.localStorage.removeItem(AUTH_KEY);
+    notifyAuthChange();
+    await supabase.auth.signOut();
   },
 };
 

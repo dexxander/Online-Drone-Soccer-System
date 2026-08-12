@@ -5,6 +5,7 @@ import * as THREE from "three";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationMenu } from "@/components/NotificationMenu";
+import { LogoMark } from "@/components/LogoMark";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -57,15 +58,21 @@ const flow = [
 ];
 
 function Landing() {
+  const { state } = useMockWebSocket();
+  const registeredClubs = state.teams.length;
+  const matchesOfficiated = state.matches.reduce(
+    (total, slot) => total + slot.events.filter((event) => event.type === "match_ended").length,
+    0,
+  );
+  const activeTournaments = state.tournaments.filter((tournament) => tournament.status === "active").length;
+
   return (
     <div className="min-h-screen bg-surface">
       {/* ── Nav ── */}
       <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
         <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
           <Link to="/" className="flex items-center gap-3">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground shadow-lift">
-              DS
-            </span>
+            <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
               <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
@@ -146,9 +153,9 @@ function Landing() {
       {/* ── Stat strip ── */}
       <section className="border-b border-border bg-background">
         <div className="mx-auto grid w-full max-w-6xl grid-cols-2 divide-x divide-border sm:grid-cols-4">
-          <Stat value="null" label="Registered clubs" />
-          <Stat value="null" label="Matches officiated" />
-          <Stat value="null" label="Arena displays" />
+          <Stat value={String(registeredClubs)} label="Registered clubs" />
+          <Stat value={String(matchesOfficiated)} label="Matches officiated" />
+          <Stat value={String(activeTournaments)} label="Active tournaments" />
           <div className="flex flex-col justify-center px-6 py-6">
             <span className="inline-flex items-center gap-2 font-mono text-2xl font-bold tabular-nums text-warning">
               <span className="size-2 rounded-full bg-warning shadow-[0_0_8px_2px_var(--color-warning)]" />
