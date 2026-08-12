@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Palette, Radio } from "lucide-react";
+import { ArrowLeftRight, Palette, Radio, Trophy } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
@@ -37,7 +37,6 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
-// Intercept the event feed to figure out what phase the match is currently in
 function getCurrentPhase(events: any[]) {
   const phaseEvent = events.find((e) => e.message.startsWith("PHASE_CHANGE:"));
   return phaseEvent ? phaseEvent.message.replace("PHASE_CHANGE:", "") : "Testing";
@@ -58,7 +57,18 @@ function Scoreboard() {
   useEffect(() => {
     void socket.refreshMatchSlots();
     const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
-    return () => clearInterval(id);
+    
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void socket.refreshMatchSlots();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [socket]);
 
   const slots: MatchSlot[] = Array.isArray(state.matches) && state.matches.length === 2
@@ -96,7 +106,7 @@ function Scoreboard() {
           {visibleSlots.length === 0 && <EmptyBoardState />}
 
           {visibleSlots.length === 1 && (
-            <MatchBoard slot={visibleSlots[0]} teams={teams} tournaments={tournaments} size="full" />
+            <MatchBoard slot={visibleSlots[0] as MatchSlot} teams={teams} tournaments={tournaments} size="full" />
           )}
 
           {visibleSlots.length === 2 && (
@@ -112,8 +122,6 @@ function Scoreboard() {
   );
 }
 
-// --- EMPTY STATE ---
-
 function EmptyBoardState() {
   return (
     <div className="mt-16 flex flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border bg-background p-16 text-center shadow-sm">
@@ -126,8 +134,6 @@ function EmptyBoardState() {
     </div>
   );
 }
-
-// --- MATCH BOARD ---
 
 function MatchBoard({
   slot,
@@ -147,17 +153,18 @@ function MatchBoard({
 
   const m = slot.match;
   const events = Array.isArray(slot.events) ? slot.events : [];
+  
+  const displayEvents = events.filter((evt) => !evt.message.startsWith("PHASE_CHANGE:") && !evt.message.startsWith("PHASE_END:"));
 
   const activeTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === m.id));
   
-  // --- DYNAMIC TIMING CONNECTION ---
   const currentPhase = getCurrentPhase(events);
-  let activeDurationMinutes = 3; // Fallback
+  let activeDurationMinutes = 3; 
   if (activeTournament) {
     if (currentPhase === "Testing") activeDurationMinutes = activeTournament.warmupDurationMinutes ?? 5;
     else if (currentPhase === "Half Time") activeDurationMinutes = activeTournament.halftimeDurationMinutes ?? 2;
     else if (currentPhase === "Overtime") activeDurationMinutes = activeTournament.overtimeDurationMinutes ?? 3;
-    else activeDurationMinutes = activeTournament.halfDurationMinutes ?? 5; // 1st or 2nd Half
+    else activeDurationMinutes = activeTournament.halfDurationMinutes ?? 5;
   }
 
   const MATCH_DURATION_MS = activeDurationMinutes * 60 * 1000;
@@ -198,31 +205,45 @@ function MatchBoard({
   const rightInfo = isSwapped ? teamAInfo : teamBInfo;
   const rightPenalties = isSwapped ? penaltiesA : penaltiesB;
 
-  const renderTeamPanel = (teamName: string, score: number, info: any, penalties: any, colorType: "primary" | "destructive") => {
+  const isFinished = m.status === "finished";
+  const leftIsWinner = isFinished && leftScore > rightScore;
+  const rightIsWinner = isFinished && rightScore > leftScore;
+
+  const renderTeamPanel = (teamName: string, score: number, info: any, penalties: any, colorType: "primary" | "destructive", isWinner: boolean) => {
     const textColorClass = colorType === "primary" ? "text-primary" : "text-destructive";
 
     return (
-      <div className={cn("relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border border-border bg-background shadow-sm", panelPadding)}>
-        <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
-          {info.logo ? (
-            <img src={info.logo} className="h-full w-full object-contain opacity-[0.15] grayscale" alt="" />
-          ) : (
-            <span className={cn("font-black leading-none text-foreground opacity-[0.05]", watermarkTextClass)}>{info.initials}</span>
-          )}
+      <div className="flex flex-col gap-4">
+        <div className={cn("relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border bg-background shadow-sm flex-1", panelPadding, isWinner ? "border-emerald-500 ring-2 ring-emerald-500/50" : "border-border")}>
+          <div className="pointer-events-none absolute inset-0 z-0 flex items-center justify-center p-8">
+            {info.logo ? (
+              <img src={info.logo} className="h-full w-full object-contain opacity-[0.15] grayscale" alt="" />
+            ) : (
+              <span className={cn("font-black leading-none text-foreground opacity-[0.05]", watermarkTextClass)}>{info.initials}</span>
+            )}
+          </div>
+          <h3 className={cn("relative z-10 font-bold text-center", textColorClass, isFull ? "text-2xl" : "text-xl")}>{teamName}</h3>
+          <p className={cn("relative z-10 mt-4 font-mono font-bold leading-none tabular-nums text-foreground", scoreTextClass)}>
+            {score.toString().padStart(2, '0')}
+          </p>
+          <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
+            {penalties.isDisqualified ? (
+              <span className="rounded bg-destructive/10 px-4 py-1 text-sm font-bold tracking-widest text-destructive border border-destructive/20">DISQUALIFIED</span>
+            ) : (
+              penalties.badges.map((b: string, i: number) => (
+                <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
+              ))
+            )}
+          </div>
         </div>
-        <h3 className={cn("relative z-10 font-bold", textColorClass, isFull ? "text-xl" : "text-base")}>{teamName}</h3>
-        <p className={cn("relative z-10 mt-4 font-mono font-bold leading-none tabular-nums text-foreground", scoreTextClass)}>
-          {score.toString().padStart(2, '0')}
-        </p>
-        <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
-          {penalties.isDisqualified ? (
-            <span className="rounded bg-destructive/10 px-4 py-1 text-sm font-bold tracking-widest text-destructive border border-destructive/20">DISQUALIFIED</span>
-          ) : (
-            penalties.badges.map((b: string, i: number) => (
-              <span key={i} className={cn("h-8 w-6 rounded-sm shadow-sm border border-black/10", b === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
-            ))
-          )}
-        </div>
+        
+        {isWinner && (
+          <div className="flex justify-center">
+            <div className="flex items-center gap-2 rounded-full bg-emerald-500/15 px-6 py-2 text-base font-bold tracking-widest text-emerald-600 border border-emerald-500/30 shadow-sm">
+              <Trophy className="size-5" /> MATCH WINNER
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -233,12 +254,10 @@ function MatchBoard({
         <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Event Log</h3>
       </div>
       <div className="flex flex-col gap-3 overflow-hidden p-4">
-        {events.length === 0 ? (
+        {displayEvents.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">No match events yet.</p>
         ) : (
-          events.slice(0, isFull ? 4 : 3).map((evt) => {
-            const isPhaseChange = evt.message.startsWith("PHASE_CHANGE:");
-            
+          displayEvents.slice(0, isFull ? 4 : 3).map((evt) => {
             const isTeamA = m.teamAName && evt.message.includes(m.teamAName);
             const isTeamB = m.teamBName && evt.message.includes(m.teamBName);
 
@@ -246,11 +265,10 @@ function MatchBoard({
             if (isTeamA && !isTeamB) side = isSwapped ? 'right' : 'left';
             else if (isTeamB && !isTeamA) side = isSwapped ? 'left' : 'right';
 
-            let uiType: 'goal' | 'penalty' | 'system' | 'phase' = 'system';
+            let uiType: 'goal' | 'penalty' | 'system' = 'system';
             let penaltyLevel: 'warning' | 'yellow' | 'red' | null = null;
 
-            if (isPhaseChange) uiType = 'phase';
-            else if (evt.type === 'score_changed') uiType = 'goal';
+            if (evt.type === 'score_changed') uiType = 'goal';
             else if (evt.type === 'penalty_issued') {
               uiType = 'penalty';
               if (evt.message.includes('Minor')) penaltyLevel = 'warning';
@@ -259,14 +277,13 @@ function MatchBoard({
             }
 
             const timeStr = new Date(evt.createdAt).toLocaleTimeString([], { minute: '2-digit', second: '2-digit' });
-            const finalMessage = isPhaseChange ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}` : evt.message;
 
             return (
               <EventLogItem
                 key={evt.id}
                 type={uiType}
                 penaltyLevel={penaltyLevel}
-                message={finalMessage}
+                message={evt.message}
                 time={timeStr}
                 side={side}
               />
@@ -316,10 +333,10 @@ function MatchBoard({
         <p className="mt-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">{currentPhase} Time Remaining</p>
       </div>
 
-      <div className={cn("grid gap-6", isFull ? "md:grid-cols-[1fr_2fr_1fr]" : "sm:grid-cols-2")}>
-        {renderTeamPanel(leftTeamName, leftScore, leftInfo, leftPenalties, leftColorType)}
+      <div className={cn("grid gap-6 items-stretch", isFull ? "md:grid-cols-[1fr_2fr_1fr]" : "sm:grid-cols-2")}>
+        {renderTeamPanel(leftTeamName, leftScore, leftInfo, leftPenalties, leftColorType, leftIsWinner)}
         {isFull && EventLogPanel}
-        {renderTeamPanel(rightTeamName, rightScore, rightInfo, rightPenalties, rightColorType)}
+        {renderTeamPanel(rightTeamName, rightScore, rightInfo, rightPenalties, rightColorType, rightIsWinner)}
       </div>
 
       {!isFull && EventLogPanel}
@@ -329,16 +346,24 @@ function MatchBoard({
 
 // --- UTILITY UI COMPONENTS ---
 
-function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal' | 'penalty' | 'system' | 'phase', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center' }) {
+function EventLogItem({ type, penaltyLevel, message, time, side }: { type: 'goal' | 'penalty' | 'system' | 'phase' | 'phase_end', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center' }) {
   let colorClass = 'border-border text-foreground bg-background';
   let indicatorColor = 'text-muted-foreground';
 
-  if (type === 'phase') {
+  if (type === 'phase_end') {
+    colorClass = 'border-red-500/30 text-red-700 dark:text-red-400 bg-red-500/10 font-bold';
+    indicatorColor = 'text-red-500';
+  } else if (type === 'phase') {
     colorClass = 'border-indigo-500/30 text-indigo-700 dark:text-indigo-400 bg-indigo-500/10 font-bold';
     indicatorColor = 'text-indigo-500';
   } else if (type === 'goal') {
-    colorClass = 'border-emerald-500/30 text-emerald-700 dark:text-emerald-500 bg-emerald-500/10 font-bold';
-    indicatorColor = 'text-emerald-600 dark:text-emerald-500';
+    if (message.includes('OWN GOAL')) {
+      colorClass = 'border-red-500/30 text-red-700 dark:text-red-500 bg-red-500/10 font-bold';
+      indicatorColor = 'text-red-600 dark:text-red-500';
+    } else {
+      colorClass = 'border-emerald-500/30 text-emerald-700 dark:text-emerald-500 bg-emerald-500/10 font-bold';
+      indicatorColor = 'text-emerald-600 dark:text-emerald-500';
+    }
   } else if (type === 'penalty') {
     if (penaltyLevel === 'warning') {
       colorClass = 'border-slate-400/30 text-slate-700 dark:text-slate-300 bg-slate-500/10 font-bold';

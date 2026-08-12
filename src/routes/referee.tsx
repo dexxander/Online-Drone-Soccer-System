@@ -16,7 +16,7 @@ import {
   Eye,
   EyeOff,
 } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
 import { EmptyState, Panel } from "@/components/ui-kit";
 import { Switch } from "@/components/ui/switch";
@@ -58,7 +58,6 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
-// Intercept the event feed to figure out what phase the match is currently in
 function getCurrentPhase(events: any[]) {
   const phaseEvent = events.find((e) => e.message.startsWith("PHASE_CHANGE:"));
   return phaseEvent ? phaseEvent.message.replace("PHASE_CHANGE:", "") : "Testing";
@@ -67,12 +66,6 @@ function getCurrentPhase(events: any[]) {
 function RefereePage() {
   const { state, emit, socket } = useMockWebSocket();
 
-  const lastActionTime = useRef<number>(0);
-  const safeEmit = useCallback((action: string, callback: any) => {
-    lastActionTime.current = Date.now();
-    emit(action, callback);
-  }, [emit]);
-
   const matchSlots: MatchSlot[] = Array.isArray(state.matches) && state.matches.length === 2
     ? state.matches
     : [initialState.matches[0], initialState.matches[1]];
@@ -80,21 +73,12 @@ function RefereePage() {
   const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control">("tournaments");
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
   const [joinConfirm, setJoinConfirm] = useState<{ slotId: MatchSlotId, matchId: string } | null>(null);
+  const [showFinalizePrompt, setShowFinalizePrompt] = useState(false);
   const [slotId, setSlotId] = useState<MatchSlotId>(1);
 
-  const activeSlot = matchSlots.find((s) => s.slotId === slotId) ?? matchSlots[0];
-  const rawMatch = safeMatch(activeSlot.match);
-  const events = Array.isArray(activeSlot.events) ? activeSlot.events : [];
-
-  const [optimisticScoreA, setOptimisticScoreA] = useState(rawMatch.scoreA);
-  const [optimisticScoreB, setOptimisticScoreB] = useState(rawMatch.scoreB);
-
-  useEffect(() => {
-    if (Date.now() - lastActionTime.current > 1500) {
-      setOptimisticScoreA(rawMatch.scoreA);
-      setOptimisticScoreB(rawMatch.scoreB);
-    }
-  }, [rawMatch.scoreA, rawMatch.scoreB]);
+  const activeSlot = matchSlots.find((s) => s.slotId === slotId) ?? matchSlots[0] ?? initialState.matches[0];
+  const rawMatch = safeMatch(activeSlot?.match);
+  const events = Array.isArray(activeSlot?.events) ? activeSlot.events : [];
 
   const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
   const teams = Array.isArray(state.teams) ? state.teams : [];
@@ -103,30 +87,65 @@ function RefereePage() {
   const live = rawMatch.status === "live";
   const isFinished = rawMatch.status === "finished";
 
-  // --- DYNAMIC TIMING CONNECTION ---
-  const currentPhase = getCurrentPhase(events);
-  const activeTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === rawMatch.id));
+  const viewedTournament = tournaments.find(t => t.id === activeTournamentId);
+  const activeMatchTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === rawMatch.id));
   
-  let activeDurationMinutes = 3; // Fallback
-  if (activeTournament) {
-    if (currentPhase === "Testing") activeDurationMinutes = activeTournament.warmupDurationMinutes ?? 5;
-    else if (currentPhase === "Half Time") activeDurationMinutes = activeTournament.halftimeDurationMinutes ?? 2;
-    else if (currentPhase === "Overtime") activeDurationMinutes = activeTournament.overtimeDurationMinutes ?? 3;
-    else activeDurationMinutes = activeTournament.halfDurationMinutes ?? 5; // 1st or 2nd Half
+  const currentPhase = getCurrentPhase(events);
+  let activeDurationMinutes = 3;
+  if (activeMatchTournament) {
+    if (currentPhase === "Testing") activeDurationMinutes = activeMatchTournament.warmupDurationMinutes ?? 5;
+    else if (currentPhase === "Half Time") activeDurationMinutes = activeMatchTournament.halftimeDurationMinutes ?? 2;
+    else if (currentPhase === "Overtime") activeDurationMinutes = activeMatchTournament.overtimeDurationMinutes ?? 3;
+    else activeDurationMinutes = activeMatchTournament.halfDurationMinutes ?? 5; 
   }
 
   const MATCH_DURATION_MS = activeDurationMinutes * 60 * 1000;
   const elapsedMs = useMatchClock(rawMatch.elapsedMs, rawMatch.runningSince);
   const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
 
+  // FIX: Tie the auto-advance blocker directly to the specific Match ID to prevent cross-court bleeding
+  const hasEndedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (live && remainingMs === 0 && hasEndedRef.current !== rawMatch.id) {
+      hasEndedRef.current = rawMatch.id;
+
+      if (currentPhase === "Testing") {
+        emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "1st Half", "Testing"));
+      } else if (currentPhase === "1st Half") {
+        emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "Half Time", "1st Half"));
+      } else if (currentPhase === "Half Time") {
+        emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "2nd Half", "Half Time"));
+      } else if (currentPhase === "2nd Half") {
+        if (rawMatch.scoreA === rawMatch.scoreB) {
+          emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "Overtime", "2nd Half"));
+        } else {
+          emit("updateMatch", (s: any) => s.pauseMatch(slotId));
+          setShowFinalizePrompt(true);
+        }
+      } else if (currentPhase === "Overtime") {
+        emit("updateMatch", (s: any) => s.pauseMatch(slotId));
+        setShowFinalizePrompt(true);
+      }
+    } else if (remainingMs > 0) {
+      hasEndedRef.current = null;
+    }
+  }, [live, remainingMs, slotId, currentPhase, rawMatch.scoreA, rawMatch.scoreB, rawMatch.id, emit]);
+
   useEffect(() => {
     void socket.refreshMatchSlots();
-    const id = setInterval(() => {
-      if (Date.now() - lastActionTime.current > 1500) {
+    const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
+    
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
         void socket.refreshMatchSlots();
       }
-    }, 1000);
-    return () => clearInterval(id);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [socket]);
 
   useEffect(() => {
@@ -200,16 +219,12 @@ function RefereePage() {
       return;
     }
 
-    if (activeSlot.match.status === "live" || activeSlot.match.status === "paused") {
-      alert("This court is currently running an active match. Please end it or switch to an empty court to start a new match.");
-      return;
-    }
-
     const teamAName = getTeamName(teamAId);
     const teamBName = getTeamName(teamBId);
 
+    // Bypassed alert directly, smoothly archives the old match and sets up the new one
     if (rawMatch.id !== matchId) {
-      safeEmit("setupLiveMatch", (s: any) => s.setupLiveMatch(slotId, matchId, teamAName, teamBName));
+      emit("setupLiveMatch", (s: any) => s.setupLiveMatch(slotId, matchId, teamAName, teamBName));
     }
     setViewMode("control");
   };
@@ -222,8 +237,8 @@ function RefereePage() {
   const dynamicCoachA = getDynamicCoach(rawMatch.teamAName);
   const dynamicCoachB = getDynamicCoach(rawMatch.teamBName);
 
-  const rounds = activeTournament
-    ? Array.from(new Set(activeTournament.matches.map(m => m.round))).sort((a, b) => a - b)
+  const rounds = viewedTournament
+    ? Array.from(new Set(viewedTournament.matches.map(m => m.round))).sort((a, b) => a - b)
     : [];
   const maxRound = Math.max(...rounds, 0);
 
@@ -255,7 +270,7 @@ function RefereePage() {
                   </div>
                   <Switch
                     checked={slot.visibleOnScoreboard}
-                    onCheckedChange={(checked) => safeEmit("setSlotVisibility", (s: any) => s.setSlotVisibility(slot.slotId, checked))}
+                    onCheckedChange={(checked) => emit("setSlotVisibility", (s: any) => s.setSlotVisibility(slot.slotId, checked))}
                   />
                 </label>
               ))}
@@ -268,6 +283,8 @@ function RefereePage() {
               const m = safeMatch(slot.match);
               const isActive = slot.slotId === slotId;
               const isLive = m.status === "live" || m.status === "paused";
+              const slotTourney = tournaments.find((t) => t.matches.some((tm) => tm.id === m.id));
+
               return (
                 <button
                   key={slot.slotId}
@@ -279,7 +296,7 @@ function RefereePage() {
                 >
                   <div className="flex items-center justify-between">
                     <span className={cn("text-[11px] font-bold uppercase tracking-wider", isActive ? "text-primary" : "text-muted-foreground")}>
-                      Court {slot.slotId}
+                      Court {slot.slotId} {slotTourney ? ` • ${slotTourney.name}` : ""}
                     </span>
                     <div className="flex items-center gap-2">
                       <span className={cn("flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider", isLive ? "text-primary" : "text-muted-foreground")}>
@@ -344,8 +361,8 @@ function RefereePage() {
                 </div>
               )}
             </Panel>
-          ) : viewMode === "bracket" && activeTournament ? (
-            <Panel title={`Bracket: ${activeTournament.name}`}>
+          ) : viewMode === "bracket" && viewedTournament ? (
+            <Panel title={`Bracket: ${viewedTournament.name}`}>
               <div className="p-5">
                 <button onClick={() => setViewMode("tournaments")} className="mb-4 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
                   <ChevronLeft className="size-3.5" /> Back to Tournaments
@@ -365,7 +382,7 @@ function RefereePage() {
                   </div>
                   <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
                     {rounds.map((round) => {
-                      const matches = activeTournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+                      const matches = viewedTournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
                       const isLast = round === maxRound;
                       const pairs: TournamentMatch[][] = [];
                       for (let i = 0; i < matches.length; i += 2) {
@@ -463,9 +480,7 @@ function RefereePage() {
                   {phases.map((phase) => (
                     <button
                       key={phase}
-                      onClick={() => {
-                          safeEmit("updateMatch", (s: any) => s.changeMatchPhase(slotId, phase));
-                      }}
+                      onClick={() => emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, phase))}
                       className={cn(
                         "flex-1 rounded-md px-2 py-2 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider transition-colors",
                         phase === currentPhase ? "border border-border bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-accent"
@@ -486,8 +501,8 @@ function RefereePage() {
                 <div className="flex w-full flex-wrap justify-center gap-4">
                   <button
                     onClick={() => {
-                      if (rawMatch.status === "paused") safeEmit("updateMatch", (s: any) => s.resumeMatch(slotId));
-                      else safeEmit("updateMatch", (s: any) => s.startMatch(slotId));
+                      if (rawMatch.status === "paused") emit("updateMatch", (s: any) => s.resumeMatch(slotId));
+                      else emit("updateMatch", (s: any) => s.startMatch(slotId));
                     }}
                     disabled={live || isFinished}
                     className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-lg font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
@@ -495,14 +510,14 @@ function RefereePage() {
                     <Play className="size-5" fill="currentColor" /> Start
                   </button>
                   <button
-                    onClick={() => safeEmit("updateMatch", (s: any) => s.pauseMatch(slotId))}
+                    onClick={() => emit("updateMatch", (s: any) => s.pauseMatch(slotId))}
                     disabled={!live || isFinished}
                     className="inline-flex items-center gap-2 rounded-xl border-2 border-border bg-background px-6 py-3 text-lg font-bold text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Pause className="size-5" /> Pause
                   </button>
                   <button
-                    onClick={() => safeEmit("updateMatch", (s: any) => s.endMatch(slotId))}
+                    onClick={() => setShowFinalizePrompt(true)}
                     disabled={rawMatch.status === "scheduled" || isFinished}
                     className="ml-auto inline-flex items-center gap-2 rounded-xl bg-destructive px-6 py-3 text-lg font-bold text-destructive-foreground shadow-sm transition-colors hover:bg-destructive/85 disabled:cursor-not-allowed disabled:opacity-40 lg:ml-8"
                   >
@@ -519,18 +534,14 @@ function RefereePage() {
                   initials={teamAInfo.initials}
                   logo={teamAInfo.logo}
                   accentColor="primary"
-                  score={optimisticScoreA}
+                  score={rawMatch.scoreA}
                   penalties={rawMatch.penalties.filter(p => p.side === "A")}
                   disabled={isFinished}
-                  onDecrement={() => {
-                    setOptimisticScoreA(prev => Math.max(0, prev - 1));
-                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "A", -1));
-                  }}
-                  onIncrement={() => {
-                    setOptimisticScoreA(prev => prev + 1);
-                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1));
-                  }}
-                  onPenalty={(type: PenaltyType) => safeEmit("updateMatch", (s: any) => s.issuePenalty(slotId, "A", type))}
+                  isWinner={isFinished && rawMatch.scoreA > rawMatch.scoreB}
+                  onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", -1))}
+                  onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1))}
+                  onPenalty={(type: PenaltyType) => emit("updateMatch", (s: any) => s.issuePenalty(slotId, "A", type))}
+                  onOwnGoal={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1, true))}
                   roster={dynamicRosterA}
                   coach={dynamicCoachA}
                 />
@@ -540,18 +551,14 @@ function RefereePage() {
                   initials={teamBInfo.initials}
                   logo={teamBInfo.logo}
                   accentColor="destructive"
-                  score={optimisticScoreB}
+                  score={rawMatch.scoreB}
                   penalties={rawMatch.penalties.filter(p => p.side === "B")}
                   disabled={isFinished}
-                  onDecrement={() => {
-                    setOptimisticScoreB(prev => Math.max(0, prev - 1));
-                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "B", -1));
-                  }}
-                  onIncrement={() => {
-                    setOptimisticScoreB(prev => prev + 1);
-                    safeEmit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1));
-                  }}
-                  onPenalty={(type: PenaltyType) => safeEmit("updateMatch", (s: any) => s.issuePenalty(slotId, "B", type))}
+                  isWinner={isFinished && rawMatch.scoreB > rawMatch.scoreA}
+                  onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", -1))}
+                  onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1))}
+                  onPenalty={(type: PenaltyType) => emit("updateMatch", (s: any) => s.issuePenalty(slotId, "B", type))}
+                  onOwnGoal={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1, true))}
                   roster={dynamicRosterB}
                   coach={dynamicCoachB}
                 />
@@ -568,7 +575,7 @@ function RefereePage() {
                 <h3 className="text-lg font-bold text-foreground">Event Feed</h3>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => safeEmit("resetMatch", (s: any) => s.resetMatch(slotId))}
+                    onClick={() => emit("resetMatch", (s: any) => s.resetMatch(slotId))}
                     disabled={isFinished}
                     className="text-[11px] font-semibold text-muted-foreground transition-colors hover:text-destructive disabled:opacity-50"
                   >
@@ -586,15 +593,24 @@ function RefereePage() {
                 <ul className="space-y-1">
                   {events.map((evt, idx) => {
                     const isPhaseChange = evt.message.startsWith("PHASE_CHANGE:");
+                    const isPhaseEnd = evt.message.startsWith("PHASE_END:");
                     let labelColor = "text-muted-foreground";
                     let messageColor = "text-foreground";
 
-                    if (isPhaseChange) {
+                    if (isPhaseEnd) {
+                      labelColor = "text-red-500";
+                      messageColor = "text-red-600 dark:text-red-400 font-bold";
+                    } else if (isPhaseChange) {
                       labelColor = "text-indigo-500";
                       messageColor = "text-indigo-600 dark:text-indigo-400 font-bold";
                     } else if (evt.type === "score_changed") {
-                      labelColor = "text-emerald-600 dark:text-emerald-500";
-                      messageColor = "text-emerald-600 dark:text-emerald-500 font-bold";
+                      if (evt.message.includes("OWN GOAL")) {
+                         labelColor = "text-destructive";
+                         messageColor = "text-destructive dark:text-red-500 font-bold";
+                      } else {
+                         labelColor = "text-emerald-600 dark:text-emerald-500";
+                         messageColor = "text-emerald-600 dark:text-emerald-500 font-bold";
+                      }
                     } else if (evt.type === "penalty_issued") {
                       if (evt.message.includes("Minor")) {
                         labelColor = "text-slate-500";
@@ -612,6 +628,12 @@ function RefereePage() {
                       labelColor = "text-destructive";
                     }
 
+                    const displayMsg = isPhaseEnd
+                      ? `End of ${evt.message.replace("PHASE_END:", "")}`
+                      : isPhaseChange
+                      ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}`
+                      : evt.message;
+
                     return (
                       <li
                         key={evt.id}
@@ -622,15 +644,13 @@ function RefereePage() {
                       >
                         <div className="mb-1 flex items-start justify-between">
                           <span className={cn("text-[11px] font-bold uppercase tracking-wider", labelColor)}>
-                            {isPhaseChange ? "PHASE" : eventLabel(evt.type)}
+                            {isPhaseEnd ? "PHASE END" : isPhaseChange ? "PHASE" : eventLabel(evt.type)}
                           </span>
                           <span className="font-mono text-[12px] text-muted-foreground">
                             {new Date(evt.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                           </span>
                         </div>
-                        <p className={cn("text-sm", messageColor)}>
-                          {isPhaseChange ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}` : evt.message}
-                        </p>
+                        <p className={cn("text-sm", messageColor)}>{displayMsg}</p>
                       </li>
                     );
                   })}
@@ -670,13 +690,43 @@ function RefereePage() {
           </div>
         </div>
       )}
+
+      {/* Finalize Match Confirmation Modal */}
+      {showFinalizePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-bold text-foreground">Finalize Match Score?</h3>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Are you sure you want to end the match and permanently finalize the score? <br/><br/>
+              <strong className="text-foreground text-base block text-center bg-muted rounded-lg py-2">
+                {rawMatch.teamAName} {rawMatch.scoreA} - {rawMatch.scoreB} {rawMatch.teamBName}
+              </strong>
+              <br/>
+              This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowFinalizePrompt(false)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  emit("updateMatch", (s: any) => s.endMatch(slotId));
+                  setShowFinalizePrompt(false);
+                }}
+                className="rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+              >
+                End Match & Finalize
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RefereeLayout>
   );
 }
-
-/* ═══════════════════════════════════════════════════════════════════════════ */
-/* Helpers & Sub-components                                                    */
-/* ═══════════════════════════════════════════════════════════════════════════ */
 
 function safeMatch(value: unknown): Match {
   const fallback = initialState.match;
@@ -707,75 +757,90 @@ function NavCard({ href, onClick, icon, label, active, danger, external }: any) 
   return <Link to={href} className={classes}>{icon}<span className="text-[11px] font-bold uppercase tracking-wider">{label}</span></Link>;
 }
 
-function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, roster }: any) {
+function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, onOwnGoal, roster, isWinner }: any) {
   const isPrimary = accentColor === "primary";
   const effectivePenalties = calculateEffectivePenalties(penalties);
 
   return (
-    <div className={cn("flex flex-col rounded-xl border bg-background p-6 shadow-card transition-opacity", disabled ? "opacity-75 border-border" : "border-border")}>
-      <div className="mb-6 flex items-center justify-between border-b border-border/30 pb-4">
-        <div>
-          <h2 className="text-xl font-bold text-foreground lg:text-2xl">{teamName}</h2>
-          <span className="mt-1 inline-block rounded bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{sideLabel}</span>
+    <div className="flex flex-col gap-4">
+      <div className={cn("relative flex-1 flex flex-col rounded-xl border bg-background p-6 shadow-card transition-opacity", disabled ? "opacity-75" : "", isWinner ? "border-emerald-500 shadow-emerald-500/10" : "border-border")}>
+        <div className="mb-6 flex items-center justify-between border-b border-border/30 pb-4">
+          <div>
+            <h2 className="text-xl font-bold text-foreground lg:text-2xl">{teamName}</h2>
+            <span className="mt-1 inline-block rounded bg-muted px-2 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{sideLabel}</span>
+          </div>
+
+          {logo ? (
+            <img
+              src={logo}
+              alt={`${teamName} Logo`}
+              className={cn("size-12 rounded-full object-contain border-2 bg-white", isPrimary ? "border-primary" : "border-destructive")}
+            />
+          ) : (
+            <div className={cn("flex size-12 items-center justify-center rounded-full border-2 font-bold", isPrimary ? "border-primary bg-primary/10 text-primary" : "border-destructive bg-destructive/10 text-destructive")}>
+              {initials}
+            </div>
+          )}
         </div>
 
-        {logo ? (
-          <img
-            src={logo}
-            alt={`${teamName} Logo`}
-            className={cn("size-12 rounded-full object-contain border-2 bg-white", isPrimary ? "border-primary" : "border-destructive")}
-          />
-        ) : (
-          <div className={cn("flex size-12 items-center justify-center rounded-full border-2 font-bold", isPrimary ? "border-primary bg-primary/10 text-primary" : "border-destructive bg-destructive/10 text-destructive")}>
-            {initials}
+        <div className="mb-8 flex flex-col items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-6">
+            <button onClick={onDecrement} disabled={disabled} className="flex size-16 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><Minus className="size-7" /></button>
+            <span className="w-32 text-center font-mono text-8xl font-bold tabular-nums leading-none text-foreground lg:text-[96px]">{score}</span>
+            <button onClick={onIncrement} disabled={disabled} className="flex size-20 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform hover:bg-primary/85 active:scale-95 disabled:opacity-50 disabled:active:scale-100"><Plus className="size-10" /></button>
           </div>
-        )}
-      </div>
+          <button onClick={onOwnGoal} disabled={disabled} className="rounded-md border border-border bg-muted/50 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors disabled:opacity-50">
+            Register Own Goal
+          </button>
+        </div>
 
-      <div className="mb-8 flex items-center justify-center gap-6">
-        <button onClick={onDecrement} disabled={disabled} className="flex size-16 items-center justify-center rounded-xl border border-border bg-muted text-muted-foreground transition-colors hover:bg-accent disabled:opacity-50"><Minus className="size-7" /></button>
-        <span className="w-32 text-center font-mono text-8xl font-bold tabular-nums leading-none text-foreground lg:text-[96px]">{score}</span>
-        <button onClick={onIncrement} disabled={disabled} className="flex size-20 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform hover:bg-primary/85 active:scale-95 disabled:opacity-50 disabled:active:scale-100"><Plus className="size-10" /></button>
-      </div>
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Penalty Entry</h3>
 
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Penalty Entry</h3>
+            <div className="flex items-center gap-1">
+              {effectivePenalties.isDisqualified ? (
+                <span className="rounded bg-destructive/10 px-2 py-1 text-[10px] font-bold uppercase text-destructive">Disqualified</span>
+              ) : effectivePenalties.badges.map((badge, index) => (
+                <span key={`${badge}-${index}`} className={cn("h-4 w-3 rounded-sm shadow-sm", badge === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
+              ))}
+            </div>
+          </div>
 
-          <div className="flex items-center gap-1">
-            {effectivePenalties.isDisqualified ? (
-              <span className="rounded bg-destructive/10 px-2 py-1 text-[10px] font-bold uppercase text-destructive">Disqualified</span>
-            ) : effectivePenalties.badges.map((badge, index) => (
-              <span key={`${badge}-${index}`} className={cn("h-4 w-3 rounded-sm shadow-sm", badge === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
+          <div className="flex gap-2">
+            {penaltyButtons.map((p) => (
+              <button key={p.label} onClick={() => onPenalty(p.type)} disabled={disabled} className={cn("flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors disabled:opacity-50", p.style)}>
+                {p.label}
+              </button>
             ))}
           </div>
         </div>
 
-        <div className="flex gap-2">
-          {penaltyButtons.map((p) => (
-            <button key={p.label} onClick={() => onPenalty(p.type)} disabled={disabled} className={cn("flex-1 rounded-lg px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors disabled:opacity-50", p.style)}>
-              {p.label}
-            </button>
-          ))}
+        <div className="mt-auto border-t border-border/30 pt-4">
+          <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Roster</h3>
+          
+          {roster.length === 0 ? (
+            <p className="text-sm font-mono text-muted-foreground italic">No players registered.</p>
+          ) : (
+            <ul className="space-y-2 font-mono text-sm text-foreground">
+              {roster.map((p: any) => (
+                <li key={p.name} className="flex items-center justify-between rounded bg-muted/50 px-2 py-1">
+                  <span className={cn("font-semibold", p.highlight ? (isPrimary ? "text-primary" : "text-destructive") : "")}>{p.name}</span>
+                  <span className="text-muted-foreground">{p.position}</span>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
-
-      <div className="mt-auto border-t border-border/30 pt-4">
-        <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Roster</h3>
-        
-        {roster.length === 0 ? (
-          <p className="text-sm font-mono text-muted-foreground italic">No players registered.</p>
-        ) : (
-          <ul className="space-y-2 font-mono text-sm text-foreground">
-            {roster.map((p: any) => (
-              <li key={p.name} className="flex items-center justify-between rounded bg-muted/50 px-2 py-1">
-                <span className={cn("font-semibold", p.highlight ? (isPrimary ? "text-primary" : "text-destructive") : "")}>{p.name}</span>
-                <span className="text-muted-foreground">{p.position}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      
+      {isWinner && (
+        <div className="flex justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-emerald-500/15 px-5 py-1.5 text-xs font-bold tracking-widest text-emerald-600 border border-emerald-500/30 shadow-sm">
+            <Trophy className="size-4" /> MATCH WINNER
+          </div>
+        </div>
+      )}
     </div>
   );
 }

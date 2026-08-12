@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert, ImagePlus } from "lucide-react";
+import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert, ImagePlus, Play } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
@@ -60,10 +60,23 @@ function AdminTournamentsPage() {
                 </span>
               )}
             </div>
-            <p className="mt-1 text-sm capitalize text-muted-foreground">
-              {selected.status} · {selected.teamIds.length} Teams Registered
-              {selected.teamQuota ? ` (Quota: ${selected.teamQuota})` : ""}
-            </p>
+            
+            {/* MANUAL STATUS TOGGLE */}
+            <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <button
+                onClick={() => emit("setTournamentStatus", (s: any) => s.setTournamentStatus(selected.id, selected.status === "completed" ? "active" : "completed"))}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-bold transition-colors shadow-sm ${
+                  selected.status === "completed"
+                    ? "bg-emerald-500/10 text-emerald-600 border border-emerald-500/30 hover:bg-emerald-500/20"
+                    : "bg-blue-500/10 text-blue-600 border border-blue-500/30 hover:bg-blue-500/20"
+                }`}
+                title="Click to toggle status manually"
+              >
+                {selected.status === "completed" ? <><Check className="size-3" /> Completed</> : <><Play className="size-3" /> Active</>}
+              </button>
+              <span>· {selected.teamIds.length} Teams Registered {selected.teamQuota ? `(Quota: ${selected.teamQuota})` : ""}</span>
+            </div>
+
             <p className="mt-1 text-xs text-muted-foreground">
               {selected.halfDurationMinutes ?? 5} min halves · {selected.halftimeDurationMinutes ?? 2} min half-time · {selected.warmupDurationMinutes ?? 5} min warm-up/testing · {selected.overtimeDurationMinutes ?? 3} min overtime
             </p>
@@ -153,7 +166,7 @@ function AdminTournamentsPage() {
                       </span>
                     </div>
                     <p className="mt-1 text-xs capitalize text-muted-foreground">
-                      Status: <strong className="text-foreground">{t.status}</strong> · {t.teamIds.length} Teams
+                      Status: <strong className={t.status === 'completed' ? "text-emerald-500" : "text-blue-500"}>{t.status}</strong> · {t.teamIds.length} Teams
                       {t.teamQuota ? ` / Quota: ${t.teamQuota}` : ""}
                     </p>
                   </button>
