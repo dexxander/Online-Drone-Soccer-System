@@ -69,10 +69,19 @@ export const auth = {
     if (error) throw error;
     
     // Fetch role from users table
-    const { data: userRow, error: userError } = await supabase.from('users').select('role, name').eq('id', data.user.id).single();
+    const { data: userRow, error: userError } = await supabase
+      .from('users')
+      .select('role, name, status')
+      .eq('id', data.user.id)
+      .single();
     
     if (userError) {
       console.error("Error fetching user profile:", userError);
+    }
+
+    if (userRow?.status === "suspended") {
+      await supabase.auth.signOut();
+      throw new Error("Your account has been suspended. Please contact an administrator.");
     }
     
     // If the database returns null or there's an error, fallback to 'user'

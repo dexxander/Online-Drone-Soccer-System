@@ -154,7 +154,7 @@ function RegisterTeamPage() {
       {justSubmitted && (
         <div className="mt-6 flex items-center gap-3 rounded-xl border border-success/25 bg-success-soft px-5 py-4 text-sm font-medium text-success">
           <CheckCircle2 className="size-5 shrink-0" />
-          Registration submitted — it now appears below as pending.
+          Team registered successfully — it is now waiting for admin approval.
         </div>
       )}
 
