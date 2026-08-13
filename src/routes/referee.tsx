@@ -74,6 +74,7 @@ function RefereePage() {
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
   const [joinConfirm, setJoinConfirm] = useState<{ slotId: MatchSlotId, matchId: string } | null>(null);
   const [showFinalizePrompt, setShowFinalizePrompt] = useState(false);
+  const [phaseConfirmation, setPhaseConfirmation] = useState<string | null>(null);
   const [slotId, setSlotId] = useState<MatchSlotId>(1);
 
   const activeSlot = matchSlots.find((s) => s.slotId === slotId) ?? matchSlots[0] ?? initialState.matches[0];
@@ -164,6 +165,11 @@ function RefereePage() {
   const signOut = () => {
     auth.logout();
     window.location.href = "/login";
+  };
+
+  const requestPhaseChange = (phase: string) => {
+    if (phase === currentPhase || isFinished) return;
+    setPhaseConfirmation(phase);
   };
 
   const getTeamName = (id: string | null) => {
@@ -493,7 +499,7 @@ function RefereePage() {
                   {phases.map((phase) => (
                     <button
                       key={phase}
-                      onClick={() => emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, phase))}
+                      onClick={() => requestPhaseChange(phase)}
                       className={cn(
                         "flex-1 rounded-md px-2 py-2 text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider transition-colors",
                         phase === currentPhase ? "border border-border bg-background text-primary shadow-sm" : "text-muted-foreground hover:bg-accent"
@@ -744,6 +750,31 @@ function RefereePage() {
           </div>
         </div>
       )}
+
+      {phaseConfirmation && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl">
+            <h3 className="mb-2 text-lg font-bold text-foreground">Change Match Phase?</h3>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Change the phase from <strong className="text-foreground">{currentPhase}</strong> to <strong className="text-primary">{phaseConfirmation}</strong>? The phase timer will be reset.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setPhaseConfirmation(null)} className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted">
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, phaseConfirmation));
+                  setPhaseConfirmation(null);
+                }}
+                className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground hover:bg-primary/90"
+              >
+                Confirm Phase Change
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </RefereeLayout>
   );
 }
@@ -809,8 +840,8 @@ function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, pe
             <span className="w-32 text-center font-mono text-8xl font-bold tabular-nums leading-none text-foreground lg:text-[96px]">{score}</span>
             <button onClick={onIncrement} disabled={disabled} className="flex size-20 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm transition-transform hover:bg-primary/85 active:scale-95 disabled:opacity-50 disabled:active:scale-100"><Plus className="size-10" /></button>
           </div>
-          <button onClick={onOwnGoal} disabled={disabled} className="rounded-md border border-border bg-muted/50 px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors disabled:opacity-50">
-            Register Own Goal
+          <button onClick={onOwnGoal} disabled={disabled} className="w-full rounded-lg border-2 border-destructive/40 bg-destructive px-5 py-3 text-sm font-black uppercase tracking-wider text-destructive-foreground shadow-md transition-all hover:bg-destructive/90 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-50">
+            Register Own Goal — Award Point to Opponent
           </button>
         </div>
 
