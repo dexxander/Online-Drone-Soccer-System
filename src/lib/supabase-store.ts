@@ -877,7 +877,11 @@ export class SupabaseStore implements DataStore {
       const tMatch = t.matches.find(tm => tm.id === match.id);
       if (tMatch && !tMatch.winnerId && tMatch.phase !== "group") {
         let winnerId = null;
-        if (match.scoreA > match.scoreB) winnerId = tMatch.teamAId;
+        const disqualifiedA = calculateEffectivePenalties(match.penalties.filter((penalty) => penalty.side === "A")).isDisqualified;
+        const disqualifiedB = calculateEffectivePenalties(match.penalties.filter((penalty) => penalty.side === "B")).isDisqualified;
+        if (disqualifiedA && !disqualifiedB) winnerId = tMatch.teamBId;
+        else if (disqualifiedB && !disqualifiedA) winnerId = tMatch.teamAId;
+        else if (match.scoreA > match.scoreB) winnerId = tMatch.teamAId;
         else if (match.scoreB > match.scoreA) winnerId = tMatch.teamBId;
         
         if (winnerId) {

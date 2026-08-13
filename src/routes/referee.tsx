@@ -235,6 +235,15 @@ function RefereePage() {
   const penaltiesB = rawMatch.penalties.filter((penalty) => penalty.side === "B");
   const teamADisqualified = calculateEffectivePenalties(penaltiesA).isDisqualified;
   const teamBDisqualified = calculateEffectivePenalties(penaltiesB).isDisqualified;
+  const winningTeamName = teamADisqualified && !teamBDisqualified
+    ? rawMatch.teamBName
+    : teamBDisqualified && !teamADisqualified
+    ? rawMatch.teamAName
+    : rawMatch.scoreA > rawMatch.scoreB
+    ? rawMatch.teamAName
+    : rawMatch.scoreB > rawMatch.scoreA
+    ? rawMatch.teamBName
+    : null;
   
   const dynamicRosterA = getDynamicRoster(rawMatch.teamAName);
   const dynamicRosterB = getDynamicRoster(rawMatch.teamBName);
@@ -700,6 +709,13 @@ function RefereePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl">
             <h3 className="mb-2 text-lg font-bold text-foreground">Finalize Match Score?</h3>
+            {winningTeamName && (
+              <div className="mb-5 overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
+                <div className="mb-1 text-2xl animate-bounce" aria-hidden="true">🎉 🏆 🎉</div>
+                <p className="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-600">Congratulations!</p>
+                <p className="mt-1 text-xl font-black uppercase text-emerald-700 dark:text-emerald-400">{winningTeamName} Wins!</p>
+              </div>
+            )}
             <p className="mb-6 text-sm text-muted-foreground">
               Are you sure you want to end the match and permanently finalize the score? <br/><br/>
               <strong className="text-foreground text-base block text-center bg-muted rounded-lg py-2">

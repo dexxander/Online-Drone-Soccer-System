@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Palette, Radio, Trophy } from "lucide-react";
+import { ArrowLeftRight, Palette, Radio, Sparkles, Trophy } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
@@ -206,8 +206,9 @@ function MatchBoard({
   const rightPenalties = isSwapped ? penaltiesA : penaltiesB;
 
   const isFinished = m.status === "finished";
-  const leftIsWinner = isFinished && leftScore > rightScore;
-  const rightIsWinner = isFinished && rightScore > leftScore;
+  const leftIsWinner = isFinished && ((leftScore > rightScore && !rightPenalties.isDisqualified) || (rightPenalties.isDisqualified && !leftPenalties.isDisqualified));
+  const rightIsWinner = isFinished && ((rightScore > leftScore && !leftPenalties.isDisqualified) || (leftPenalties.isDisqualified && !rightPenalties.isDisqualified));
+  const winnerName = leftIsWinner ? leftTeamName : rightIsWinner ? rightTeamName : null;
 
   const renderTeamPanel = (teamName: string, score: number, info: any, penalties: any, colorType: "primary" | "destructive", isWinner: boolean) => {
     const textColorClass = colorType === "primary" ? "text-primary" : "text-destructive";
@@ -295,7 +296,7 @@ function MatchBoard({
   );
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="relative flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-primary">
           <span className={cn("h-1.5 w-1.5 rounded-full", (m.status === "live" || m.status === "paused") ? "animate-pulse bg-primary" : "bg-muted-foreground")} />
@@ -340,6 +341,19 @@ function MatchBoard({
       </div>
 
       {!isFull && EventLogPanel}
+
+      {winnerName && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-emerald-950/70 p-6 text-center backdrop-blur-[2px]">
+          <div className="relative rounded-3xl border border-emerald-300/60 bg-emerald-950/95 px-8 py-7 text-white shadow-2xl shadow-emerald-500/30">
+            <div className="absolute -inset-4 -z-10 animate-ping rounded-full bg-emerald-400/20" />
+            <Sparkles className="mx-auto mb-2 size-8 animate-bounce text-yellow-300" />
+            <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-200">Congratulations</p>
+            <h2 className="mt-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">{winnerName}</h2>
+            <p className="mt-2 text-lg font-bold uppercase tracking-[0.2em] text-yellow-300">Match Winner!</p>
+            <div className="mt-3 text-2xl" aria-hidden="true">🎉 ✨ 🏆 ✨ 🎉</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
