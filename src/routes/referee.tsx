@@ -15,6 +15,8 @@ import {
   Radio,
   Eye,
   EyeOff,
+  PlusCircle,
+  Swords as SwordsIcon,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
@@ -84,6 +86,7 @@ function RefereePage() {
   const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
   const teams = Array.isArray(state.teams) ? state.teams : [];
   const players = Array.isArray(state.players) ? state.players : [];
+  const mockBattles = Array.isArray(state.mockBattles) ? state.mockBattles : [];
 
   const live = rawMatch.status === "live";
   const isFinished = rawMatch.status === "finished";
@@ -235,6 +238,16 @@ function RefereePage() {
     setViewMode("control");
   };
 
+  const handleCreateMockBattle = () => {
+    socket.createMockBattle(slotId, "Red Team", "Blue Team");
+    setViewMode("control");
+  };
+
+  const handleSelectMockBattle = (battle: typeof mockBattles[number]) => {
+    socket.setupLiveMatch(slotId, battle.id, battle.blueTeamName, battle.redTeamName);
+    setViewMode("control");
+  };
+
   const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
   const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
   const penaltiesA = rawMatch.penalties.filter((penalty) => penalty.side === "A");
@@ -348,6 +361,40 @@ function RefereePage() {
           </div>
 
           {viewMode === "tournaments" ? (
+            <>
+            <Panel title="Mock Battles">
+              <div className="flex flex-col gap-4 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                  <div>
+                    <h2 className="font-bold text-foreground">Create an on-the-spot match</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">Create a shared Red Team vs Blue Team battle that every referee can access.</p>
+                  </div>
+                  <button onClick={handleCreateMockBattle} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
+                    <PlusCircle className="size-4" /> Create Mock Battle
+                  </button>
+                </div>
+                {mockBattles.length === 0 ? (
+                  <p className="py-4 text-center text-sm text-muted-foreground">No mock battles have been created yet.</p>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {mockBattles.map((battle) => {
+                      const assignedSlot = matchSlots.find((slot) => slot.match.id === battle.id);
+                      return (
+                        <button key={battle.id} onClick={() => handleSelectMockBattle(battle)} className="flex items-center justify-between rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40">
+                          <span>
+                            <span className="flex items-center gap-2 font-bold text-foreground"><SwordsIcon className="size-4 text-primary" /> {battle.blueTeamName} <span className="font-normal text-muted-foreground">vs</span> {battle.redTeamName}</span>
+                            <span className="mt-1 block text-xs text-muted-foreground">Created {new Date(battle.createdAt).toLocaleString()}</span>
+                          </span>
+                          <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", assignedSlot ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                            {assignedSlot ? `Court ${assignedSlot.slotId}` : "Available"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </Panel>
             <Panel title="Active Tournaments">
               {tournaments.length === 0 ? (
                 <EmptyState title="No active tournaments" description="Tournaments generated in the Admin dashboard will appear here." />
@@ -380,6 +427,7 @@ function RefereePage() {
                 </div>
               )}
             </Panel>
+            </>
           ) : viewMode === "bracket" && viewedTournament ? (
             <Panel title={`Bracket: ${viewedTournament.name}`}>
               <div className="p-5">

@@ -101,6 +101,14 @@ export interface MatchSlot {
   lastActiveAt: number | null;
 }
 
+export interface MockBattle {
+  id: string;
+  redTeamName: string;
+  blueTeamName: string;
+  createdBy: string;
+  createdAt: number;
+}
+
 export type AnnouncementCategory = "General" | "Tournament" | "Rule Update" | "Maintenance" | "Urgent";
 
 export interface Announcement {
@@ -159,6 +167,7 @@ export interface AppState {
   announcements: Announcement[];
   users: AppUser[];
   auditLogs: AuditLogEntry[];
+  mockBattles: MockBattle[];
 }
 
 export type TournamentStatus = "draft" | "active" | "completed";

@@ -3,7 +3,7 @@ import { calculateEffectivePenalties } from "./penalties";
 import type {
   AppState, Team, Player, Tournament, TournamentMatch, Announcement, AppUser, AuditLogEntry,
   MatchSlot, MatchSlotId, Match, MatchEvent, MatchEventType, Penalty, PenaltyType,
-  EntityStatus, UserTag, MatchmakingType, TeamCategory
+  EntityStatus, UserTag, MatchmakingType, TeamCategory, MockBattle
 } from "./types";
 
 export function toSnake(obj: any): any {
@@ -211,6 +211,7 @@ export const emptyState: AppState = {
   announcements: [],
   users: [],
   auditLogs: [],
+  mockBattles: [],
 };
 
 export interface DataStore {
@@ -230,6 +231,7 @@ export interface DataStore {
   setTournamentStatus(id: string, status: "draft" | "active" | "completed"): void;
   removeTournament(id: string): void;
   setupLiveMatch(slotId: MatchSlotId, tournamentMatchId: string, teamAName: string, teamBName: string): void;
+  createMockBattle(slotId: MatchSlotId, redTeamName?: string, blueTeamName?: string): MockBattle;
   startMatch(slotId: MatchSlotId): void;
   pauseMatch(slotId: MatchSlotId): void;
   resumeMatch(slotId: MatchSlotId): void;
@@ -318,7 +320,17 @@ export class SupabaseStore implements DataStore {
         announcements: toCamel(announcements) || [],
         tournaments: mappedTournaments,
         auditLogs: toCamel(auditLogs) || [],
+        mockBattles: [],
       };
+      const { data: mockBattleRows, error: mockBattleError } = await supabase
+        .from('mock_battles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (mockBattleError) {
+        console.warn('Mock battle history unavailable until its migration is applied:', mockBattleError.message);
+      } else {
+        this.state = { ...this.state, mockBattles: toCamel(mockBattleRows || []) };
+      }
       this.applyMatchSlots(toCamel(matchSlots) || [], toCamel(matchEvents) || [], toCamel(penalties) || []);
       this.notify();
     } catch (e) {
@@ -823,6 +835,42 @@ export class SupabaseStore implements DataStore {
         }
         return { error: null };
     });
+  }
+
+  createMockBattle(slotId: MatchSlotId, redTeamName = "Red Team", blueTeamName = "Blue Team") {
+    const id = uid();
+    const createdAt = Date.now();
+    const battle: MockBattle = { id, redTeamName: redTeamName.trim() || "Red Team", blueTeamName: blueTeamName.trim() || "Blue Team", createdBy: currentAuditActor(), createdAt };
+    const mockMatch = {
+      id,
+      tournament_id: null,
+      round: 0,
+      // `tournament_matches.slot` is a PostgreSQL INTEGER. A millisecond
+      // timestamp overflows it and causes the insert to fail, after which the
+      // periodic slot refresh restores the previous match.
+      slot: 0,
+      team_a_id: null,
+      team_b_id: null,
+      winner_id: null,
+      is_bye: false,
+      status: "scheduled",
+      score_a: 0,
+      score_b: 0,
+    };
+    this.commit({ ...this.state, mockBattles: [battle, ...this.state.mockBattles] });
+    this.persist('mock tournament match insert', async () => {
+      const { error } = await supabase.from('tournament_matches').insert(mockMatch);
+      if (error) console.error('Mock battle match was not saved:', error.message, error.details, error.hint);
+      return { error };
+    });
+    this.persist('mock battle insert', async () => {
+      const { error } = await supabase.from('mock_battles').insert(toSnake(battle));
+      if (error) console.error('Mock battle history was not saved:', error.message, error.details, error.hint);
+      return { error };
+    });
+    this.setupLiveMatch(slotId, id, battle.blueTeamName, battle.redTeamName);
+    this.logAudit('Mock battle created', battle.createdBy, id, 'System', `${battle.blueTeamName} vs ${battle.redTeamName}`);
+    return battle;
   }
 
   startMatch(slotId: MatchSlotId) {

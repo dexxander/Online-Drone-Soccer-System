@@ -151,6 +151,15 @@ CREATE TABLE public.penalties (
   created_at BIGINT NOT NULL
 );
 
+-- Shared referee-created mock battles
+CREATE TABLE public.mock_battles (
+  id UUID PRIMARY KEY REFERENCES public.tournament_matches(id) ON DELETE CASCADE,
+  red_team_name TEXT NOT NULL DEFAULT 'Red Team',
+  blue_team_name TEXT NOT NULL DEFAULT 'Blue Team',
+  created_by TEXT NOT NULL,
+  created_at BIGINT NOT NULL
+);
+
 -- Audit Logs
 CREATE TABLE public.audit_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -173,6 +182,7 @@ ALTER TABLE public.tournament_matches ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.match_slots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.match_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.penalties ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.mock_battles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
@@ -209,6 +219,10 @@ CREATE POLICY "Admins can manage tournament teams" ON public.tournament_teams FO
 CREATE POLICY "Tournament Matches are viewable by everyone" ON public.tournament_matches FOR SELECT USING (true);
 CREATE POLICY "Admins can manage tournament matches" ON public.tournament_matches FOR ALL USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
 CREATE POLICY "Referees can update tournament matches" ON public.tournament_matches FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'referee'));
+CREATE POLICY "Referees can insert mock tournament matches" ON public.tournament_matches FOR INSERT WITH CHECK (phase = 'mock' AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+
+CREATE POLICY "Mock battles are viewable by referees" ON public.mock_battles FOR SELECT USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can create mock battles" ON public.mock_battles FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
 
 -- Live Matches & Slots: Read by everyone, manage by referee/admin
 CREATE POLICY "Match slots are viewable by everyone" ON public.match_slots FOR SELECT USING (true);
