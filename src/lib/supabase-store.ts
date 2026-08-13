@@ -232,6 +232,7 @@ export interface DataStore {
   removeTournament(id: string): void;
   setupLiveMatch(slotId: MatchSlotId, tournamentMatchId: string, teamAName: string, teamBName: string): void;
   createMockBattle(slotId: MatchSlotId, redTeamName?: string, blueTeamName?: string): MockBattle;
+  deleteMockBattle(id: string): void;
   startMatch(slotId: MatchSlotId): void;
   pauseMatch(slotId: MatchSlotId): void;
   resumeMatch(slotId: MatchSlotId): void;
@@ -853,6 +854,7 @@ export class SupabaseStore implements DataStore {
       team_b_id: null,
       winner_id: null,
       is_bye: false,
+      phase: "mock",
       status: "scheduled",
       score_a: 0,
       score_b: 0,
@@ -864,13 +866,58 @@ export class SupabaseStore implements DataStore {
       return { error };
     });
     this.persist('mock battle insert', async () => {
-      const { error } = await supabase.from('mock_battles').insert(toSnake(battle));
+      // mock_battles.created_at is BIGINT, so do not use toSnake here:
+      // toSnake converts createdAt numbers into ISO strings for timestamp
+      // columns, which PostgreSQL cannot store in this BIGINT column.
+      const { error } = await supabase.from('mock_battles').insert({
+        id: battle.id,
+        red_team_name: battle.redTeamName,
+        blue_team_name: battle.blueTeamName,
+        created_by: battle.createdBy,
+        created_at: battle.createdAt,
+      });
       if (error) console.error('Mock battle history was not saved:', error.message, error.details, error.hint);
       return { error };
     });
     this.setupLiveMatch(slotId, id, battle.blueTeamName, battle.redTeamName);
     this.logAudit('Mock battle created', battle.createdBy, id, 'System', `${battle.blueTeamName} vs ${battle.redTeamName}`);
     return battle;
+  }
+
+  deleteMockBattle(id: string) {
+    const assignedSlot = this.state.matches.find((slot) => slot.match.id === id);
+    if (assignedSlot) {
+      this.lockSlot(assignedSlot.slotId);
+      const clearedMatch = defaultMatch(`match-slot-${assignedSlot.slotId}`);
+      const matches = this.state.matches.map((slot) =>
+        slot.slotId === assignedSlot.slotId
+          ? { ...slot, match: clearedMatch, events: [] }
+          : slot,
+      ) as [MatchSlot, MatchSlot];
+      this.commit({ ...this.state, matches, match: matches[0].match, events: matches[0].events, mockBattles: this.state.mockBattles.filter((battle) => battle.id !== id) });
+      delete this.matchArchive[id];
+      this.persist('clear deleted mock battle slot', async () => {
+        await supabase.from('match_events').delete().eq('slot_id', assignedSlot.slotId);
+        await supabase.from('penalties').delete().eq('slot_id', assignedSlot.slotId);
+        const { error } = await supabase.from('match_slots').update({
+          tournament_match_id: null,
+          team_a_name: 'TBD',
+          team_b_name: 'TBD',
+          score_a: 0,
+          score_b: 0,
+          status: 'scheduled',
+          elapsed_ms: 0,
+          running_since: null,
+        }).eq('slot_id', assignedSlot.slotId);
+        return { error };
+      });
+    } else {
+      this.commit({ ...this.state, mockBattles: this.state.mockBattles.filter((battle) => battle.id !== id) });
+    }
+    this.persist('mock battle delete', async () => {
+      const { error } = await supabase.from('tournament_matches').delete().eq('id', id);
+      return { error };
+    });
   }
 
   startMatch(slotId: MatchSlotId) {

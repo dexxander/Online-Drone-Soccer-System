@@ -27,10 +27,32 @@ CREATE POLICY "Referees can create mock battles"
     WHERE id = auth.uid() AND role IN ('referee', 'admin')
   ));
 
+DROP POLICY IF EXISTS "Referees can delete mock tournament matches" ON public.tournament_matches;
+CREATE POLICY "Referees can delete mock tournament matches"
+  ON public.tournament_matches FOR DELETE
+  USING (
+    EXISTS (SELECT 1 FROM public.mock_battles WHERE mock_battles.id = tournament_matches.id)
+    AND EXISTS (
+      SELECT 1 FROM public.users
+      WHERE id = auth.uid() AND role IN ('referee', 'admin')
+    )
+  );
+
+DROP POLICY IF EXISTS "Referees can delete mock battles" ON public.mock_battles;
+CREATE POLICY "Referees can delete mock battles"
+  ON public.mock_battles FOR DELETE
+  USING (EXISTS (
+    SELECT 1 FROM public.users
+    WHERE id = auth.uid() AND role IN ('referee', 'admin')
+  ));
+
 DROP POLICY IF EXISTS "Referees can insert mock tournament matches" ON public.tournament_matches;
+DROP POLICY IF EXISTS "Referees can insert tournament matches" ON public.tournament_matches;
 CREATE POLICY "Referees can insert mock tournament matches"
   ON public.tournament_matches FOR INSERT
   WITH CHECK (
+    phase = 'mock'
+    AND
     EXISTS (
       SELECT 1 FROM public.users
       WHERE id = auth.uid() AND role IN ('referee', 'admin')

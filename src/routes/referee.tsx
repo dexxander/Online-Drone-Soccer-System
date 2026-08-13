@@ -17,6 +17,7 @@ import {
   EyeOff,
   PlusCircle,
   Swords as SwordsIcon,
+  Trash2,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
@@ -248,6 +249,12 @@ function RefereePage() {
     setViewMode("control");
   };
 
+  const handleDeleteMockBattle = (battle: typeof mockBattles[number]) => {
+    if (window.confirm(`Delete the mock battle ${battle.blueTeamName} vs ${battle.redTeamName}?`)) {
+      socket.deleteMockBattle(battle.id);
+    }
+  };
+
   const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
   const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
   const penaltiesA = rawMatch.penalties.filter((penalty) => penalty.side === "A");
@@ -380,7 +387,8 @@ function RefereePage() {
                     {mockBattles.map((battle) => {
                       const assignedSlot = matchSlots.find((slot) => slot.match.id === battle.id);
                       return (
-                        <button key={battle.id} onClick={() => handleSelectMockBattle(battle)} className="flex items-center justify-between rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40">
+                        <div key={battle.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40">
+                          <button onClick={() => handleSelectMockBattle(battle)} className="flex min-w-0 flex-1 items-center justify-between text-left">
                           <span>
                             <span className="flex items-center gap-2 font-bold text-foreground"><SwordsIcon className="size-4 text-primary" /> {battle.blueTeamName} <span className="font-normal text-muted-foreground">vs</span> {battle.redTeamName}</span>
                             <span className="mt-1 block text-xs text-muted-foreground">Created {new Date(battle.createdAt).toLocaleString()}</span>
@@ -388,7 +396,11 @@ function RefereePage() {
                           <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", assignedSlot ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
                             {assignedSlot ? `Court ${assignedSlot.slotId}` : "Available"}
                           </span>
-                        </button>
+                          </button>
+                          <button onClick={() => handleDeleteMockBattle(battle)} className="ml-3 rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete mock battle" aria-label={`Delete ${battle.blueTeamName} versus ${battle.redTeamName}`}>
+                            <Trash2 className="size-4" />
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
