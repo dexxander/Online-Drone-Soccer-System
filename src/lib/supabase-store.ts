@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { calculateEffectivePenalties } from "./penalties";
 import type {
   AppState, Team, Player, Tournament, TournamentMatch, Announcement, AppUser, AuditLogEntry,
   MatchSlot, MatchSlotId, Match, MatchEvent, MatchEventType, Penalty, PenaltyType,
@@ -343,6 +344,11 @@ export class SupabaseStore implements DataStore {
   private persist(label: string, operation: () => PromiseLike<{ error: unknown | null }>) {
     this.writeQueue = this.writeQueue.then(async () => {
       try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.warn(`Supabase ${label} skipped: no authenticated session`);
+          return;
+        }
         const { error } = await operation();
         if (error) console.error(`Supabase ${label} failed:`, error);
       } catch (e) {
@@ -381,12 +387,17 @@ export class SupabaseStore implements DataStore {
       const row = rows.find((candidate) => candidate.slotId === slot.slotId);
       if (!row) return slot;
 
+      // Events and penalties belong to a match, not merely to a reusable court.
+      // During match setup the court row is updated before the old child rows
+      // are deleted, so filtering only by slot can briefly leak the previous
+      // match's cards/events into the new match.
+      const matchId = row.tournamentMatchId || slot.match.id;
       const events = eventRows
-        .filter((event) => event.slotId === slot.slotId)
-        .map((event) => ({ ...event, matchId: event.matchId || row.tournamentMatchId || slot.match.id }));
+        .filter((event) => event.slotId === slot.slotId && event.matchId === matchId)
+        .map((event) => ({ ...event, matchId }));
       const slotPenalties = penaltyRows
-        .filter((penalty) => penalty.slotId === slot.slotId)
-        .map((penalty) => ({ ...penalty, matchId: penalty.matchId || row.tournamentMatchId || slot.match.id }));
+        .filter((penalty) => penalty.slotId === slot.slotId && penalty.matchId === matchId)
+        .map((penalty) => ({ ...penalty, matchId }));
       events.forEach((event) => this.persistedEventIds.add(event.id));
       slotPenalties.forEach((penalty) => this.persistedPenaltyIds.add(penalty.id));
 
@@ -394,7 +405,7 @@ export class SupabaseStore implements DataStore {
         ...slot,
         match: {
           ...slot.match,
-          id: row.tournamentMatchId || slot.match.id,
+          id: matchId,
           teamAName: row.teamAName || "TBD",
           teamBName: row.teamBName || "TBD",
           scoreA: Number(row.scoreA) || 0,
@@ -462,6 +473,7 @@ export class SupabaseStore implements DataStore {
       const row = {
         id: event.id,
         slot_id: slotId,
+        match_id: event.matchId,
         type: event.type,
         message: event.message,
         created_at: event.createdAt,
@@ -477,6 +489,7 @@ export class SupabaseStore implements DataStore {
       const row = {
         id: penalty.id,
         slot_id: slotId,
+        match_id: penalty.matchId,
         side: penalty.side,
         type: penalty.type,
         created_at: penalty.createdAt,
@@ -755,8 +768,8 @@ export class SupabaseStore implements DataStore {
     let freshEvents: MatchEvent[] = [];
 
     if (archived) {
-        freshEvents = archived.events.map(e => ({ ...e, id: uid() }));
-        matchToRestore = { ...archived.match, id: tournamentMatchId };
+        freshEvents = archived.events.map(e => ({ ...e, id: uid(), matchId: tournamentMatchId }));
+        matchToRestore = { ...archived.match, id: tournamentMatchId, penalties: archived.match.penalties.map(p => ({ ...p, id: uid(), matchId: tournamentMatchId })) };
     } else {
         let initialElapsed = 0;
         if (existingStatus === "finished") {
@@ -804,7 +817,7 @@ export class SupabaseStore implements DataStore {
           // Tell the local UI that we have inserted these to prevent duplicate loops
           freshEvents.forEach(e => this.persistedEventIds.add(e.id));
           const rows = freshEvents.map(e => ({
-            id: e.id, slot_id: slotId, type: e.type, message: e.message, created_at: e.createdAt
+            id: e.id, slot_id: slotId, match_id: e.matchId, type: e.type, message: e.message, created_at: e.createdAt
           }));
           await supabase.from('match_events').insert(rows);
         }
@@ -878,6 +891,8 @@ export class SupabaseStore implements DataStore {
     this.lockSlot(slotId);
     const slot = this.getSlot(slotId);
     const m = slot.match;
+    const sidePenalties = m.penalties.filter((penalty) => penalty.side === side);
+    if (calculateEffectivePenalties(sidePenalties).isDisqualified) return;
     const key = side === "A" ? "scoreA" : "scoreB";
     const value = Math.max(0, m[key] + delta);
     const match: Match = { ...m, [key]: value } as Match;
@@ -917,11 +932,18 @@ export class SupabaseStore implements DataStore {
     this.lockSlot(slotId);
     const slot = this.getSlot(slotId);
     const m = slot.match;
-    const match: Match = {
-      ...m, penalties: [{ id: uid(), matchId: m.id, side, type, createdAt: Date.now() }, ...m.penalties],
-    };
+    if (calculateEffectivePenalties(m.penalties.filter((penalty) => penalty.side === side)).isDisqualified) return;
+    const penalty = { id: uid(), matchId: m.id, side, type, createdAt: Date.now() };
+    const match: Match = { ...m, penalties: [penalty, ...m.penalties] };
     const name = side === "A" ? m.teamAName : m.teamBName;
-    const events = this.log("penalty_issued", `${type} penalty — ${name}`, match.id, slot.events);
+    let events = this.log("penalty_issued", `${type} penalty — ${name}`, match.id, slot.events);
+    const isDisqualified = calculateEffectivePenalties(match.penalties.filter((item) => item.side === side)).isDisqualified;
+    if (isDisqualified && match.status === "live") {
+      match.elapsedMs += match.runningSince ? Date.now() - match.runningSince : 0;
+      match.status = "paused";
+      match.runningSince = null;
+      events = this.log("match_paused", `${name} disqualified — clock stopped`, match.id, events);
+    }
     this.commitSlot(slotId, { match, events });
     this.logAudit("Penalty issued", currentAuditActor(), match.id, "System", `${type} penalty for ${name}`);
   }
@@ -955,7 +977,7 @@ export class SupabaseStore implements DataStore {
         // Track the inserted ID so we don't duplicate it in loop
         this.persistedEventIds.add(pauseEvt.id);
         await supabase.from('match_events').insert([{
-           id: pauseEvt.id, slot_id: slotId, type: pauseEvt.type, message: pauseEvt.message, created_at: pauseEvt.createdAt
+           id: pauseEvt.id, slot_id: slotId, match_id: pauseEvt.matchId, type: pauseEvt.type, message: pauseEvt.message, created_at: pauseEvt.createdAt
         }]);
         return { error: null };
     });

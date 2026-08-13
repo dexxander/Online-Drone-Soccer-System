@@ -231,6 +231,10 @@ function RefereePage() {
 
   const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
   const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
+  const penaltiesA = rawMatch.penalties.filter((penalty) => penalty.side === "A");
+  const penaltiesB = rawMatch.penalties.filter((penalty) => penalty.side === "B");
+  const teamADisqualified = calculateEffectivePenalties(penaltiesA).isDisqualified;
+  const teamBDisqualified = calculateEffectivePenalties(penaltiesB).isDisqualified;
   
   const dynamicRosterA = getDynamicRoster(rawMatch.teamAName);
   const dynamicRosterB = getDynamicRoster(rawMatch.teamBName);
@@ -504,7 +508,7 @@ function RefereePage() {
                       if (rawMatch.status === "paused") emit("updateMatch", (s: any) => s.resumeMatch(slotId));
                       else emit("updateMatch", (s: any) => s.startMatch(slotId));
                     }}
-                    disabled={live || isFinished}
+                    disabled={live || isFinished || teamADisqualified || teamBDisqualified}
                     className="inline-flex items-center gap-2 rounded-xl bg-primary px-8 py-3 text-lg font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 disabled:cursor-not-allowed disabled:opacity-40"
                   >
                     <Play className="size-5" fill="currentColor" /> Start
@@ -535,8 +539,8 @@ function RefereePage() {
                   logo={teamAInfo.logo}
                   accentColor="primary"
                   score={rawMatch.scoreA}
-                  penalties={rawMatch.penalties.filter(p => p.side === "A")}
-                  disabled={isFinished}
+                  penalties={penaltiesA}
+                  disabled={isFinished || teamADisqualified}
                   isWinner={isFinished && rawMatch.scoreA > rawMatch.scoreB}
                   onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", -1))}
                   onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1))}
@@ -552,8 +556,8 @@ function RefereePage() {
                   logo={teamBInfo.logo}
                   accentColor="destructive"
                   score={rawMatch.scoreB}
-                  penalties={rawMatch.penalties.filter(p => p.side === "B")}
-                  disabled={isFinished}
+                  penalties={penaltiesB}
+                  disabled={isFinished || teamBDisqualified}
                   isWinner={isFinished && rawMatch.scoreB > rawMatch.scoreA}
                   onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", -1))}
                   onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1))}

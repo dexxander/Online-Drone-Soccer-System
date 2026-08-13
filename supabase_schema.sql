@@ -135,6 +135,7 @@ CREATE TABLE public.match_slots (
 CREATE TABLE public.match_events (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   slot_id INTEGER REFERENCES public.match_slots(slot_id) ON DELETE CASCADE,
+  match_id UUID REFERENCES public.tournament_matches(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
   message TEXT NOT NULL,
   created_at BIGINT NOT NULL
@@ -144,6 +145,7 @@ CREATE TABLE public.match_events (
 CREATE TABLE public.penalties (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   slot_id INTEGER REFERENCES public.match_slots(slot_id) ON DELETE CASCADE,
+  match_id UUID REFERENCES public.tournament_matches(id) ON DELETE CASCADE,
   side TEXT NOT NULL, -- 'A' or 'B'
   type penalty_type NOT NULL,
   created_at BIGINT NOT NULL
@@ -214,13 +216,15 @@ CREATE POLICY "Referees can manage match slots" ON public.match_slots FOR UPDATE
 
 CREATE POLICY "Match events are viewable by everyone" ON public.match_events FOR SELECT USING (true);
 CREATE POLICY "Referees can insert match events" ON public.match_events FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can delete match events" ON public.match_events FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
 
 CREATE POLICY "Penalties are viewable by everyone" ON public.penalties FOR SELECT USING (true);
 CREATE POLICY "Referees can insert penalties" ON public.penalties FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can delete penalties" ON public.penalties FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
 
 -- Audit Logs: Insert by admin/system, Read by admin
 CREATE POLICY "Admins can view audit logs" ON public.audit_logs FOR SELECT USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "Admins can insert audit logs" ON public.audit_logs FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "Admins and referees can insert audit logs" ON public.audit_logs FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('admin', 'referee')));
 
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
