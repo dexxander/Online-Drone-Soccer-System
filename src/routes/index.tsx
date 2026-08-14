@@ -126,10 +126,7 @@ function Landing() {
               <span className="text-primary">One arena feed.</span>
             </h1>
 
-            <p className="mt-6 max-w-md text-[15px] leading-relaxed text-muted-foreground">
-              Register teams, approve rosters, referee from pitchside and broadcast the score to
-              every screen in the venue — synced in real time, no refresh.
-            </p>
+          
 
             <div className="mt-8 flex flex-wrap gap-3">
               {canRegisterTeam && (
@@ -178,7 +175,7 @@ function Landing() {
       {/* ── Footer ── */}
       <footer className="border-t border-border py-8">
         <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
-          Drone Soccer League Control — prototype build. Data is stored locally and synced across tabs.
+          Drone Soccer League Control
         </p>
       </footer>
     </div>
