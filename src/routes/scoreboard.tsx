@@ -215,7 +215,7 @@ function MatchBoard({
   const finalPauseEvent = events.find((evt) => evt.type === "match_paused" && evt.message === "Match paused");
   const isHalfTimeNotice = currentPhase === "Half Time" && Boolean(firstHalfEndEvent);
   const isTimesUpNotice = finalPhaseEnded && Boolean(finalPauseEvent);
-  const showWinner = isFinished && isTimesUpNotice && Boolean(winnerName);
+  const showWinner = isFinished && Boolean(winnerName);
   const showTimeUpNotice = !showWinner && (isHalfTimeNotice || isTimesUpNotice);
   const noticeTitle = isHalfTimeNotice ? "HALF TIME" : "TIME'S UP";
   const noticeSubtitle = isHalfTimeNotice ? "The first half has ended" : "The match has ended";
@@ -381,6 +381,12 @@ function MatchBoard({
             <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-200">Congratulations</p>
             <h2 className="mt-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">{winnerName}</h2>
             <p className="mt-2 text-lg font-bold uppercase tracking-[0.2em] text-yellow-300">Match Winner!</p>
+            <div className="mt-5 rounded-xl border border-emerald-300/30 bg-black/20 px-5 py-3">
+              <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-200">Final Score</p>
+              <p className="mt-1 font-mono text-3xl font-black tabular-nums sm:text-4xl">
+                {leftTeamName} {leftScore} <span className="px-2 text-emerald-300">–</span> {rightScore} {rightTeamName}
+              </p>
+            </div>
             <div className="mt-3 text-2xl" aria-hidden="true">🎉 ✨ 🏆 ✨ 🎉</div>
           </div>
         </div>
