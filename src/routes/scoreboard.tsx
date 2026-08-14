@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Palette, Radio, Sparkles, Trophy } from "lucide-react";
+import { ArrowLeftRight, Palette, Radio, Sparkles, Timer, Trophy } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
@@ -148,8 +148,6 @@ function MatchBoard({
 }) {
   const [isSwapped, setIsSwapped] = useState(false);
   const [colorScheme, setColorScheme] = useState<"default" | "swappedColors">("default");
-  const [timeUpNotice, setTimeUpNotice] = useState<"Half Time" | "Times Up" | null>(null);
-  const [showWinner, setShowWinner] = useState(false);
 
   const isFull = size === "full";
 
@@ -215,27 +213,12 @@ function MatchBoard({
   const firstHalfEndEvent = events.find((evt) => evt.message === "PHASE_END:1st Half");
   const finalPhaseEnded = (currentPhase === "2nd Half" || currentPhase === "Overtime") && remainingMs === 0 && (m.status === "paused" || isFinished);
   const finalPauseEvent = events.find((evt) => evt.type === "match_paused" && evt.message === "Match paused");
-  const timeUpEvent = currentPhase === "Half Time"
-    ? firstHalfEndEvent
-    : finalPhaseEnded
-      ? finalPauseEvent
-      : undefined;
-  const timeUpEventKey = timeUpEvent?.id ?? null;
-
-  useEffect(() => {
-    if (!timeUpEventKey) return;
-
-    const isHalfTime = currentPhase === "Half Time";
-    setTimeUpNotice(isHalfTime ? "Half Time" : "Times Up");
-    setShowWinner(false);
-
-    const timeoutId = window.setTimeout(() => {
-      setTimeUpNotice(null);
-      if (!isHalfTime) setShowWinner(true);
-    }, 2000);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [timeUpEventKey, currentPhase]);
+  const isHalfTimeNotice = currentPhase === "Half Time" && Boolean(firstHalfEndEvent);
+  const isTimesUpNotice = finalPhaseEnded && Boolean(finalPauseEvent);
+  const showWinner = isFinished && isTimesUpNotice && Boolean(winnerName);
+  const showTimeUpNotice = !showWinner && (isHalfTimeNotice || isTimesUpNotice);
+  const noticeTitle = isHalfTimeNotice ? "HALF TIME" : "TIME'S UP";
+  const noticeSubtitle = isHalfTimeNotice ? "The first half has ended" : "The match has ended";
 
   const renderTeamPanel = (teamName: string, score: number, info: any, penalties: any, colorType: "primary" | "destructive", isWinner: boolean) => {
     const textColorClass = colorType === "primary" ? "text-primary" : "text-destructive";
@@ -369,11 +352,23 @@ function MatchBoard({
 
       {!isFull && EventLogPanel}
 
-      {timeUpNotice && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-slate-950/70 p-6 text-center backdrop-blur-[2px]">
-          <div className="relative rounded-3xl border border-sky-300/60 bg-slate-950/95 px-8 py-7 text-white shadow-2xl shadow-sky-500/30">
-            <div className="absolute -inset-4 -z-10 animate-ping rounded-full bg-sky-400/20" />
-            <p className="text-3xl font-black uppercase tracking-tight sm:text-5xl">{timeUpNotice}</p>
+      {showTimeUpNotice && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-slate-950/80 p-6 text-center backdrop-blur-sm">
+          <div className={cn(
+            "relative w-full max-w-xl overflow-hidden rounded-2xl border-2 bg-slate-950/95 px-8 py-10 text-white shadow-2xl sm:px-12",
+            isHalfTimeNotice ? "border-amber-300/80 shadow-amber-500/30" : "border-red-300/80 shadow-red-500/30",
+          )}>
+            <div className={cn("absolute inset-x-0 top-0 h-2", isHalfTimeNotice ? "bg-amber-300" : "bg-red-400")} />
+            <div className={cn(
+              "mx-auto flex size-16 items-center justify-center rounded-full border-2",
+              isHalfTimeNotice ? "border-amber-300/60 bg-amber-300/15 text-amber-200" : "border-red-300/60 bg-red-400/15 text-red-200",
+            )}>
+              <Timer className="size-8" strokeWidth={2.5} />
+            </div>
+            <p className="mt-5 text-xs font-black uppercase tracking-[0.35em] text-white/70">Match Status</p>
+            <p className="mt-2 text-4xl font-black uppercase tracking-tight sm:text-6xl">{noticeTitle}</p>
+            <p className="mt-3 text-sm font-semibold uppercase tracking-[0.2em] text-white/75 sm:text-base">{noticeSubtitle}</p>
+            <div className={cn("mx-auto mt-7 h-1 w-24 rounded-full", isHalfTimeNotice ? "bg-amber-300" : "bg-red-400")} />
           </div>
         </div>
       )}
