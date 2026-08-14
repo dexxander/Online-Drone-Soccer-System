@@ -41,7 +41,7 @@ const DEVELOPERS: Array<{
     name: "Dexter Oliver Robilin",
     role: "Lead Developer",
     bio: "Lead the development of this project, focusing on architecture and core features.",
-    photo: null, // e.g. "/team/developer-one.jpg"
+    photo: "/team/dexter.jpeg",
     email: "deux15012@gmail.com",
     github: "https://github.com/dexxander",
     linkedin: "https://www.linkedin.com/in/dexteroliverrobilin/",
@@ -50,7 +50,7 @@ const DEVELOPERS: Array<{
     name: "Trevor Leong Thomas",
     role: "Frontend Developer",
     bio: "Design the referee and scoreboard interfaces, ensuring a smooth user experience.Created Drone SVG animations for the landing page.",
-    photo: null, // e.g. "/team/developer-two.jpg"
+    photo: "/team/trevor.jpeg",
     email: "trevorleongthomas@@gmail.com",
     github: "https://github.com/trevorleong55",
     linkedin: "https://www.linkedin.com/in/trevorleongthomas/",
@@ -59,7 +59,7 @@ const DEVELOPERS: Array<{
     name: "Job Vinius",
     role: "Frontend Developer",
     bio: "Design the admin and coach interfaces, and implement the frontend workflow logic for match management.",
-    photo: null, // e.g. "/team/developer-three.jpg"
+    photo: "/team/job.jpg",
     email: "jobvinius442@gmail.com",
     github: "https://github.com/JoblessPP",
     linkedin: "https://www.linkedin.com/in/jobvinius/",
@@ -69,7 +69,7 @@ const DEVELOPERS: Array<{
 /* Group photo — set this to the real image path once you have one, e.g.
  * "/team/group-photo.jpg" after adding the file to /public/team/. Leave it
  * `null` to keep showing the placeholder frame below. */
-const GROUP_PHOTO: string | null = null;
+const GROUP_PHOTO: string | null = "/team/developer photo.jpg";
 
 function initials(name: string) {
   return name
