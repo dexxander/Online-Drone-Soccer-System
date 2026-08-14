@@ -1,11 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Users, ShieldCheck, Gauge, Radio, ArrowRight } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationMenu } from "@/components/NotificationMenu";
 import { LogoMark } from "@/components/LogoMark";
+import { auth } from "@/lib/store";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -59,12 +60,16 @@ const flow = [
 
 function Landing() {
   const { state } = useMockWebSocket();
+  const [user, setUser] = useState(auth.current());
   const registeredClubs = state.teams.length;
   const matchesOfficiated = state.matches.reduce(
     (total, slot) => total + slot.events.filter((event) => event.type === "match_ended").length,
     0,
   );
   const activeTournaments = state.tournaments.filter((tournament) => tournament.status === "active").length;
+  const canRegisterTeam = !user || user.role === "coach";
+
+  useEffect(() => auth.subscribe(() => setUser(auth.current())), []);
 
   return (
     <div className="min-h-screen bg-surface">
@@ -127,12 +132,14 @@ function Landing() {
             </p>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                to="/register-team"
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lift transition-colors hover:bg-primary/90"
-              >
-                Register your team <ArrowRight className="size-4" />
-              </Link>
+              {canRegisterTeam && (
+                <Link
+                  to="/register-team"
+                  className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lift transition-colors hover:bg-primary/90"
+                >
+                  Register your team <ArrowRight className="size-4" />
+                </Link>
+              )}
               <Link
                 to="/scoreboard"
                 className="inline-flex items-center gap-2 rounded-xl border border-border bg-background px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:bg-muted"

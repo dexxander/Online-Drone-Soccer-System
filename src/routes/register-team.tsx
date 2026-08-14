@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, CheckCircle2, Pencil, X, Check } from "lucide-react";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -6,11 +6,22 @@ import { NotificationMenu } from "@/components/NotificationMenu";
 import { LogoMark } from "@/components/LogoMark";
 import { EmptyState, Panel, StatusBadge } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
-import { auth } from "@/lib/store";
+import { auth, homeForRole } from "@/lib/store";
 import type { Player, PlayerPosition, Team, TeamCategory } from "@/lib/types";
 import { Field } from "./login";
 
 export const Route = createFileRoute("/register-team")({
+  beforeLoad: () => {
+    const user = auth.current();
+
+    if (!user) {
+      throw redirect({ to: "/login" });
+    }
+
+    if (user.role !== "coach") {
+      throw redirect({ to: homeForRole(user.role) });
+    }
+  },
   head: () => ({
     meta: [
       { title: "Team registration — Drone Soccer League Control" },
