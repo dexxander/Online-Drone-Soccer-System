@@ -56,7 +56,7 @@ const DEVELOPERS: Array<{
     linkedin: "https://www.linkedin.com/in/trevorleongthomas/",
   },
   {
-    name: "Job Vinius",
+    name: "Job Vinius Johnny",
     role: "Frontend Developer",
     bio: "Design the admin and coach interfaces, and implement the frontend workflow logic for match management.",
     photo: "/team/job.jpg",
