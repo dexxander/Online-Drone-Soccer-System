@@ -148,6 +148,8 @@ function MatchBoard({
 }) {
   const [isSwapped, setIsSwapped] = useState(false);
   const [colorScheme, setColorScheme] = useState<"default" | "swappedColors">("default");
+  const [timeUpNotice, setTimeUpNotice] = useState<"Half Time" | "Times Up" | null>(null);
+  const [showWinner, setShowWinner] = useState(false);
 
   const isFull = size === "full";
 
@@ -209,6 +211,31 @@ function MatchBoard({
   const leftIsWinner = isFinished && ((leftScore > rightScore && !rightPenalties.isDisqualified) || (rightPenalties.isDisqualified && !leftPenalties.isDisqualified));
   const rightIsWinner = isFinished && ((rightScore > leftScore && !leftPenalties.isDisqualified) || (leftPenalties.isDisqualified && !rightPenalties.isDisqualified));
   const winnerName = leftIsWinner ? leftTeamName : rightIsWinner ? rightTeamName : null;
+
+  const firstHalfEndEvent = events.find((evt) => evt.message === "PHASE_END:1st Half");
+  const finalPhaseEnded = (currentPhase === "2nd Half" || currentPhase === "Overtime") && remainingMs === 0 && (m.status === "paused" || isFinished);
+  const finalPauseEvent = events.find((evt) => evt.type === "match_paused" && evt.message === "Match paused");
+  const timeUpEvent = currentPhase === "Half Time"
+    ? firstHalfEndEvent
+    : finalPhaseEnded
+      ? finalPauseEvent
+      : undefined;
+  const timeUpEventKey = timeUpEvent?.id ?? null;
+
+  useEffect(() => {
+    if (!timeUpEventKey) return;
+
+    const isHalfTime = currentPhase === "Half Time";
+    setTimeUpNotice(isHalfTime ? "Half Time" : "Times Up");
+    setShowWinner(false);
+
+    const timeoutId = window.setTimeout(() => {
+      setTimeUpNotice(null);
+      if (!isHalfTime) setShowWinner(true);
+    }, 2000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [timeUpEventKey, currentPhase]);
 
   const renderTeamPanel = (teamName: string, score: number, info: any, penalties: any, colorType: "primary" | "destructive", isWinner: boolean) => {
     const textColorClass = colorType === "primary" ? "text-primary" : "text-destructive";
@@ -342,7 +369,16 @@ function MatchBoard({
 
       {!isFull && EventLogPanel}
 
-      {winnerName && (
+      {timeUpNotice && (
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-slate-950/70 p-6 text-center backdrop-blur-[2px]">
+          <div className="relative rounded-3xl border border-sky-300/60 bg-slate-950/95 px-8 py-7 text-white shadow-2xl shadow-sky-500/30">
+            <div className="absolute -inset-4 -z-10 animate-ping rounded-full bg-sky-400/20" />
+            <p className="text-3xl font-black uppercase tracking-tight sm:text-5xl">{timeUpNotice}</p>
+          </div>
+        </div>
+      )}
+
+      {winnerName && showWinner && (
         <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-emerald-950/70 p-6 text-center backdrop-blur-[2px]">
           <div className="relative rounded-3xl border border-emerald-300/60 bg-emerald-950/95 px-8 py-7 text-white shadow-2xl shadow-emerald-500/30">
             <div className="absolute -inset-4 -z-10 animate-ping rounded-full bg-emerald-400/20" />
