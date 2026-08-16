@@ -84,8 +84,17 @@ function advanceWinner(matches: TournamentMatch[], match: TournamentMatch) {
 }
 
 function generateGroupStage(teamIds: string[], groupCount: number): TournamentMatch[] {
-  const groups = Array.from({ length: Math.max(1, Math.min(groupCount, teamIds.length)) }, () => [] as string[]);
-  [...new Set(teamIds)].sort(() => Math.random() - 0.5).forEach((teamId, index) => groups[index % groups.length]?.push(teamId));
+  const uniqueTeamIds = [...new Set(teamIds)];
+  const groups = Array.from({ length: Math.max(1, Math.min(groupCount, uniqueTeamIds.length)) }, () => [] as string[]);
+  const shuffled = uniqueTeamIds.sort(() => Math.random() - 0.5);
+  const baseSize = Math.floor(shuffled.length / groups.length);
+  const extraGroups = shuffled.length % groups.length;
+  let cursor = 0;
+  groups.forEach((group, index) => {
+    const size = baseSize + (index < extraGroups ? 1 : 0);
+    group.push(...shuffled.slice(cursor, cursor + size));
+    cursor += size;
+  });
   const matches: TournamentMatch[] = [];
   groups.forEach((group, groupIndex) => {
     let slot = 0;
@@ -651,6 +660,8 @@ export class SupabaseStore implements DataStore {
       is_bye: match.isBye,
       scheduled_date: match.scheduledDate ?? null,
       scheduled_time: match.scheduledTime ?? null,
+      phase: match.phase ?? "knockout",
+      group_number: match.groupNumber ?? null,
     }));
     this.persist('tournament insert', async () => {
       const result = await supabase.from('tournaments').insert(mapped);

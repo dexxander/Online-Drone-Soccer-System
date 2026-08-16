@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert, ImagePlus, Play } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import type { MatchmakingType, Team, TeamCategory, Tournament, TournamentMatch } from "@/lib/types";
+import { exportBracketPdf, exportGroupStagePdf, exportTournamentPdf } from "@/lib/tournament-pdf";
 
 export const Route = createFileRoute("/admin-tournaments")({
   head: () => ({
@@ -23,6 +24,14 @@ function AdminTournamentsPage() {
   const [reMatchmakingItem, setReMatchmakingItem] = useState<Tournament | null>(null);
 
   const selected = state.tournaments.find((t) => t.id === selectedId) ?? null;
+  const autoExportedTournament = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (selected?.status === "completed" && autoExportedTournament.current !== selected.id) {
+      autoExportedTournament.current = selected.id;
+      exportTournamentPdf(selected, state.teams);
+    }
+  }, [selected, state.teams]);
 
   if (selected) {
     return (
@@ -94,6 +103,11 @@ function AdminTournamentsPage() {
           >
             <Shuffle className="size-4 text-primary" /> Re-Matchmake / Edit Pairings
           </button>
+          <div className="flex flex-wrap gap-2">
+            {selected.groupStageEnabled && <button onClick={() => exportGroupStagePdf(selected, state.teams)} className="rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-semibold hover:bg-muted">Export Group PDF</button>}
+            <button onClick={() => exportBracketPdf(selected, state.teams)} className="rounded-lg border border-border bg-background px-3.5 py-2 text-sm font-semibold hover:bg-muted">Export Bracket PDF</button>
+            {selected.status === "completed" && <button onClick={() => exportTournamentPdf(selected, state.teams)} className="rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Export Tournament PDF</button>}
+          </div>
         </div>
 
         <div className="mt-8 space-y-6">
@@ -235,6 +249,11 @@ function CreateTournamentForm({
   // Manual Pairs state: array of { teamAId: string | null, teamBId: string | null }
   const [manualPairs, setManualPairs] = useState<Array<{ teamAId: string | null; teamBId: string | null }>>([]);
 
+  const updateTeamQuota = (quota: number) => {
+    setTeamQuota(quota);
+    if (quota === 21) setGroupCount(5);
+  };
+
   const readImage = (file: File, setter: (value: string) => void) => {
     if (!file.type.startsWith("image/")) {
       setError("Please choose an image file.");
@@ -306,6 +325,10 @@ function CreateTournamentForm({
     }
     if (selectedTeamIds.length > 128) {
       setError("A tournament can include a maximum of 128 teams.");
+      return;
+    }
+    if (teamQuota === 21 && groupStageEnabled && selectedTeamIds.length !== 21) {
+      setError("The 21-team group-stage format requires exactly 21 selected teams.");
       return;
     }
     if (groupStageEnabled && selectedTeamIds.length < groupCount * 2) {
@@ -427,10 +450,11 @@ function CreateTournamentForm({
             <select
               className="auth-input"
               value={teamQuota}
-              onChange={(e) => setTeamQuota(Number(e.target.value))}
+              onChange={(e) => updateTeamQuota(Number(e.target.value))}
             >
               <option value={4}>4 Teams (Semifinals)</option>
               <option value={12}>12 Teams</option>
+              <option value={21}>21 Teams (Group Stage)</option>
               <option value={8}>8 Teams (Quarterfinals)</option>
               <option value={16}>16 Teams (Round of 16)</option>
               <option value={32}>32 Teams (Round of 32)</option>
@@ -506,7 +530,7 @@ function CreateTournamentForm({
             <div className="mt-3 max-w-xs pl-7">
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-foreground">Number of groups</label>
               <select className="auth-input" value={groupCount} onChange={(e) => setGroupCount(Number(e.target.value))}>
-                {[2, 4, 8, 16].map((count) => <option key={count} value={count}>{count} Groups</option>)}
+                {[2, 4, 5, 8, 16].map((count) => <option key={count} value={count}>{count} Groups</option>)}
               </select>
             </div>
           )}
@@ -539,8 +563,8 @@ function CreateTournamentForm({
                       className="size-4 rounded border-border text-primary"
                       checked={selectedTeamIds.includes(t.id)}
                       onChange={() => {
-                        if (!selectedTeamIds.includes(t.id) && selectedTeamIds.length >= 128) {
-                          setError("A tournament can include a maximum of 128 teams.");
+                        if (!selectedTeamIds.includes(t.id) && selectedTeamIds.length >= teamQuota) {
+                          setError(`This tournament is limited to ${teamQuota} teams.`);
                           return;
                         }
                         toggleTeamSelect(t.id);
