@@ -3,7 +3,7 @@ import { calculateEffectivePenalties } from "./penalties";
 import type {
   AppState, Team, Player, Tournament, TournamentMatch, Announcement, AppUser, AuditLogEntry,
   MatchSlot, MatchSlotId, Match, MatchEvent, MatchEventType, Penalty, PenaltyType,
-  EntityStatus, UserTag, MatchmakingType, TeamCategory, MockBattle
+  EntityStatus, UserTag, MatchmakingType, TeamCategory, MockBattle, GroupScoringSystem
 } from "./types";
 
 export function toSnake(obj: any): any {
@@ -615,7 +615,7 @@ export class SupabaseStore implements DataStore {
     halftimeDurationMinutes = 2,
     warmupDurationMinutes = 5,
     overtimeDurationMinutes = 3,
-    groupScoringSystem: "three-one-zero" = "three-one-zero"
+    groupScoringSystem: GroupScoringSystem = "three-one-zero"
   ) {
     const uniqueTeamIds = [...new Set(teamIds)].slice(0, 128);
     if (uniqueTeamIds.length < 2) throw new Error("A tournament requires at least 2 teams.");

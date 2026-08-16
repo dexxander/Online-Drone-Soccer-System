@@ -892,37 +892,170 @@ function GroupStage({
   const groupMatches = tournament.matches.filter((m) => m.phase === "group");
   const groupCount = tournament.groupCount ?? Math.max(1, ...groupMatches.map((m) => m.groupNumber ?? 1));
   const groups = Array.from({ length: groupCount }, (_, index) => groupMatches.filter((m) => m.groupNumber === index + 1));
+  const qualifiers = tournament.qualifiersPerGroup ?? 2;
+  const scoringSystem = tournament.groupScoringSystem ?? "three-one-zero";
+
+  // Build standings for a group
+  const buildStandings = (matches: TournamentMatch[]) => {
+    const teamIds = new Set<string>();
+    matches.forEach((m) => { if (m.teamAId) teamIds.add(m.teamAId); if (m.teamBId) teamIds.add(m.teamBId); });
+    const stats = new Map<string, { played: number; wins: number; draws: number; losses: number; gf: number; ga: number; pts: number }>();
+    teamIds.forEach((id) => stats.set(id, { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 }));
+    matches.forEach((m) => {
+      if (!m.winnerId && m.result !== "draw") return;
+      const a = m.teamAId ? stats.get(m.teamAId) : undefined;
+      const b = m.teamBId ? stats.get(m.teamBId) : undefined;
+      const scoreA = (m as any).scoreA ?? 0;
+      const scoreB = (m as any).scoreB ?? 0;
+      if (a) { a.played++; a.gf += scoreA; a.ga += scoreB; }
+      if (b) { b.played++; b.gf += scoreB; b.ga += scoreA; }
+      if (m.result === "draw" && scoringSystem !== "winner-only") {
+        if (a) { a.draws++; a.pts += 1; }
+        if (b) { b.draws++; b.pts += 1; }
+      } else if (m.winnerId) {
+        const w = stats.get(m.winnerId);
+        const loserId = m.winnerId === m.teamAId ? m.teamBId : m.teamAId;
+        const l = loserId ? stats.get(loserId) : undefined;
+        if (w) { w.wins++; w.pts += 3; }
+        if (l) { l.losses++; }
+      }
+    });
+    return [...stats.entries()]
+      .sort(([, a], [, b]) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf)
+      .map(([id, s], rank) => ({ id, rank: rank + 1, ...s }));
+  };
+
+  const decidedCount = groupMatches.filter((m) => m.winnerId || m.result === "draw").length;
 
   return (
-    <section className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-6 shadow-sm">
-      <div className="mb-5 flex items-center justify-between">
+    <section className="rounded-2xl border border-border bg-background p-6 shadow-sm">
+      <div className="mb-6 flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-foreground">Group Stage</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Top {tournament.qualifiersPerGroup ?? 2} teams from each group qualify. {(tournament.groupScoringSystem ?? "three-one-zero") === "three-one-zero" ? "Win 3 points, draw 1, loss 0." : "The winner-only scoring system is active."}</p>
+          <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+            <span className="flex size-7 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600">
+              <ShieldAlert className="size-4" />
+            </span>
+            Group Stage
+          </h2>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            Top {qualifiers} from each group qualify.{" "}
+            {scoringSystem === "three-one-zero" ? "Win 3 · Draw 1 · Loss 0" : "Winner-only scoring"}
+          </p>
         </div>
-        <span className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-700">
-          {groupMatches.filter((m) => m.winnerId).length} / {groupMatches.length} decided
-        </span>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {groups.map((matches, index) => (
-          <div key={index} className="rounded-xl border border-border bg-background p-3">
-            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-foreground">Group {String.fromCharCode(65 + index)}</h3>
-            <div className="space-y-2">
-              {matches.length === 0 ? <p className="text-xs text-muted-foreground">No matches</p> : matches.map((match) => (
-                <div key={match.id} className="rounded-lg border border-border/70 p-2 text-xs">
-                  <div className="flex items-center justify-between gap-2"><span className={match.winnerId === match.teamAId ? "font-bold text-emerald-600" : ""}>{teamName(match.teamAId)}</span>{match.winnerId === match.teamAId && "✓"}</div>
-                  <div className="my-1 border-t border-border" />
-                  <div className="flex items-center justify-between gap-2"><span className={match.winnerId === match.teamBId ? "font-bold text-emerald-600" : ""}>{teamName(match.teamBId)}</span>{match.winnerId === match.teamBId && "✓"}</div>
-                  {match.result === "draw" && <p className="mt-2 text-center text-[10px] font-bold text-amber-700">DRAW - 1 point each</p>}
-                  {!match.winnerId && match.result !== "draw" && match.teamAId && match.teamBId && (
-                    <div className="mt-2 flex flex-wrap gap-1"><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamAId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamAId)} wins</button><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamBId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamBId)} wins</button>{(tournament.groupScoringSystem ?? "three-one-zero") === "three-one-zero" && <button onClick={() => emit("setMatchResult", (store) => store.setMatchResult(tournament.id, match.id, null, "draw"))} className="w-full rounded bg-amber-500/10 px-1 py-1 text-[10px] font-bold text-amber-700">Draw</button>}</div>
-                  )}
-                </div>
-              ))}
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <p className="text-2xl font-bold tabular-nums text-foreground">{decidedCount}<span className="text-muted-foreground">/{groupMatches.length}</span></p>
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Matches Decided</p>
           </div>
-        ))}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap justify-center gap-5">
+        {groups.map((matches, index) => {
+          const standings = buildStandings(matches);
+          return (
+            <div key={index} className="w-full sm:w-[calc(50%-0.625rem)] xl:w-[calc(33.333%-0.875rem)] rounded-xl border border-border bg-background overflow-hidden">
+              {/* Group Header */}
+              <div className="border-b border-border bg-muted/30 px-4 py-2.5">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-foreground">
+                  Group {String.fromCharCode(65 + index)}
+                </h3>
+              </div>
+
+              {/* Standings Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/15 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      <th className="w-6 py-2 pl-3 text-center">#</th>
+                      <th className="py-2 pl-2 text-left">Team</th>
+                      <th className="w-7 py-2 text-center">P</th>
+                      <th className="w-7 py-2 text-center">W</th>
+                      <th className="w-7 py-2 text-center">D</th>
+                      <th className="w-7 py-2 text-center">L</th>
+                      <th className="w-8 py-2 text-center">GD</th>
+                      <th className="w-8 py-2 pr-3 text-center font-bold">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {standings.map((row) => {
+                      const isQualifying = row.rank <= qualifiers;
+                      const gd = row.gf - row.ga;
+                      return (
+                        <tr
+                          key={row.id}
+                          className={`border-b border-border/50 last:border-0 transition-colors ${
+                            isQualifying ? "bg-emerald-500/5" : ""
+                          }`}
+                        >
+                          <td className="py-2 pl-3 text-center">
+                            <span className={`inline-flex size-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                              isQualifying
+                                ? "bg-emerald-500/15 text-emerald-600"
+                                : "bg-muted text-muted-foreground"
+                            }`}>{row.rank}</span>
+                          </td>
+                          <td className={`py-2 pl-2 font-semibold ${isQualifying ? "text-foreground" : "text-muted-foreground"}`}>
+                            {teamName(row.id)}
+                          </td>
+                          <td className="py-2 text-center text-muted-foreground tabular-nums">{row.played}</td>
+                          <td className="py-2 text-center tabular-nums font-medium text-foreground">{row.wins}</td>
+                          <td className="py-2 text-center tabular-nums text-muted-foreground">{row.draws}</td>
+                          <td className="py-2 text-center tabular-nums text-muted-foreground">{row.losses}</td>
+                          <td className={`py-2 text-center tabular-nums font-medium ${gd > 0 ? "text-emerald-600" : gd < 0 ? "text-red-500" : "text-muted-foreground"}`}>
+                            {gd > 0 ? `+${gd}` : gd}
+                          </td>
+                          <td className="py-2 pr-3 text-center tabular-nums font-bold text-foreground">{row.pts}</td>
+                        </tr>
+                      );
+                    })}
+                    {standings.length === 0 && (
+                      <tr><td colSpan={8} className="py-4 text-center text-muted-foreground">No teams assigned</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Fixtures */}
+              <div className="border-t border-border bg-muted/10 px-3 py-2.5">
+                <p className="mb-2 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Fixtures</p>
+                <div className="space-y-1.5">
+                  {matches.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">No fixtures</p>
+                  ) : matches.map((match) => {
+                    const decided = !!match.winnerId || match.result === "draw";
+                    return (
+                      <div key={match.id} className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs ${decided ? "bg-background" : "bg-background border border-border/50"}`}>
+                        <span className={`flex-1 truncate text-right ${match.winnerId === match.teamAId ? "font-bold text-emerald-600" : match.winnerId === match.teamBId ? "text-muted-foreground" : "font-medium text-foreground"}`}>
+                          {teamName(match.teamAId)}
+                        </span>
+                        {decided ? (
+                          <span className="shrink-0 rounded bg-muted/60 px-2 py-0.5 text-[10px] font-bold tabular-nums text-foreground">
+                            {match.result === "draw" ? "Draw" : "✓"}
+                          </span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] font-bold text-muted-foreground">vs</span>
+                        )}
+                        <span className={`flex-1 truncate ${match.winnerId === match.teamBId ? "font-bold text-emerald-600" : match.winnerId === match.teamAId ? "text-muted-foreground" : "font-medium text-foreground"}`}>
+                          {teamName(match.teamBId)}
+                        </span>
+                        {!decided && match.teamAId && match.teamBId && (
+                          <div className="flex shrink-0 gap-0.5 ml-1">
+                            <button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamAId!))} className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20" title={`${teamName(match.teamAId)} wins`}>A</button>
+                            {scoringSystem === "three-one-zero" && (
+                              <button onClick={() => emit("setMatchResult", (store) => store.setMatchResult(tournament.id, match.id, null, "draw"))} className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-bold text-amber-600 hover:bg-amber-500/20">D</button>
+                            )}
+                            <button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamBId!))} className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold text-primary hover:bg-primary/20" title={`${teamName(match.teamBId)} wins`}>B</button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
@@ -942,6 +1075,7 @@ function Bracket({
   if (knockoutMatches.length === 0) {
     return (
       <div className="rounded-2xl border border-border bg-muted/20 p-8 text-center">
+        <Trophy className="mx-auto size-8 text-muted-foreground/40 mb-3" />
         <p className="font-semibold text-foreground">Knockout bracket is waiting for group results</p>
         <p className="mt-1 text-sm text-muted-foreground">The qualifying teams will be placed here after all group matches are decided.</p>
       </div>
@@ -950,87 +1084,136 @@ function Bracket({
   const rounds = Math.max(...knockoutMatches.map((m) => m.round));
 
   const getRoundTitle = (r: number) => {
-    if (r === rounds) return "FINAL";
-    if (r === rounds - 1) return "SEMIFINAL";
-    if (r === rounds - 2) return "QUARTERFINAL";
-    return `ROUND ${r}`;
+    if (r === rounds) return "Final";
+    if (r === rounds - 1) return "Semifinals";
+    if (r === rounds - 2) return "Quarterfinals";
+    const matchCount = knockoutMatches.filter(m => m.round === r).length;
+    return `Round of ${matchCount * 2}`;
   };
 
-  return (
-    <div className="rounded-2xl border border-border bg-background/50 p-6 shadow-sm">
-      <div className="flex flex-col gap-6 overflow-x-auto pb-4">
-        {/* Round Headers */}
-        <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
-          {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
-            const matchesCount = knockoutMatches.filter((m) => m.round === round).length;
-            return (
-              <div key={round} className="w-[260px] flex items-center justify-between">
-                <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <span className="flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground">
-                    {round}
-                  </span>
-                  {getRoundTitle(round)}
-                </span>
-                <span className="text-[11px] font-medium text-muted-foreground">
-                  {matchesCount} Match{matchesCount === 1 ? "" : "es"}
-                </span>
-              </div>
-            );
-          })}
-        </div>
+  // Find the champion
+  const finalMatch = knockoutMatches.find((m) => m.round === rounds);
+  const champion = finalMatch?.winnerId ? teamName(finalMatch.winnerId) : null;
 
-        {/* Bracket Columns */}
-        <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
+  return (
+    <div className="rounded-2xl border border-border bg-background overflow-hidden shadow-sm">
+      {/* Header bar */}
+      <div className="flex items-center justify-between border-b border-border bg-muted/20 px-6 py-3">
+        <h2 className="text-sm font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
+          <Trophy className="size-4 text-primary" />
+          Knockout Bracket
+        </h2>
+        {champion && (
+          <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-1.5">
+            <Trophy className="size-3.5 text-amber-600" />
+            <span className="text-xs font-bold text-amber-700">Champion: {champion}</span>
+          </div>
+        )}
+      </div>
+
+      <div className="overflow-x-auto p-6">
+        <div className="flex items-stretch gap-0 min-w-max">
           {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
             const matches = knockoutMatches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
             const isLast = round === rounds;
-
-            // Group matches into pairs for Round 1, 2, etc.
-            const pairs: TournamentMatch[][] = [];
-            for (let i = 0; i < matches.length; i += 2) {
-              const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
-              pairs.push(pair);
-            }
+            const columnWidth = 240;
+            const connectorWidth = 40;
 
             return (
-              <div key={round} className="w-[260px] flex flex-col justify-around">
-                {pairs.map((pair, pi) => (
-                  <div key={pi} className="relative flex flex-col justify-around h-full my-4">
-                    {pair.map((m, idx) => {
-                      const hasWinner = !!m.winnerId;
-                      return (
-                        <div key={m.id} className="relative py-2 z-10">
-                          <MatchBox match={m} teamName={teamName} tournament={tournament} emit={emit} />
-                          {/* Horizontal line extending right from MatchBox */}
-                          {!isLast && (
-                            <div
-                              className={`absolute -right-8 top-1/2 h-[2.5px] w-8 -translate-y-1/2 transition-colors ${
-                                hasWinner ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
-                              }`}
-                            />
+              <div key={round} className="flex flex-col" style={{ width: columnWidth + (isLast ? 0 : connectorWidth) }}>
+                {/* Round Header */}
+                <div className="mb-4 px-1" style={{ width: columnWidth }}>
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {getRoundTitle(round)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                    {matches.length} match{matches.length !== 1 ? "es" : ""}
+                  </p>
+                </div>
+
+                {/* Match cards with connectors */}
+                <div className="flex-1 flex flex-col justify-around">
+                  {matches.map((m) => {
+                    const hasWinner = !!m.winnerId;
+                    const canDecide = !m.isBye && m.teamAId && m.teamBId && !m.winnerId;
+
+                    return (
+                      <div key={m.id} className="flex items-center">
+                        {/* Match Card */}
+                        <div
+                          className={`rounded-lg border overflow-hidden transition-all ${
+                            hasWinner
+                              ? "border-emerald-500/30 shadow-sm"
+                              : canDecide
+                                ? "border-primary/30 shadow-sm"
+                                : "border-border"
+                          }`}
+                          style={{ width: columnWidth }}
+                        >
+                          {/* Team A Row */}
+                          <div className={`flex items-center justify-between px-3 py-2 text-sm border-b border-border/40 ${
+                            m.winnerId === m.teamAId
+                              ? "bg-emerald-500/8 font-bold text-emerald-700 dark:text-emerald-400"
+                              : m.winnerId && m.winnerId !== m.teamAId
+                                ? "bg-muted/20 text-muted-foreground"
+                                : "bg-background text-foreground"
+                          }`}>
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {m.winnerId === m.teamAId && <span className="text-emerald-500 text-[10px]">▶</span>}
+                              <span className="truncate font-medium text-[13px]">{teamName(m.teamAId) ?? "TBD"}</span>
+                            </div>
+                            {canDecide && m.teamAId && (
+                              <button
+                                onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, m.id, m.teamAId!))}
+                                className="shrink-0 ml-2 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                              >
+                                Win
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Team B Row or BYE */}
+                          {!m.isBye ? (
+                            <div className={`flex items-center justify-between px-3 py-2 text-sm ${
+                              m.winnerId === m.teamBId
+                                ? "bg-emerald-500/8 font-bold text-emerald-700 dark:text-emerald-400"
+                                : m.winnerId && m.winnerId !== m.teamBId
+                                  ? "bg-muted/20 text-muted-foreground"
+                                  : "bg-background text-foreground"
+                            }`}>
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                {m.winnerId === m.teamBId && <span className="text-emerald-500 text-[10px]">▶</span>}
+                                <span className="truncate font-medium text-[13px]">{teamName(m.teamBId) ?? "TBD"}</span>
+                              </div>
+                              {canDecide && m.teamBId && (
+                                <button
+                                  onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, m.id, m.teamBId!))}
+                                  className="shrink-0 ml-2 rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary hover:bg-primary hover:text-primary-foreground transition-colors"
+                                >
+                                  Win
+                                </button>
+                              )}
+                            </div>
+                          ) : (
+                            <div className="px-3 py-2 text-[11px] font-semibold italic text-muted-foreground bg-muted/10">
+                              Bye — Auto-Advance
+                            </div>
                           )}
                         </div>
-                      );
-                    })}
 
-                    {/* Bracket Spine Connector connecting Top & Bottom Match in the Pair */}
-                    {!isLast && (
-                      <>
-                        <div
-                          className={`absolute -right-8 top-[25%] bottom-[25%] w-[2.5px] z-0 transition-colors ${
-                            pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
-                          }`}
-                        />
-                        {/* Forward Stem to Next Round */}
-                        <div
-                          className={`absolute -right-16 top-1/2 h-[2.5px] w-8 -translate-y-1/2 z-0 transition-colors ${
-                            pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"
-                          }`}
-                        />
-                      </>
-                    )}
-                  </div>
-                ))}
+                        {/* Connector line to next round */}
+                        {!isLast && (
+                          <div
+                            className={`h-[2px] transition-colors ${
+                              hasWinner ? "bg-emerald-500/50" : "bg-border"
+                            }`}
+                            style={{ width: connectorWidth }}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })}
@@ -1040,52 +1223,3 @@ function Bracket({
   );
 }
 
-function MatchBox({
-  match,
-  teamName,
-  tournament,
-  emit,
-}: {
-  match: TournamentMatch;
-  teamName: (id: string | null) => string | null;
-  tournament: Tournament;
-  emit: ReturnType<typeof useMockWebSocket>["emit"];
-}) {
-  const canDecide = !match.isBye && match.teamAId && match.teamBId && !match.winnerId;
-
-  const pick = (winnerId: string) => {
-    emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, winnerId));
-  };
-
-  const row = (id: string | null) => {
-    const isWinner = id && id === match.winnerId;
-    return (
-      <div
-        className={`flex items-center justify-between rounded-md px-3 py-2 text-sm transition-colors ${
-          isWinner ? "bg-emerald-500/10 font-bold text-emerald-600 dark:text-emerald-400" : "text-foreground"
-        }`}
-      >
-        <span className="truncate pr-2 font-medium">{teamName(id) ?? "TBD"}</span>
-        {canDecide && id && (
-          <button
-            onClick={() => pick(id)}
-            className="rounded border border-primary/40 bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary transition-colors hover:bg-primary hover:text-primary-foreground shrink-0"
-          >
-            Win
-          </button>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <Trophy className="size-3.5 shrink-0 text-muted-foreground" />
-      <div className="flex-1 divide-y divide-border rounded-xl border border-border bg-background shadow-sm transition-all hover:border-primary/50">
-        {row(match.teamAId)}
-        {!match.isBye && row(match.teamBId)}
-        {match.isBye && <div className="px-3 py-2 text-xs font-semibold italic text-muted-foreground">Bye (Auto-Advance)</div>}
-      </div>
-    </div>
-  );
-}
