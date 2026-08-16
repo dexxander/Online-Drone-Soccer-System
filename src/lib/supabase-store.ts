@@ -113,7 +113,7 @@ function generateGroupStage(teamIds: string[], groupCount: number): TournamentMa
 
 function groupQualifiedTeams(tournament: Tournament): string[] | null {
   const groupMatches = tournament.matches.filter((m) => m.phase === "group");
-  if (!groupMatches.length || groupMatches.some((m) => !m.winnerId)) return null;
+  if (!groupMatches.length || groupMatches.some((m) => !m.winnerId && m.result !== "draw")) return null;
   const groups = new Map<number, string[]>();
   groupMatches.forEach((match) => {
     const group = match.groupNumber ?? 1;
@@ -125,7 +125,12 @@ function groupQualifiedTeams(tournament: Tournament): string[] | null {
   const qualifiers = tournament.qualifiersPerGroup ?? 2;
   const points = new Map<string, number>();
   groupMatches.forEach((match) => {
-    if (match.winnerId) points.set(match.winnerId, (points.get(match.winnerId) ?? 0) + 3);
+    if (match.result === "draw" && tournament.groupScoringSystem !== "winner-only") {
+      if (match.teamAId) points.set(match.teamAId, (points.get(match.teamAId) ?? 0) + 1);
+      if (match.teamBId) points.set(match.teamBId, (points.get(match.teamBId) ?? 0) + 1);
+    } else if (match.winnerId) {
+      points.set(match.winnerId, (points.get(match.winnerId) ?? 0) + 3);
+    }
   });
   return [...groups.entries()].flatMap(([_, ids]) => ids
     .sort((a, b) => (points.get(b) ?? 0) - (points.get(a) ?? 0))
@@ -234,9 +239,10 @@ export interface DataStore {
   removePlayer(id: string): void;
   updateTeam(id: string, patch: Partial<Omit<Team, "id" | "createdAt" | "ownerId">>): void;
   removeTeam(id: string): void;
-  createTournament(name: string, teamIds: string[], category?: TeamCategory, matchmakingType?: MatchmakingType, teamQuota?: number, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>, groupStageEnabled?: boolean, groupCount?: number, qualifiersPerGroup?: number, logoUrl?: string | null, bannerUrl?: string | null, halfDurationMinutes?: number, halftimeDurationMinutes?: number, warmupDurationMinutes?: number, overtimeDurationMinutes?: number): Tournament;
+  createTournament(name: string, teamIds: string[], category?: TeamCategory, matchmakingType?: MatchmakingType, teamQuota?: number, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>, groupStageEnabled?: boolean, groupCount?: number, qualifiersPerGroup?: number, logoUrl?: string | null, bannerUrl?: string | null, halfDurationMinutes?: number, halftimeDurationMinutes?: number, warmupDurationMinutes?: number, overtimeDurationMinutes?: number, groupScoringSystem?: "three-one-zero" | "winner-only"): Tournament;
   regenerateTournamentMatchmaking(tournamentId: string, matchmakingType: MatchmakingType, manualPairs?: Array<{ teamAId: string | null; teamBId: string | null }>): void;
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string): void;
+  setMatchResult(tournamentId: string, matchId: string, winnerId: string | null, result: "win" | "draw"): void;
   setTournamentStatus(id: string, status: "draft" | "active" | "completed"): void;
   removeTournament(id: string): void;
   setupLiveMatch(slotId: MatchSlotId, tournamentMatchId: string, teamAName: string, teamBName: string): void;
@@ -253,6 +259,7 @@ export interface DataStore {
   touchSlotPresence(slotId: MatchSlotId): void;
   releaseSlotPresence(slotId: MatchSlotId): void;
   refreshMatchSlots(): Promise<void>;
+  refreshTournaments(): Promise<void>;
   addAnnouncement(input: Omit<Announcement, "id" | "createdAt">): Announcement;
   updateAnnouncement(id: string, patch: Partial<Omit<Announcement, "id" | "createdAt">>): void;
   removeAnnouncement(id: string): void;
@@ -314,13 +321,20 @@ export class SupabaseStore implements DataStore {
       const camelMatches = toCamel(tournamentMatches || []);
       const camelTournamentTeams = toCamel(tournamentTeams || []);
 
-      const mappedTournaments = camelTournaments.map((t: any) => ({
+      const mappedTournaments = camelTournaments.map((t: any) => {
+        const matches = camelMatches.filter((m: any) => m.tournamentId === t.id);
+        const groupMatches = matches.filter((m: any) => m.phase === "group");
+        return {
         ...t,
+        groupStageEnabled: t.groupStageEnabled ?? groupMatches.length > 0,
+        groupCount: t.groupCount ?? (groupMatches.length ? Math.max(...groupMatches.map((m: any) => m.groupNumber ?? 1)) : undefined),
+        qualifiersPerGroup: t.qualifiersPerGroup ?? (groupMatches.length ? 2 : undefined),
+        groupScoringSystem: t.groupScoringSystem ?? "three-one-zero",
         teamIds: camelTournamentTeams
           .filter((link: any) => link.tournamentId === t.id)
           .map((link: any) => link.teamId),
-        matches: camelMatches.filter((m: any) => m.tournamentId === t.id)
-      }));
+        matches,
+      }; });
 
       this.state = {
         ...emptyState,
@@ -600,7 +614,8 @@ export class SupabaseStore implements DataStore {
     halfDurationMinutes = 5,
     halftimeDurationMinutes = 2,
     warmupDurationMinutes = 5,
-    overtimeDurationMinutes = 3
+    overtimeDurationMinutes = 3,
+    groupScoringSystem: "three-one-zero" = "three-one-zero"
   ) {
     const uniqueTeamIds = [...new Set(teamIds)].slice(0, 128);
     if (uniqueTeamIds.length < 2) throw new Error("A tournament requires at least 2 teams.");
@@ -622,6 +637,7 @@ export class SupabaseStore implements DataStore {
       ...(teamQuota ? { teamQuota } : {}),
       groupStageEnabled,
       ...(groupStageEnabled ? { groupCount, qualifiersPerGroup } : {}),
+      ...(groupStageEnabled ? { groupScoringSystem } : {}),
       logoUrl,
       bannerUrl,
       halfDurationMinutes,
@@ -641,6 +657,9 @@ export class SupabaseStore implements DataStore {
       status: tournament.status,
       matchmaking_type: tournament.matchmakingType ?? null,
       team_quota: tournament.teamQuota ?? null,
+      group_stage_enabled: tournament.groupStageEnabled ?? false,
+      group_count: tournament.groupCount ?? null,
+      qualifiers_per_group: tournament.qualifiersPerGroup ?? null,
       created_at: new Date(tournament.createdAt).toISOString(),
       logo_url: tournament.logoUrl ?? null,
       banner_url: tournament.bannerUrl ?? null,
@@ -648,6 +667,7 @@ export class SupabaseStore implements DataStore {
       halftime_duration_minutes: tournament.halftimeDurationMinutes ?? 2,
       warmup_duration_minutes: tournament.warmupDurationMinutes ?? 5,
       overtime_duration_minutes: tournament.overtimeDurationMinutes ?? 3,
+      group_scoring_system: tournament.groupScoringSystem ?? "three-one-zero",
     };
     const tMatches = tournament.matches.map((match) => ({
       id: match.id,
@@ -662,6 +682,7 @@ export class SupabaseStore implements DataStore {
       scheduled_time: match.scheduledTime ?? null,
       phase: match.phase ?? "knockout",
       group_number: match.groupNumber ?? null,
+      result: match.result ?? null,
     }));
     this.persist('tournament insert', async () => {
       const result = await supabase.from('tournaments').insert(mapped);
@@ -707,6 +728,37 @@ export class SupabaseStore implements DataStore {
   }
 
   setMatchWinner(tournamentId: string, matchId: string, winnerId: string) {
+    this.setMatchResult(tournamentId, matchId, winnerId, "win");
+  }
+
+  async refreshTournaments() {
+    const [tournamentRows, matchRows, teamRows] = await Promise.all([
+      supabase.from("tournaments").select("*"),
+      supabase.from("tournament_matches").select("*"),
+      supabase.from("tournament_teams").select("*")
+    ]);
+    const firstError = [tournamentRows, matchRows, teamRows].find((response) => response.error)?.error;
+    if (firstError) return;
+    const tournaments = toCamel(tournamentRows.data || []) as any[];
+    const matches = toCamel(matchRows.data || []) as any[];
+    const links = toCamel(teamRows.data || []) as any[];
+    const mappedTournaments = tournaments.map((t: any) => {
+      const tournamentMatches = matches.filter((m: any) => m.tournamentId === t.id);
+      const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group");
+      return {
+        ...t,
+        groupStageEnabled: t.groupStageEnabled ?? groupMatches.length > 0,
+        groupCount: t.groupCount ?? (groupMatches.length ? Math.max(...groupMatches.map((m: any) => m.groupNumber ?? 1)) : undefined),
+        qualifiersPerGroup: t.qualifiersPerGroup ?? (groupMatches.length ? 2 : undefined),
+        groupScoringSystem: t.groupScoringSystem ?? "three-one-zero",
+        teamIds: links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId),
+        matches: tournamentMatches,
+      };
+    });
+    this.commit({ ...this.state, tournaments: mappedTournaments });
+  }
+
+  setMatchResult(tournamentId: string, matchId: string, winnerId: string | null, result: "win" | "draw") {
     const previousMatchIds = new Set(this.state.tournaments.find(x => x.id === tournamentId)?.matches.map(m => m.id) ?? []);
     const tournaments = this.state.tournaments.map((t) => {
       if (t.id !== tournamentId) return t;
@@ -714,6 +766,7 @@ export class SupabaseStore implements DataStore {
       const match = matches.find((m) => m.id === matchId);
       if (!match) return t;
       match.winnerId = winnerId;
+      match.result = result;
       if (match.phase === "group") {
         const updated = { ...t, matches };
         const qualified = groupQualifiedTeams(updated);
@@ -981,7 +1034,7 @@ export class SupabaseStore implements DataStore {
     const t = this.state.tournaments.find(t => t.matches.some(tm => tm.id === match.id));
     if (t) {
       const tMatch = t.matches.find(tm => tm.id === match.id);
-      if (tMatch && !tMatch.winnerId && tMatch.phase !== "group") {
+      if (tMatch && !tMatch.winnerId && tMatch.result !== "draw") {
         let winnerId = null;
         const disqualifiedA = calculateEffectivePenalties(match.penalties.filter((penalty) => penalty.side === "A")).isDisqualified;
         const disqualifiedB = calculateEffectivePenalties(match.penalties.filter((penalty) => penalty.side === "B")).isDisqualified;
@@ -990,9 +1043,8 @@ export class SupabaseStore implements DataStore {
         else if (match.scoreA > match.scoreB) winnerId = tMatch.teamAId;
         else if (match.scoreB > match.scoreA) winnerId = tMatch.teamBId;
         
-        if (winnerId) {
-          this.setMatchWinner(t.id, match.id, winnerId);
-        }
+        if (winnerId) this.setMatchWinner(t.id, match.id, winnerId);
+        else if (tMatch.phase === "group") this.setMatchResult(t.id, match.id, null, "draw");
       }
     }
   }

@@ -474,7 +474,7 @@ function RefereePage() {
                             <div key={pi} className="relative flex flex-col justify-around h-full my-4">
                               {pair.map((m) => {
                                 const isPlayable = !m.isBye && Boolean(m.teamAId) && Boolean(m.teamBId) && !m.winnerId;
-                                const isCompleted = m.winnerId !== null;
+                                const isCompleted = m.winnerId !== null || m.result === "draw";
                                 const isClickable = isPlayable || (isCompleted && !m.isBye);
                                 const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
                                 const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;

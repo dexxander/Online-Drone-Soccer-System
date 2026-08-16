@@ -4,7 +4,7 @@ import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, S
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
-import type { MatchmakingType, Team, TeamCategory, Tournament, TournamentMatch } from "@/lib/types";
+import type { GroupScoringSystem, MatchmakingType, Team, TeamCategory, Tournament, TournamentMatch } from "@/lib/types";
 import { exportBracketPdf, exportGroupStagePdf, exportTournamentPdf } from "@/lib/tournament-pdf";
 
 export const Route = createFileRoute("/admin-tournaments")({
@@ -18,12 +18,18 @@ export const Route = createFileRoute("/admin-tournaments")({
 });
 
 function AdminTournamentsPage() {
-  const { state, emit } = useMockWebSocket();
+  const { state, emit, socket } = useMockWebSocket();
   const [creating, setCreating] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [reMatchmakingItem, setReMatchmakingItem] = useState<Tournament | null>(null);
 
   const selected = state.tournaments.find((t) => t.id === selectedId) ?? null;
+
+  useEffect(() => {
+    void socket.refreshTournaments();
+    const refreshId = window.setInterval(() => void socket.refreshTournaments(), 3000);
+    return () => window.clearInterval(refreshId);
+  }, [socket]);
   const autoExportedTournament = useRef<string | null>(null);
 
   useEffect(() => {
@@ -237,6 +243,7 @@ function CreateTournamentForm({
   const [matchmakingType, setMatchmakingType] = useState<MatchmakingType>("auto");
   const [groupStageEnabled, setGroupStageEnabled] = useState(false);
   const [groupCount, setGroupCount] = useState(4);
+  const [groupScoringSystem, setGroupScoringSystem] = useState<GroupScoringSystem>("three-one-zero");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [halfDurationMinutes, setHalfDurationMinutes] = useState(5);
@@ -393,6 +400,7 @@ function CreateTournamentForm({
         ,halftimeDurationMinutes
         ,warmupDurationMinutes
         ,overtimeDurationMinutes
+        ,groupScoringSystem
       )
     );
     onClose();
@@ -531,6 +539,11 @@ function CreateTournamentForm({
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-foreground">Number of groups</label>
               <select className="auth-input" value={groupCount} onChange={(e) => setGroupCount(Number(e.target.value))}>
                 {[2, 4, 5, 8, 16].map((count) => <option key={count} value={count}>{count} Groups</option>)}
+              </select>
+              <label className="mt-3 block text-xs font-semibold uppercase tracking-wider text-foreground">Group scoring system</label>
+              <select className="auth-input mt-1.5" value={groupScoringSystem} onChange={(e) => setGroupScoringSystem(e.target.value as GroupScoringSystem)}>
+                <option value="three-one-zero">Points: win 3 / draw 1 / loss 0</option>
+                <option value="winner-only">Winner-only scoring</option>
               </select>
             </div>
           )}
@@ -885,7 +898,7 @@ function GroupStage({
       <div className="mb-5 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold text-foreground">Group Stage</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Top {tournament.qualifiersPerGroup ?? 2} teams from each group qualify for the knockout bracket.</p>
+          <p className="mt-1 text-sm text-muted-foreground">Top {tournament.qualifiersPerGroup ?? 2} teams from each group qualify. {(tournament.groupScoringSystem ?? "three-one-zero") === "three-one-zero" ? "Win 3 points, draw 1, loss 0." : "The winner-only scoring system is active."}</p>
         </div>
         <span className="rounded-md bg-amber-500/10 px-2.5 py-1 text-xs font-bold text-amber-700">
           {groupMatches.filter((m) => m.winnerId).length} / {groupMatches.length} decided
@@ -901,8 +914,9 @@ function GroupStage({
                   <div className="flex items-center justify-between gap-2"><span className={match.winnerId === match.teamAId ? "font-bold text-emerald-600" : ""}>{teamName(match.teamAId)}</span>{match.winnerId === match.teamAId && "✓"}</div>
                   <div className="my-1 border-t border-border" />
                   <div className="flex items-center justify-between gap-2"><span className={match.winnerId === match.teamBId ? "font-bold text-emerald-600" : ""}>{teamName(match.teamBId)}</span>{match.winnerId === match.teamBId && "✓"}</div>
-                  {!match.winnerId && match.teamAId && match.teamBId && (
-                    <div className="mt-2 flex gap-1"><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamAId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamAId)} wins</button><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamBId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamBId)} wins</button></div>
+                  {match.result === "draw" && <p className="mt-2 text-center text-[10px] font-bold text-amber-700">DRAW - 1 point each</p>}
+                  {!match.winnerId && match.result !== "draw" && match.teamAId && match.teamBId && (
+                    <div className="mt-2 flex flex-wrap gap-1"><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamAId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamAId)} wins</button><button onClick={() => emit("setMatchWinner", (store) => store.setMatchWinner(tournament.id, match.id, match.teamBId!))} className="flex-1 rounded bg-primary/10 px-1 py-1 text-[10px] font-bold text-primary">{teamName(match.teamBId)} wins</button>{(tournament.groupScoringSystem ?? "three-one-zero") === "three-one-zero" && <button onClick={() => emit("setMatchResult", (store) => store.setMatchResult(tournament.id, match.id, null, "draw"))} className="w-full rounded bg-amber-500/10 px-1 py-1 text-[10px] font-bold text-amber-700">Draw</button>}</div>
                   )}
                 </div>
               ))}

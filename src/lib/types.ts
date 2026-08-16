@@ -181,12 +181,14 @@ export interface TournamentMatch {
   teamAId: string | null;
   teamBId: string | null;
   winnerId: string | null;
+  result?: "win" | "draw" | undefined;
   isBye: boolean;
   scheduledDate?: string | undefined;
   scheduledTime?: string | undefined;
 }
 
 export type MatchmakingType = "auto" | "manual";
+export type GroupScoringSystem = "three-one-zero" | "winner-only";
 
 export interface Tournament {
   id: string;
@@ -200,6 +202,7 @@ export interface Tournament {
   groupStageEnabled?: boolean | undefined;
   groupCount?: number | undefined;
   qualifiersPerGroup?: number | undefined;
+  groupScoringSystem?: GroupScoringSystem | undefined;
   logoUrl?: string | null | undefined;
   bannerUrl?: string | null | undefined;
   halfDurationMinutes?: number | undefined;

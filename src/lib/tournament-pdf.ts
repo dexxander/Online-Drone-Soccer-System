@@ -1,49 +1,39 @@
-import type { Team, Tournament } from "./types";
+import type { Team, Tournament, TournamentMatch } from "./types";
 
+type PdfPage = string[];
+type Standing = { id: string; played: number; wins: number; draws: number; losses: number; points: number };
+const navy = [0.08, 0.13, 0.24]; const blue = [0.12, 0.35, 0.75]; const paleBlue = [0.92, 0.95, 1]; const gray = [0.38, 0.42, 0.5]; const lightGray = [0.9, 0.91, 0.94];
 function safe(value: string) { return value.replace(/[^\x20-\x7E]/g, "?"); }
 function escapePdf(value: string) { return safe(value).replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)"); }
-
-function buildPdf(pages: string[][]) {
-  const objects: string[] = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [] /Count 0 >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"];
-  const pageIds: number[] = [];
-  pages.forEach((lines) => {
-    const content = ["BT", "/F1 11 Tf", "48 752 Td", "14 TL", ...lines.map((line, index) => `${index ? "T* " : ""}(${escapePdf(line)}) Tj`), "ET"].join("\n");
-    const contentId = objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
-    pageIds.push(objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`));
-  });
-  objects[1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`;
-  let pdf = "%PDF-1.4\n";
-  const offsets = [0];
-  objects.forEach((object, index) => { offsets[index + 1] = pdf.length; pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; });
-  const xref = pdf.length;
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
-  offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; });
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
-  return new Blob([pdf], { type: "application/pdf" });
-}
-
-function downloadPdf(fileName: string, pages: string[][]) {
-  const url = URL.createObjectURL(buildPdf(pages));
-  const link = document.createElement("a"); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url);
-}
+function color(values: number[]) { return `${values.join(" ")} rg`; }
+function line(x1: number, y1: number, x2: number, y2: number, values = lightGray) { return `${color(values)} 0.7 w ${x1} ${y1} m ${x2} ${y2} l S`; }
+function rect(x: number, y: number, width: number, height: number, values: number[]) { return `${color(values)} ${x} ${y} ${width} ${height} re f`; }
+function text(x: number, y: number, value: string, size = 10, values = navy) { return `${color(values)} BT /F1 ${size} Tf ${x} ${y} Td (${escapePdf(value)}) Tj ET`; }
 function teamName(id: string | null, teams: Team[]) { return id ? teams.find((team) => team.id === id)?.name ?? "Unknown team" : "TBD"; }
-function groupLines(tournament: Tournament, teams: Team[]) {
-  const groups = new Map<number, Set<string>>();
-  tournament.matches.filter((match) => match.phase === "group").forEach((match) => {
-    const ids = groups.get(match.groupNumber ?? 1) ?? new Set<string>();
-    if (match.teamAId) ids.add(match.teamAId); if (match.teamBId) ids.add(match.teamBId); groups.set(match.groupNumber ?? 1, ids);
-  });
-  return [...groups.entries()].flatMap(([number, ids]) => [`Group ${String.fromCharCode(64 + number)} (${ids.size} teams)`, ...[...ids].map((id) => `  - ${teamName(id, teams)}`), ""]);
+function groupMatches(tournament: Tournament, groupNumber: number) { return tournament.matches.filter((match) => match.phase === "group" && (match.groupNumber ?? 1) === groupNumber); }
+function groupTeamIds(matches: TournamentMatch[]) { return [...new Set(matches.flatMap((match) => [match.teamAId, match.teamBId].filter((id): id is string => Boolean(id))))]; }
+function standings(matches: TournamentMatch[], scoring: Tournament["groupScoringSystem"]): Standing[] {
+  const rows = new Map<string, Standing>(); groupTeamIds(matches).forEach((id) => rows.set(id, { id, played: 0, wins: 0, draws: 0, losses: 0, points: 0 }));
+  matches.forEach((match) => { if (!match.teamAId || !match.teamBId || (!match.winnerId && match.result !== "draw")) return; const a = rows.get(match.teamAId); const b = rows.get(match.teamBId); if (!a || !b) return; a.played += 1; b.played += 1; if (match.result === "draw") { a.draws += 1; b.draws += 1; if (scoring !== "winner-only") { a.points += 1; b.points += 1; } } else if (match.winnerId === match.teamAId) { a.wins += 1; b.losses += 1; a.points += 3; } else { b.wins += 1; a.losses += 1; b.points += 3; } });
+  return [...rows.values()].sort((a, b) => b.points - a.points || b.wins - a.wins || a.id.localeCompare(b.id));
 }
-function bracketLines(tournament: Tournament, teams: Team[]) {
-  const matches = tournament.matches.filter((match) => (match.phase ?? "knockout") === "knockout");
-  return matches.length ? matches.sort((a, b) => a.round - b.round || a.slot - b.slot).map((match) => `Round ${match.round}, Match ${match.slot + 1}: ${teamName(match.teamAId, teams)} vs ${teamName(match.teamBId, teams)}${match.winnerId ? ` | Winner: ${teamName(match.winnerId, teams)}` : ""}`) : ["Knockout bracket is waiting for group results."];
+function groupPage(tournament: Tournament, teams: Team[], groupNumber: number, pageNumber: number, totalPages: number): PdfPage {
+  const matches = groupMatches(tournament, groupNumber); const rows = standings(matches, tournament.groupScoringSystem); const name = `Group ${String.fromCharCode(64 + groupNumber)}`;
+  const commands = [rect(0, 0, 612, 792, [1, 1, 1]), rect(0, 742, 612, 50, navy), text(48, 762, "DRONE SOCCER LEAGUE", 10, [1, 1, 1]), text(48, 725, `${name} - Group Stage Standings`, 22, navy), text(48, 704, `Top ${tournament.qualifiersPerGroup ?? 2} qualify  |  ${tournament.groupScoringSystem === "three-one-zero" ? "Win 3 / Draw 1 / Loss 0" : "Winner-only scoring"}`, 9, gray)];
+  commands.push(rect(48, 665, 516, 25, blue), text(58, 673, "TEAM", 8, [1, 1, 1]), text(280, 673, "P", 8, [1, 1, 1]), text(320, 673, "W", 8, [1, 1, 1]), text(360, 673, "D", 8, [1, 1, 1]), text(400, 673, "L", 8, [1, 1, 1]), text(448, 673, "POINTS", 8, [1, 1, 1]));
+  rows.forEach((row, index) => { const y = 640 - index * 27; if (index % 2 === 0) commands.push(rect(48, y - 8, 516, 27, [0.97, 0.98, 1])); commands.push(text(58, y, `${index + 1}. ${teamName(row.id, teams)}`, 9), text(280, y, String(row.played), 9, gray), text(320, y, String(row.wins), 9, gray), text(360, y, String(row.draws), 9, gray), text(400, y, String(row.losses), 9, gray), text(448, y, String(row.points), 9, blue), line(48, y - 9, 564, y - 9)); });
+  const matchTop = 620 - rows.length * 27 - 24; commands.push(text(48, matchTop, "MATCH RESULTS", 11, navy), rect(48, matchTop - 25, 516, 22, paleBlue), text(58, matchTop - 17, "MATCH", 8), text(180, matchTop - 17, "TEAM A", 8), text(350, matchTop - 17, "TEAM B", 8), text(500, matchTop - 17, "RESULT", 8));
+  matches.forEach((match, index) => { const y = matchTop - 48 - index * 23; const result = match.result === "draw" ? "DRAW" : match.winnerId ? `${teamName(match.winnerId, teams)} WINS` : "PENDING"; commands.push(text(58, y, `#${index + 1}`, 8, gray), text(180, y, teamName(match.teamAId, teams).slice(0, 24), 8), text(350, y, teamName(match.teamBId, teams).slice(0, 24), 8), text(500, y, result.slice(0, 12), 8, result === "DRAW" ? [0.72, 0.42, 0.05] : blue), line(48, y - 8, 564, y - 8)); });
+  commands.push(text(48, 35, `Generated ${new Date().toLocaleDateString()}  |  Page ${pageNumber} of ${totalPages}`, 8, gray)); return commands;
 }
-function page(title: string, tournament: Tournament, lines: string[]) { return [`${title}: ${tournament.name}`, `Generated ${new Date().toLocaleString()}`, "", ...lines]; }
-function pages(title: string, tournament: Tournament, lines: string[]) {
-  const allLines = page(title, tournament, lines);
-  return Array.from({ length: Math.max(1, Math.ceil(allLines.length / 48)) }, (_, index) => allLines.slice(index * 48, index * 48 + 48));
+function bracketPage(tournament: Tournament, teams: Team[], pageNumber: number, totalPages: number): PdfPage {
+  const matches = tournament.matches.filter((match) => (match.phase ?? "knockout") === "knockout").sort((a, b) => a.round - b.round || a.slot - b.slot); const commands = [rect(0, 0, 612, 792, [1, 1, 1]), rect(0, 742, 612, 50, navy), text(48, 762, "DRONE SOCCER LEAGUE", 10, [1, 1, 1]), text(48, 725, "Tournament Bracket", 22, navy), text(48, 704, tournament.name, 10, gray), rect(48, 665, 516, 25, blue), text(58, 673, "ROUND", 8, [1, 1, 1]), text(120, 673, "MATCH", 8, [1, 1, 1]), text(190, 673, "TEAM A", 8, [1, 1, 1]), text(360, 673, "TEAM B", 8, [1, 1, 1]), text(500, 673, "STATUS", 8, [1, 1, 1])];
+  matches.slice(0, 24).forEach((match, index) => { const y = 640 - index * 24; if (index % 2 === 0) commands.push(rect(48, y - 9, 516, 24, [0.97, 0.98, 1])); commands.push(text(58, y, `R${match.round}`, 8, gray), text(120, y, `#${match.slot + 1}`, 8, gray), text(190, y, teamName(match.teamAId, teams).slice(0, 24), 8), text(360, y, teamName(match.teamBId, teams).slice(0, 24), 8), text(500, y, match.winnerId ? "DECIDED" : "PENDING", 8, match.winnerId ? blue : gray), line(48, y - 9, 564, y - 9)); });
+  commands.push(text(48, 35, `Generated ${new Date().toLocaleDateString()}  |  Page ${pageNumber} of ${totalPages}`, 8, gray)); return commands;
 }
-export function exportGroupStagePdf(tournament: Tournament, teams: Team[]) { downloadPdf(`${tournament.name}-group-stage.pdf`, pages("Group Stage", tournament, groupLines(tournament, teams))); }
-export function exportBracketPdf(tournament: Tournament, teams: Team[]) { downloadPdf(`${tournament.name}-bracket.pdf`, pages("Tournament Bracket", tournament, bracketLines(tournament, teams))); }
-export function exportTournamentPdf(tournament: Tournament, teams: Team[]) { downloadPdf(`${tournament.name}-tournament.pdf`, pages("Tournament Summary", tournament, [`Status: ${tournament.status}`, `Teams: ${tournament.teamIds.length}`, "", "GROUP STAGE", ...groupLines(tournament, teams), "KNOCKOUT BRACKET", ...bracketLines(tournament, teams)])); }
+function buildPdf(pages: PdfPage[]) { const objects: string[] = ["<< /Type /Catalog /Pages 2 0 R >>", "<< /Type /Pages /Kids [] /Count 0 >>", "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]; const pageIds: number[] = []; pages.forEach((commands) => { const content = commands.join("\n"); const contentId = objects.push(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`); pageIds.push(objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${contentId} 0 R >>`)); }); objects[1] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageIds.length} >>`; let pdf = "%PDF-1.4\n"; const offsets = [0]; objects.forEach((object, index) => { offsets[index + 1] = pdf.length; pdf += `${index + 1} 0 obj\n${object}\nendobj\n`; }); const xref = pdf.length; pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`; offsets.slice(1).forEach((offset) => { pdf += `${String(offset).padStart(10, "0")} 00000 n \n`; }); pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`; return new Blob([pdf], { type: "application/pdf" }); }
+function downloadPdf(fileName: string, pages: PdfPage[]) { const url = URL.createObjectURL(buildPdf(pages)); const link = document.createElement("a"); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url); }
+function groups(tournament: Tournament) { return [...new Set(tournament.matches.filter((match) => match.phase === "group").map((match) => match.groupNumber ?? 1))].sort((a, b) => a - b); }
+export function exportGroupStagePdf(tournament: Tournament, teams: Team[]) { const groupNumbers = groups(tournament); downloadPdf(`${tournament.name}-group-stage.pdf`, groupNumbers.map((group, index) => groupPage(tournament, teams, group, index + 1, groupNumbers.length))); }
+export function exportBracketPdf(tournament: Tournament, teams: Team[]) { downloadPdf(`${tournament.name}-bracket.pdf`, [bracketPage(tournament, teams, 1, 1)]); }
+export function exportTournamentPdf(tournament: Tournament, teams: Team[]) { const groupNumbers = groups(tournament); const pages = groupNumbers.map((group, index) => groupPage(tournament, teams, group, index + 1, groupNumbers.length + 1)); pages.push(bracketPage(tournament, teams, pages.length + 1, pages.length + 1)); downloadPdf(`${tournament.name}-tournament.pdf`, pages); }

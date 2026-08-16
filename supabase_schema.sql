@@ -72,6 +72,7 @@ CREATE TABLE public.tournaments (
   ,group_stage_enabled BOOLEAN DEFAULT FALSE NOT NULL
   ,group_count INTEGER
   ,qualifiers_per_group INTEGER
+  ,group_scoring_system TEXT DEFAULT 'three-one-zero'
   ,logo_url TEXT
   ,banner_url TEXT
   ,half_duration_minutes INTEGER DEFAULT 5 NOT NULL
@@ -101,6 +102,7 @@ CREATE TABLE public.tournament_matches (
   scheduled_time TEXT
   ,phase TEXT DEFAULT 'knockout' NOT NULL
   ,group_number INTEGER
+  ,result TEXT
 );
 
 -- Run these statements when upgrading an existing database created before group stages.
@@ -115,6 +117,8 @@ ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS warmup_duration_minutes 
 ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS overtime_duration_minutes INTEGER DEFAULT 3 NOT NULL;
 ALTER TABLE public.tournament_matches ADD COLUMN IF NOT EXISTS phase TEXT DEFAULT 'knockout' NOT NULL;
 ALTER TABLE public.tournament_matches ADD COLUMN IF NOT EXISTS group_number INTEGER;
+ALTER TABLE public.tournament_matches ADD COLUMN IF NOT EXISTS result TEXT;
+ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS group_scoring_system TEXT DEFAULT 'three-one-zero';
 
 -- Match Slots
 CREATE TABLE public.match_slots (
