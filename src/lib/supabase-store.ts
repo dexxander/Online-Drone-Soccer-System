@@ -114,6 +114,8 @@ function generateGroupStage(teamIds: string[], groupCount: number): TournamentMa
 function groupQualifiedTeams(tournament: Tournament): string[] | null {
   const groupMatches = tournament.matches.filter((m) => m.phase === "group");
   if (!groupMatches.length || groupMatches.some((m) => !m.winnerId && m.result !== "draw")) return null;
+
+  // Collect team IDs per group
   const groups = new Map<number, string[]>();
   groupMatches.forEach((match) => {
     const group = match.groupNumber ?? 1;
@@ -122,18 +124,64 @@ function groupQualifiedTeams(tournament: Tournament): string[] | null {
     if (match.teamBId && !list.includes(match.teamBId)) list.push(match.teamBId);
     groups.set(group, list);
   });
-  const qualifiers = tournament.qualifiersPerGroup ?? 2;
-  const points = new Map<string, number>();
+
+  // Build full stats per team: points, goal difference, goals for, goals against
+  const stats = new Map<string, { pts: number; gf: number; ga: number }>();
+  const ensureStats = (id: string) => { if (!stats.has(id)) stats.set(id, { pts: 0, gf: 0, ga: 0 }); };
   groupMatches.forEach((match) => {
+    if (match.teamAId) ensureStats(match.teamAId);
+    if (match.teamBId) ensureStats(match.teamBId);
+    const scoreA = match.scoreA ?? 0;
+    const scoreB = match.scoreB ?? 0;
+    if (match.teamAId) { const s = stats.get(match.teamAId)!; s.gf += scoreA; s.ga += scoreB; }
+    if (match.teamBId) { const s = stats.get(match.teamBId)!; s.gf += scoreB; s.ga += scoreA; }
     if (match.result === "draw" && tournament.groupScoringSystem !== "winner-only") {
-      if (match.teamAId) points.set(match.teamAId, (points.get(match.teamAId) ?? 0) + 1);
-      if (match.teamBId) points.set(match.teamBId, (points.get(match.teamBId) ?? 0) + 1);
+      if (match.teamAId) stats.get(match.teamAId)!.pts += 1;
+      if (match.teamBId) stats.get(match.teamBId)!.pts += 1;
     } else if (match.winnerId) {
-      points.set(match.winnerId, (points.get(match.winnerId) ?? 0) + 3);
+      stats.get(match.winnerId)!.pts += 3;
     }
   });
-  return [...groups.entries()].flatMap(([_, ids]) => ids
-    .sort((a, b) => (points.get(b) ?? 0) - (points.get(a) ?? 0))
+
+  // Sort teams within each group by: points desc → goal diff desc → goals for desc
+  const sortByRank = (a: string, b: string) => {
+    const sa = stats.get(a)!; const sb = stats.get(b)!;
+    const diffA = sa.gf - sa.ga; const diffB = sb.gf - sb.ga;
+    return (sb.pts - sa.pts) || (diffB - diffA) || (sb.gf - sa.gf);
+  };
+
+  const qualifiers = tournament.qualifiersPerGroup ?? 2;
+
+  // 21-team format: 7 groups × 3 teams → top 2 per group + 2 best 3rd-placed by GD
+  const is21TeamFormat = groups.size === 7 && [...groups.values()].every((g) => g.length === 3);
+
+  if (is21TeamFormat) {
+    const qualified: string[] = [];
+    const thirdPlaced: string[] = [];
+
+    for (const [, ids] of groups) {
+      const sorted = [...ids].sort(sortByRank);
+      // Top 2 auto-qualify
+      qualified.push(...sorted.slice(0, 2));
+      // 3rd-placed team is the wildcard candidate
+      if (sorted[2]) thirdPlaced.push(sorted[2]);
+    }
+
+    // Rank 3rd-placed teams by: goal diff desc → goals for desc → fewest goals against asc
+    thirdPlaced.sort((a, b) => {
+      const sa = stats.get(a)!; const sb = stats.get(b)!;
+      const diffA = sa.gf - sa.ga; const diffB = sb.gf - sb.ga;
+      return (diffB - diffA) || (sb.gf - sa.gf) || (sa.ga - sb.ga);
+    });
+
+    // Top 2 wildcard 3rd-placed teams qualify
+    qualified.push(...thirdPlaced.slice(0, 2));
+    return qualified;
+  }
+
+  // Default behavior: top N from each group
+  return [...groups.entries()].flatMap(([_, ids]) => [...ids]
+    .sort(sortByRank)
     .slice(0, Math.min(qualifiers, ids.length)));
 }
 

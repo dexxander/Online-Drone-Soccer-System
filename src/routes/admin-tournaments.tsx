@@ -258,7 +258,10 @@ function CreateTournamentForm({
 
   const updateTeamQuota = (quota: number) => {
     setTeamQuota(quota);
-    if (quota === 21) setGroupCount(5);
+    if (quota === 21) {
+      setGroupStageEnabled(true);
+      setGroupCount(7);
+    }
   };
 
   const readImage = (file: File, setter: (value: string) => void) => {
@@ -536,9 +539,14 @@ function CreateTournamentForm({
           <p className="mt-1 pl-7 text-xs text-muted-foreground">Teams play each other within their group. The top two teams from each group advance automatically.</p>
           {groupStageEnabled && (
             <div className="mt-3 max-w-xs pl-7">
+              {teamQuota === 21 && (
+                <p className="mb-3 text-xs text-amber-700 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                  <strong>21-Team Format:</strong> 7 groups × 3 teams. Top 2 per group (14 teams) advance automatically. The 2 best 3rd-placed teams by goal difference also qualify → 16 teams in knockout.
+                </p>
+              )}
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-foreground">Number of groups</label>
-              <select className="auth-input" value={groupCount} onChange={(e) => setGroupCount(Number(e.target.value))}>
-                {[2, 4, 5, 8, 16].map((count) => <option key={count} value={count}>{count} Groups</option>)}
+              <select className="auth-input" value={groupCount} onChange={(e) => setGroupCount(Number(e.target.value))} disabled={teamQuota === 21}>
+                {[2, 4, 5, 7, 8, 16].map((count) => <option key={count} value={count}>{count} Groups</option>)}
               </select>
               <label className="mt-3 block text-xs font-semibold uppercase tracking-wider text-foreground">Group scoring system</label>
               <select className="auth-input mt-1.5" value={groupScoringSystem} onChange={(e) => setGroupScoringSystem(e.target.value as GroupScoringSystem)}>
@@ -905,8 +913,8 @@ function GroupStage({
       if (!m.winnerId && m.result !== "draw") return;
       const a = m.teamAId ? stats.get(m.teamAId) : undefined;
       const b = m.teamBId ? stats.get(m.teamBId) : undefined;
-      const scoreA = (m as any).scoreA ?? 0;
-      const scoreB = (m as any).scoreB ?? 0;
+      const scoreA = m.scoreA ?? 0;
+      const scoreB = m.scoreB ?? 0;
       if (a) { a.played++; a.gf += scoreA; a.ga += scoreB; }
       if (b) { b.played++; b.gf += scoreB; b.ga += scoreA; }
       if (m.result === "draw" && scoringSystem !== "winner-only") {
@@ -1031,7 +1039,7 @@ function GroupStage({
                         </span>
                         {decided ? (
                           <span className="shrink-0 rounded bg-muted/60 px-2 py-0.5 text-[10px] font-bold tabular-nums text-foreground">
-                            {match.result === "draw" ? "Draw" : "✓"}
+                            {match.scoreA ?? 0} – {match.scoreB ?? 0}
                           </span>
                         ) : (
                           <span className="shrink-0 text-[10px] font-bold text-muted-foreground">vs</span>

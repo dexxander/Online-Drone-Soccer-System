@@ -481,8 +481,8 @@ function RefereePage() {
                                 const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
                                 const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
                                 const liveSlot = matchSlots.find((slot) => slot.match.id === m.id);
-                                const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : ((m as any).scoreA !== undefined ? (m as any).scoreA : "-"));
-                                const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : ((m as any).scoreB !== undefined ? (m as any).scoreB : "-"));
+                                const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : (m.scoreA !== undefined ? m.scoreA : "-"));
+                                const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : (m.scoreB !== undefined ? m.scoreB : "-"));
                                 const hasWinner = !!m.winnerId;
                                 return (
                                   <div key={m.id} className="relative py-2 z-10">

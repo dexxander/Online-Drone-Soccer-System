@@ -185,6 +185,8 @@ export interface TournamentMatch {
   isBye: boolean;
   scheduledDate?: string | undefined;
   scheduledTime?: string | undefined;
+  scoreA?: number;
+  scoreB?: number;
 }
 
 export type MatchmakingType = "auto" | "manual";
