@@ -4,7 +4,7 @@ import { ArrowLeftRight, Palette, Radio, Sparkles, Timer, Trophy, MonitorSmartph
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
-import type { MatchSlot, Tournament } from "@/lib/types";
+import type { MatchSlot, Tournament, TournamentMatch } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
 
 export const Route = createFileRoute("/scoreboard")({
@@ -171,11 +171,16 @@ function Scoreboard() {
 
   useEffect(() => {
     void socket.refreshMatchSlots();
-    const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
+    void socket.refreshTournaments?.();
+    const id = setInterval(() => {
+      void socket.refreshMatchSlots();
+      void socket.refreshTournaments?.();
+    }, 1000);
     
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         void socket.refreshMatchSlots();
+        void socket.refreshTournaments?.();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
@@ -195,6 +200,10 @@ function Scoreboard() {
 
   const visibleSlots = slots.filter((slot) => slot.visibleOnScoreboard);
   const anyLive = visibleSlots.some((slot) => slot.match.status === "live" || slot.match.status === "paused");
+
+  const configSlot = slots.find(s => s.slotId === 1) || slots[0];
+  const scoreboardMode = configSlot.scoreboardMode || "courts";
+  const scoreboardTournamentId = configSlot.scoreboardTournamentId;
 
   return (
     <div className={cn("flex min-h-screen flex-col font-sans transition-all duration-700", theme.appBg, theme.textMain)}>
@@ -231,19 +240,35 @@ function Scoreboard() {
       </header>
 
       <main className="flex-1 p-6">
-        <div className={cn("mx-auto flex w-full flex-col gap-8", visibleSlots.length === 2 ? "max-w-7xl" : "max-w-6xl")}>
-          {visibleSlots.length === 0 && <EmptyBoardState theme={theme} />}
+        <div className={cn("mx-auto flex w-full flex-col gap-8", (scoreboardMode === "courts" && visibleSlots.length === 2) ? "max-w-7xl" : "max-w-6xl")}>
+          {scoreboardMode === "courts" && visibleSlots.length === 0 && <EmptyBoardState theme={theme} />}
 
-          {visibleSlots.length === 1 && (
+          {scoreboardMode === "courts" && visibleSlots.length === 1 && (
             <MatchBoard slot={visibleSlots[0] as MatchSlot} teams={teams} tournaments={tournaments} size="full" theme={theme} />
           )}
 
-          {visibleSlots.length === 2 && (
+          {scoreboardMode === "courts" && visibleSlots.length === 2 && (
             <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
               {visibleSlots.map((slot) => (
                 <MatchBoard key={slot.slotId} slot={slot} teams={teams} tournaments={tournaments} size="split" theme={theme} />
               ))}
             </div>
+          )}
+
+          {scoreboardMode === "bracket" && scoreboardTournamentId && (
+            <BracketBoard 
+              tournament={tournaments.find(t => t.id === scoreboardTournamentId)!} 
+              teams={teams} 
+              theme={theme} 
+            />
+          )}
+
+          {scoreboardMode === "group" && scoreboardTournamentId && (
+            <GroupBoard 
+              tournament={tournaments.find(t => t.id === scoreboardTournamentId)!} 
+              teams={teams} 
+              theme={theme} 
+            />
           )}
         </div>
       </main>
@@ -606,6 +631,88 @@ function EventLogItem({ type, penaltyLevel, message, time, side, theme }: { type
       <div className="flex w-4 justify-end">
         {side === 'right' && <span className={indicatorColor}>▶</span>}
       </div>
+    </div>
+  );
+}
+
+// ─── TOURNAMENT VIEWS ────────────────────────────────────────────────────────
+
+function BracketBoard({ tournament, teams, theme }: { tournament: Tournament; teams: any[]; theme: ThemeDef }) {
+  const rounds = Array.from(new Set(tournament.matches.map(m => m.round))).sort((a, b) => a - b);
+  const maxRound = Math.max(...rounds, 0);
+
+  return (
+    <div className={cn("flex flex-col gap-6 overflow-x-auto pb-4 p-8 rounded-xl border backdrop-blur-xl transition-all duration-700", theme.cardBg, theme.border)}>
+      <div className={cn("text-center mb-4")}>
+        <h2 className={cn("text-3xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+        <p className={cn("mt-1 text-sm font-semibold uppercase tracking-widest", theme.textMuted)}>Knockout Bracket</p>
+      </div>
+
+      <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
+        {rounds.map((round) => (
+          <div key={round} className="w-[320px] flex items-center justify-between">
+            <span className={cn("text-sm font-bold uppercase tracking-wider flex items-center gap-2", theme.textMuted)}>
+              <span className={cn("flex size-6 items-center justify-center rounded-full text-[11px] font-bold", theme.teamA.bg, theme.textMain)}>
+                {round}
+              </span>
+              {getMatchTitle(round, maxRound)}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex items-stretch gap-16 min-w-max py-2">
+        {rounds.map((round) => {
+          const matches = tournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+          const pairs: TournamentMatch[][] = [];
+          for (let i = 0; i < matches.length; i += 2) {
+            const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
+            pairs.push(pair);
+          }
+          return (
+            <div key={round} className="w-[320px] flex flex-col justify-around">
+              {pairs.map((pair, pi) => (
+                <div key={pi} className="relative flex flex-col justify-around h-full my-6">
+                  {pair.map((m) => {
+                    const displayTeamA = m.isBye && !m.teamAId ? "BYE" : (m.teamAName || "TBD");
+                    const displayTeamB = m.isBye && !m.teamBId ? "BYE" : (m.teamBName || "TBD");
+                    const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
+                    const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
+                    
+                    return (
+                      <div key={m.id} className="relative py-3 z-10">
+                        <div className={cn("relative flex flex-col rounded-xl border p-4 shadow-sm transition-all", theme.appBg, theme.border)}>
+                          <div className="flex flex-col gap-3">
+                            <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-base font-bold border", isTeamAWinner ? cn("border-transparent ring-1", theme.teamA.ring, theme.teamA.bg) : cn("bg-black/20", theme.border))}>
+                              <span className={cn(displayTeamA === "BYE" ? "italic opacity-50" : "", isTeamAWinner ? theme.textMain : theme.textMuted)}>{displayTeamA}</span>
+                              <span className="font-mono text-lg">{m.scoreA !== undefined ? m.scoreA : "-"}</span>
+                            </div>
+                            <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-base font-bold border", isTeamBWinner ? cn("border-transparent ring-1", theme.teamB.ring, theme.teamB.bg) : cn("bg-black/20", theme.border))}>
+                              <span className={cn(displayTeamB === "BYE" ? "italic opacity-50" : "", isTeamBWinner ? theme.textMain : theme.textMuted)}>{displayTeamB}</span>
+                              <span className="font-mono text-lg">{m.scoreB !== undefined ? m.scoreB : "-"}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function GroupBoard({ tournament, teams, theme }: { tournament: Tournament; teams: any[]; theme: ThemeDef }) {
+  return (
+    <div className={cn("flex flex-col gap-6 p-12 rounded-xl border backdrop-blur-xl transition-all duration-700 text-center", theme.cardBg, theme.border)}>
+      <Trophy className={cn("size-16 mx-auto mb-4", theme.teamA.text)} />
+      <h2 className={cn("text-4xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+      <p className={cn("mt-2 text-xl font-semibold uppercase tracking-widest", theme.textMuted)}>Group Stage Results</p>
+      <p className={cn("mt-8 text-lg", theme.textMuted)}>The group stage standings are finalized and the knockout bracket is set.</p>
     </div>
   );
 }

@@ -91,6 +91,8 @@ export interface MatchEvent {
  */
 export type MatchSlotId = 1 | 2;
 
+export type ScoreboardMode = "courts" | "bracket" | "group";
+
 export interface MatchSlot {
   slotId: MatchSlotId;
   match: Match;
@@ -99,6 +101,10 @@ export interface MatchSlot {
   visibleOnScoreboard: boolean;
   /** Timestamp (ms) of the last heartbeat from an open control page for this slot, or null if none is open. */
   lastActiveAt: number | null;
+  /** Referee-controlled: what the public scoreboard should display. Stored on slot 1 as global setting. */
+  scoreboardMode: ScoreboardMode;
+  /** When scoreboardMode is "bracket" or "group", which tournament to display. */
+  scoreboardTournamentId: string | null;
 }
 
 export interface MockBattle {

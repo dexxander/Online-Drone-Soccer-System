@@ -294,9 +294,43 @@ function RefereePage() {
               <Monitor className="size-5" />
               <span className="text-xs font-bold uppercase tracking-widest text-foreground">Scoreboard Output</span>
             </div>
+            
             <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2 border-r border-border pr-4">
+                <select 
+                  className="auth-input py-1.5 text-xs h-auto w-auto"
+                  value={matchSlots[0]?.scoreboardMode || "courts"}
+                  onChange={(e) => {
+                    const mode = e.target.value as any;
+                    let tId = matchSlots[0]?.scoreboardTournamentId;
+                    if ((mode === "bracket" || mode === "group") && !tId && tournaments.length > 0) {
+                      tId = tournaments[0].id;
+                    }
+                    emit("setScoreboardMode", (s: any) => s.setScoreboardMode(mode, tId));
+                  }}
+                >
+                  <option value="courts">Live Courts</option>
+                  <option value="bracket">Knockout Bracket</option>
+                  <option value="group">Group Stage</option>
+                </select>
+
+                {(matchSlots[0]?.scoreboardMode === "bracket" || matchSlots[0]?.scoreboardMode === "group") && (
+                  <select 
+                    className="auth-input py-1.5 text-xs h-auto w-auto max-w-[200px]"
+                    value={matchSlots[0]?.scoreboardTournamentId || ""}
+                    onChange={(e) => {
+                      emit("setScoreboardMode", (s: any) => s.setScoreboardMode(matchSlots[0]?.scoreboardMode, e.target.value));
+                    }}
+                  >
+                    {tournaments.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
               {matchSlots.map((slot) => (
-                <label key={slot.slotId} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2 transition-colors hover:bg-muted">
+                <label key={slot.slotId} className={cn("flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors", matchSlots[0]?.scoreboardMode !== "courts" ? "opacity-50 grayscale bg-background" : "bg-muted/40 hover:bg-muted")}>
                   <div className="flex items-center gap-1.5">
                     {slot.visibleOnScoreboard ? (
                       <Eye className="size-4 text-primary" strokeWidth={2.5} />
@@ -308,6 +342,7 @@ function RefereePage() {
                     </span>
                   </div>
                   <Switch
+                    disabled={matchSlots[0]?.scoreboardMode !== "courts"}
                     checked={slot.visibleOnScoreboard}
                     onCheckedChange={(checked) => emit("setSlotVisibility", (s: any) => s.setSlotVisibility(slot.slotId, checked))}
                   />

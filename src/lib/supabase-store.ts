@@ -3,7 +3,7 @@ import { calculateEffectivePenalties } from "./penalties";
 import type {
   AppState, Team, Player, Tournament, TournamentMatch, Announcement, AppUser, AuditLogEntry,
   MatchSlot, MatchSlotId, Match, MatchEvent, MatchEventType, Penalty, PenaltyType,
-  EntityStatus, UserTag, MatchmakingType, TeamCategory, MockBattle, GroupScoringSystem
+  EntityStatus, UserTag, MatchmakingType, TeamCategory, MockBattle, GroupScoringSystem, ScoreboardMode
 } from "./types";
 
 export function toSnake(obj: any): any {
@@ -259,8 +259,8 @@ const defaultMatch = (id: string, teamA = "TBD", teamB = "TBD"): Match => ({
 });
 
 const defaultSlots: [MatchSlot, MatchSlot] = [
-  { slotId: 1, match: defaultMatch("match-slot-1"), events: [], visibleOnScoreboard: true, lastActiveAt: null },
-  { slotId: 2, match: defaultMatch("match-slot-2"), events: [], visibleOnScoreboard: true, lastActiveAt: null },
+  { slotId: 1, match: defaultMatch("match-slot-1"), events: [], visibleOnScoreboard: true, lastActiveAt: null, scoreboardMode: "courts", scoreboardTournamentId: null },
+  { slotId: 2, match: defaultMatch("match-slot-2"), events: [], visibleOnScoreboard: true, lastActiveAt: null, scoreboardMode: "courts", scoreboardTournamentId: null },
 ];
 
 export const emptyState: AppState = {
@@ -304,6 +304,7 @@ export interface DataStore {
   issuePenalty(slotId: MatchSlotId, side: "A" | "B", type: PenaltyType): void;
   resetMatch(slotId: MatchSlotId): void;
   setSlotVisibility(slotId: MatchSlotId, visible: boolean): void;
+  setScoreboardMode(mode: ScoreboardMode, tournamentId: string | null): void;
   touchSlotPresence(slotId: MatchSlotId): void;
   releaseSlotPresence(slotId: MatchSlotId): void;
   refreshMatchSlots(): Promise<void>;
@@ -502,6 +503,8 @@ export class SupabaseStore implements DataStore {
         events,
         visibleOnScoreboard: row.visibleOnScoreboard ?? true,
         lastActiveAt: row.lastActiveAt == null ? null : Number(row.lastActiveAt),
+        scoreboardMode: row.scoreboardMode || "courts",
+        scoreboardTournamentId: row.scoreboardTournamentId || null,
       };
     }) as [MatchSlot, MatchSlot];
     
@@ -1213,6 +1216,12 @@ export class SupabaseStore implements DataStore {
     const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, visibleOnScoreboard: visible } : s)) as [MatchSlot, MatchSlot];
     this.commit({ ...this.state, matches });
     this.persist('visibility update', () => supabase.from('match_slots').update({ visible_on_scoreboard: visible }).eq('slot_id', slotId));
+  }
+
+  setScoreboardMode(mode: ScoreboardMode, tournamentId: string | null) {
+    const matches = this.state.matches.map((s) => ({ ...s, scoreboardMode: mode, scoreboardTournamentId: tournamentId })) as [MatchSlot, MatchSlot];
+    this.commit({ ...this.state, matches });
+    this.persist('scoreboard mode update', () => supabase.from('match_slots').update({ scoreboard_mode: mode, scoreboard_tournament_id: tournamentId }).eq('slot_id', 1));
   }
 
   touchSlotPresence(slotId: MatchSlotId) {

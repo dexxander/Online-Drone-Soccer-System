@@ -199,10 +199,7 @@ function RegisterTeamPage() {
                             className="size-9 shrink-0 rounded-md border border-border object-cover"
                           />
                         )}
-                        <div>
-                          <p className="text-sm font-bold text-foreground">{t.name}</p>
-                          <p className="text-xs text-muted-foreground">{t.category} division</p>
-                        </div>
+                        <TeamNameEditor team={t} emit={emit} />
                       </div>
                       <StatusBadge status={t.status} />
                     </div>
@@ -596,5 +593,51 @@ function RosterRow({
         <Trash2 className="size-3.5" />
       </button>
     </li>
+  );
+}
+
+function TeamNameEditor({ team, emit }: { team: Team; emit: any }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(team.name);
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          autoFocus
+          className="auth-input py-1 text-sm font-bold"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              emit("updateTeam", (store: any) => store.updateTeam(team.id, { name: draft }));
+              setEditing(false);
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <button onClick={() => {
+            emit("updateTeam", (store: any) => store.updateTeam(team.id, { name: draft }));
+            setEditing(false);
+        }} className="text-success hover:opacity-80">
+          <Check className="size-4" />
+        </button>
+        <button onClick={() => setEditing(false)} className="text-muted-foreground hover:text-foreground">
+          <X className="size-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      <div>
+        <p className="text-sm font-bold text-foreground">{team.name}</p>
+        <p className="text-xs text-muted-foreground">{team.category} division</p>
+      </div>
+      <button onClick={() => { setDraft(team.name); setEditing(true); }} className="text-muted-foreground hover:text-foreground">
+        <Pencil className="size-3.5" />
+      </button>
+    </div>
   );
 }
