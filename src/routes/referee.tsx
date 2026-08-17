@@ -95,6 +95,7 @@ function RefereePage() {
 
   const viewedTournament = tournaments.find(t => t.id === activeTournamentId);
   const activeMatchTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === rawMatch.id));
+  const tMatch = activeMatchTournament?.matches?.find((m) => m.id === rawMatch.id);
   
   const currentPhase = getCurrentPhase(events);
   let activeDurationMinutes = 3;
@@ -122,7 +123,6 @@ function RefereePage() {
       } else if (currentPhase === "Half Time") {
         emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "2nd Half", "Half Time"));
       } else if (currentPhase === "2nd Half") {
-        const tMatch = activeMatchTournament?.matches.find((m) => m.id === rawMatch.id);
         const isKnockout = (tMatch?.phase ?? "knockout") === "knockout";
         if (rawMatch.scoreA === rawMatch.scoreB && isKnockout) {
           emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "Overtime", "2nd Half"));
@@ -865,10 +865,10 @@ function RefereePage() {
                   emit("updateMatch", (s: any) => s.endMatch(slotId));
                   setShowFinalizePrompt(false);
                 }}
-                disabled={!winningTeamName && (activeMatchTournament?.matches.find((m) => m.id === rawMatch.id)?.phase ?? "knockout") === "knockout"}
+                disabled={!winningTeamName && (tMatch?.phase ?? "knockout") === "knockout"}
                 className={cn(
                   "rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition-colors",
-                  !winningTeamName && (activeMatchTournament?.matches.find((m) => m.id === rawMatch.id)?.phase ?? "knockout") === "knockout" 
+                  !winningTeamName && (tMatch?.phase ?? "knockout") === "knockout" 
                     ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50" 
                     : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 )}

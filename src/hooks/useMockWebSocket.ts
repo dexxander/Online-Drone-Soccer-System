@@ -21,9 +21,9 @@ export function useMockWebSocket() {
   const subscribe = useCallback((cb: () => void) => store.subscribe(cb), []);
   const state = useSyncExternalStore<AppState>(subscribe, () => store.getState(), () => initialState);
 
-  const emit = (_event: string, action: (s: typeof store) => void) => {
+  const emit = useCallback((_event: string, action: (s: typeof store) => void) => {
     action(store);
-  };
+  }, []);
 
   return { state, emit, socket: store };
 }
