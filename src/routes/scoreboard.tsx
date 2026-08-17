@@ -259,6 +259,7 @@ function Scoreboard() {
             <BracketBoard 
               tournament={tournaments.find(t => t.id === scoreboardTournamentId)!} 
               teams={teams} 
+              slots={slots}
               theme={theme} 
             />
           )}
@@ -267,6 +268,7 @@ function Scoreboard() {
             <GroupBoard 
               tournament={tournaments.find(t => t.id === scoreboardTournamentId)!} 
               teams={teams} 
+              slots={slots}
               theme={theme} 
             />
           )}
@@ -637,8 +639,25 @@ function EventLogItem({ type, penaltyLevel, message, time, side, theme }: { type
 
 // ─── TOURNAMENT VIEWS ────────────────────────────────────────────────────────
 
-function BracketBoard({ tournament, teams, theme }: { tournament: Tournament; teams: any[]; theme: ThemeDef }) {
-  const rounds = Array.from(new Set(tournament.matches.map(m => m.round))).sort((a, b) => a - b);
+function BracketBoard({ tournament, teams, slots, theme }: { tournament: Tournament; teams: any[]; slots: MatchSlot[]; theme: ThemeDef }) {
+  const getTeamName = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "—" : "TBD");
+  
+  const groupMatches = tournament.matches.filter(m => m.phase === "group");
+  const knockoutMatches = tournament.matches.filter(m => m.phase !== "group");
+  const isGroupStageInProgress = tournament.groupStageEnabled && groupMatches.some(m => !m.winnerId && m.result !== "draw");
+  
+  if (isGroupStageInProgress) {
+    return (
+      <div className={cn("flex flex-col gap-6 p-12 rounded-xl border backdrop-blur-xl transition-all duration-700 text-center", theme.cardBg, theme.border)}>
+        <Trophy className={cn("size-16 mx-auto mb-4", theme.teamA.text)} />
+        <h2 className={cn("text-4xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+        <p className={cn("mt-2 text-xl font-semibold uppercase tracking-widest", theme.textMuted)}>Knockout Bracket</p>
+        <p className={cn("mt-8 text-lg", theme.textMuted)}>The group stage is currently in progress. The bracket will be generated once all group matches have concluded.</p>
+      </div>
+    );
+  }
+
+  const rounds = Array.from(new Set(knockoutMatches.map(m => m.round))).sort((a, b) => a - b);
   const maxRound = Math.max(...rounds, 0);
 
   return (
@@ -663,7 +682,7 @@ function BracketBoard({ tournament, teams, theme }: { tournament: Tournament; te
 
       <div className="flex items-stretch gap-16 min-w-max py-2">
         {rounds.map((round) => {
-          const matches = tournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+          const matches = knockoutMatches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
           const pairs: TournamentMatch[][] = [];
           for (let i = 0; i < matches.length; i += 2) {
             const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
@@ -674,10 +693,14 @@ function BracketBoard({ tournament, teams, theme }: { tournament: Tournament; te
               {pairs.map((pair, pi) => (
                 <div key={pi} className="relative flex flex-col justify-around h-full my-6">
                   {pair.map((m) => {
-                    const displayTeamA = m.isBye && !m.teamAId ? "BYE" : (m.teamAName || "TBD");
-                    const displayTeamB = m.isBye && !m.teamBId ? "BYE" : (m.teamBName || "TBD");
+                    const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
+                    const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
                     const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
                     const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
+                    
+                    const liveSlot = slots.find(s => s.match.id === m.id);
+                    const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : (m.scoreA !== undefined ? m.scoreA : "-"));
+                    const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : (m.scoreB !== undefined ? m.scoreB : "-"));
                     
                     return (
                       <div key={m.id} className="relative py-3 z-10">
@@ -685,11 +708,11 @@ function BracketBoard({ tournament, teams, theme }: { tournament: Tournament; te
                           <div className="flex flex-col gap-3">
                             <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-base font-bold border", isTeamAWinner ? cn("border-transparent ring-1", theme.teamA.ring, theme.teamA.bg) : cn("bg-black/20", theme.border))}>
                               <span className={cn(displayTeamA === "BYE" ? "italic opacity-50" : "", isTeamAWinner ? theme.textMain : theme.textMuted)}>{displayTeamA}</span>
-                              <span className="font-mono text-lg">{m.scoreA !== undefined ? m.scoreA : "-"}</span>
+                              <span className={cn("font-mono text-lg", liveSlot ? "text-emerald-500 animate-pulse" : "")}>{scoreA}</span>
                             </div>
                             <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-base font-bold border", isTeamBWinner ? cn("border-transparent ring-1", theme.teamB.ring, theme.teamB.bg) : cn("bg-black/20", theme.border))}>
                               <span className={cn(displayTeamB === "BYE" ? "italic opacity-50" : "", isTeamBWinner ? theme.textMain : theme.textMuted)}>{displayTeamB}</span>
-                              <span className="font-mono text-lg">{m.scoreB !== undefined ? m.scoreB : "-"}</span>
+                              <span className={cn("font-mono text-lg", liveSlot ? "text-emerald-500 animate-pulse" : "")}>{scoreB}</span>
                             </div>
                           </div>
                         </div>
@@ -706,13 +729,134 @@ function BracketBoard({ tournament, teams, theme }: { tournament: Tournament; te
   );
 }
 
-function GroupBoard({ tournament, teams, theme }: { tournament: Tournament; teams: any[]; theme: ThemeDef }) {
+function GroupBoard({ tournament, teams, slots, theme }: { tournament: Tournament; teams: any[]; slots: MatchSlot[]; theme: ThemeDef }) {
+  const getTeamName = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "—" : "TBD");
+  
+  const groupMatches = tournament.matches.filter((m) => m.phase === "group");
+  const groupCount = tournament.groupCount ?? Math.max(1, ...groupMatches.map((m) => m.groupNumber ?? 1));
+  const groups = Array.from({ length: groupCount }, (_, index) => groupMatches.filter((m) => m.groupNumber === index + 1));
+  const qualifiers = tournament.qualifiersPerGroup ?? 2;
+  const scoringSystem = tournament.groupScoringSystem ?? "three-one-zero";
+
+  const buildStandings = (matches: TournamentMatch[]) => {
+    const teamIds = new Set<string>();
+    matches.forEach((m) => { if (m.teamAId) teamIds.add(m.teamAId); if (m.teamBId) teamIds.add(m.teamBId); });
+    const stats = new Map<string, { played: number; wins: number; draws: number; losses: number; gf: number; ga: number; pts: number }>();
+    teamIds.forEach((id) => stats.set(id, { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 }));
+    
+    matches.forEach((m) => {
+      // Use live scores if the match is currently running
+      const liveSlot = slots.find(s => s.match.id === m.id);
+      const isLive = Boolean(liveSlot);
+      const isCompleted = m.winnerId !== null || m.result === "draw";
+      
+      if (!isCompleted && !isLive) return;
+      
+      const scoreA = liveSlot ? liveSlot.match.scoreA : (m.scoreA ?? 0);
+      const scoreB = liveSlot ? liveSlot.match.scoreB : (m.scoreB ?? 0);
+      
+      const a = m.teamAId ? stats.get(m.teamAId) : undefined;
+      const b = m.teamBId ? stats.get(m.teamBId) : undefined;
+      
+      if (a) { a.played++; a.gf += scoreA; a.ga += scoreB; }
+      if (b) { b.played++; b.gf += scoreB; b.ga += scoreA; }
+      
+      // Points are only awarded for completed matches, not live ones
+      if (isCompleted) {
+        if (m.result === "draw" && scoringSystem !== "winner-only") {
+          if (a) { a.draws++; a.pts += 1; }
+          if (b) { b.draws++; b.pts += 1; }
+        } else if (m.winnerId) {
+          const w = stats.get(m.winnerId);
+          const loserId = m.winnerId === m.teamAId ? m.teamBId : m.teamAId;
+          const l = loserId ? stats.get(loserId) : undefined;
+          if (w) { w.wins++; w.pts += 3; }
+          if (l) { l.losses++; }
+        }
+      }
+    });
+    
+    return [...stats.entries()]
+      .sort(([, a], [, b]) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf)
+      .map(([id, s], rank) => ({ id, rank: rank + 1, ...s }));
+  };
+
+  if (!tournament.groupStageEnabled) {
+    return (
+      <div className={cn("flex flex-col gap-6 p-12 rounded-xl border backdrop-blur-xl transition-all duration-700 text-center", theme.cardBg, theme.border)}>
+        <Trophy className={cn("size-16 mx-auto mb-4", theme.teamA.text)} />
+        <h2 className={cn("text-4xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+        <p className={cn("mt-8 text-lg", theme.textMuted)}>This tournament does not have a group stage.</p>
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex flex-col gap-6 p-12 rounded-xl border backdrop-blur-xl transition-all duration-700 text-center", theme.cardBg, theme.border)}>
-      <Trophy className={cn("size-16 mx-auto mb-4", theme.teamA.text)} />
-      <h2 className={cn("text-4xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
-      <p className={cn("mt-2 text-xl font-semibold uppercase tracking-widest", theme.textMuted)}>Group Stage Results</p>
-      <p className={cn("mt-8 text-lg", theme.textMuted)}>The group stage standings are finalized and the knockout bracket is set.</p>
+    <div className={cn("flex flex-col gap-8 p-8 rounded-xl border backdrop-blur-xl transition-all duration-700", theme.cardBg, theme.border)}>
+      <div className="text-center mb-4">
+        <h2 className={cn("text-3xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+        <p className={cn("mt-1 text-sm font-semibold uppercase tracking-widest", theme.textMuted)}>Group Stage Standings</p>
+      </div>
+
+      <div className="flex flex-wrap justify-center gap-6">
+        {groups.map((matches, index) => {
+          const standings = buildStandings(matches);
+          return (
+            <div key={index} className={cn("w-full sm:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-1rem)] rounded-xl border overflow-hidden", theme.border)}>
+              <div className={cn("px-4 py-3 border-b", theme.border, theme.headerBg)}>
+                <h3 className={cn("text-sm font-bold uppercase tracking-widest", theme.textMain)}>
+                  Group {String.fromCharCode(65 + index)}
+                </h3>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className={cn("border-b text-[10px] font-bold uppercase tracking-wider", theme.border, theme.textMuted, "bg-black/10")}>
+                      <th className="w-8 py-3 pl-4 text-center">#</th>
+                      <th className="py-3 pl-2 text-left">Team</th>
+                      <th className="w-8 py-3 text-center">P</th>
+                      <th className="w-8 py-3 text-center">W</th>
+                      <th className="w-8 py-3 text-center">D</th>
+                      <th className="w-8 py-3 text-center">L</th>
+                      <th className="w-10 py-3 text-center">GD</th>
+                      <th className="w-10 py-3 pr-4 text-center">Pts</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {standings.map((row) => {
+                      const isQualifying = row.rank <= qualifiers;
+                      const gd = row.gf - row.ga;
+                      return (
+                        <tr key={row.id} className={cn("border-b last:border-0", theme.border, isQualifying ? "bg-emerald-500/10" : "")}>
+                          <td className="py-3 pl-4 text-center">
+                            <span className={cn("inline-flex size-6 items-center justify-center rounded-full text-xs font-bold", isQualifying ? "bg-emerald-500 text-white" : cn("bg-black/20", theme.textMuted))}>
+                              {row.rank}
+                            </span>
+                          </td>
+                          <td className={cn("py-3 pl-2 font-bold text-left", theme.textMain)}>
+                            {getTeamName(row.id)}
+                          </td>
+                          <td className={cn("py-3 text-center", theme.textMuted)}>{row.played}</td>
+                          <td className={cn("py-3 text-center", theme.textMuted)}>{row.wins}</td>
+                          <td className={cn("py-3 text-center", theme.textMuted)}>{row.draws}</td>
+                          <td className={cn("py-3 text-center", theme.textMuted)}>{row.losses}</td>
+                          <td className={cn("py-3 text-center font-mono", gd > 0 ? "text-emerald-500" : gd < 0 ? "text-red-500" : theme.textMuted)}>
+                            {gd > 0 ? `+${gd}` : gd}
+                          </td>
+                          <td className={cn("py-3 pr-4 text-center font-bold text-base", theme.textMain)}>
+                            {row.pts}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
