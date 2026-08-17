@@ -222,27 +222,27 @@ CREATE POLICY "Admins can manage tournament teams" ON public.tournament_teams FO
 
 CREATE POLICY "Tournament Matches are viewable by everyone" ON public.tournament_matches FOR SELECT USING (true);
 CREATE POLICY "Admins can manage tournament matches" ON public.tournament_matches FOR ALL USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "Referees can update tournament matches" ON public.tournament_matches FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'referee'));
-CREATE POLICY "Referees can insert mock tournament matches" ON public.tournament_matches FOR INSERT WITH CHECK (phase IN ('mock', 'knockout') AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can update tournament matches" ON public.tournament_matches FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'referee' AND status = 'active'));
+CREATE POLICY "Referees can insert mock tournament matches" ON public.tournament_matches FOR INSERT WITH CHECK (phase IN ('mock', 'knockout') AND EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
 
-CREATE POLICY "Mock battles are viewable by referees" ON public.mock_battles FOR SELECT USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
-CREATE POLICY "Referees can create mock battles" ON public.mock_battles FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Mock battles are viewable by referees" ON public.mock_battles FOR SELECT USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
+CREATE POLICY "Referees can create mock battles" ON public.mock_battles FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
 
 -- Live Matches & Slots: Read by everyone, manage by referee/admin
 CREATE POLICY "Match slots are viewable by everyone" ON public.match_slots FOR SELECT USING (true);
-CREATE POLICY "Referees can manage match slots" ON public.match_slots FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can manage match slots" ON public.match_slots FOR UPDATE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
 
 CREATE POLICY "Match events are viewable by everyone" ON public.match_events FOR SELECT USING (true);
-CREATE POLICY "Referees can insert match events" ON public.match_events FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
-CREATE POLICY "Referees can delete match events" ON public.match_events FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can insert match events" ON public.match_events FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
+CREATE POLICY "Referees can delete match events" ON public.match_events FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
 
 CREATE POLICY "Penalties are viewable by everyone" ON public.penalties FOR SELECT USING (true);
-CREATE POLICY "Referees can insert penalties" ON public.penalties FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
-CREATE POLICY "Referees can delete penalties" ON public.penalties FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin')));
+CREATE POLICY "Referees can insert penalties" ON public.penalties FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
+CREATE POLICY "Referees can delete penalties" ON public.penalties FOR DELETE USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('referee', 'admin') AND status = 'active'));
 
 -- Audit Logs: Insert by admin/system, Read by admin
 CREATE POLICY "Admins can view audit logs" ON public.audit_logs FOR SELECT USING (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role = 'admin'));
-CREATE POLICY "Admins and referees can insert audit logs" ON public.audit_logs FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('admin', 'referee')));
+CREATE POLICY "Admins and referees can insert audit logs" ON public.audit_logs FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND role IN ('admin', 'referee') AND status = 'active'));
 
 -- Function to handle new user signup
 CREATE OR REPLACE FUNCTION public.handle_new_user()
