@@ -305,6 +305,19 @@ function MatchBoard({
     </div>
   );
 
+  const [showWinnerOverlay, setShowWinnerOverlay] = useState(false);
+
+  useEffect(() => {
+    if (winnerName) {
+      setShowWinnerOverlay(true);
+      // Auto-hide the graphic after 4 seconds
+      const timer = setTimeout(() => setShowWinnerOverlay(false), 5000);
+      return () => clearTimeout(timer);
+    } else {
+      setShowWinnerOverlay(false);
+    }
+  }, [winnerName]);
+
   return (
     <div className="relative flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -372,22 +385,37 @@ function MatchBoard({
           </div>
         </div>
       )}
+      
 
-      {winnerName && showWinner && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-emerald-950/70 p-6 text-center backdrop-blur-[2px]">
-          <div className="relative rounded-3xl border border-emerald-300/60 bg-emerald-950/95 px-8 py-7 text-white shadow-2xl shadow-emerald-500/30">
-            <div className="absolute -inset-4 -z-10 animate-ping rounded-full bg-emerald-400/20" />
-            <Sparkles className="mx-auto mb-2 size-8 animate-bounce text-yellow-300" />
-            <p className="text-xs font-black uppercase tracking-[0.35em] text-emerald-200">Congratulations</p>
-            <h2 className="mt-2 text-3xl font-black uppercase tracking-tight sm:text-5xl">{winnerName}</h2>
-            <p className="mt-2 text-lg font-bold uppercase tracking-[0.2em] text-yellow-300">Match Winner!</p>
-            <div className="mt-5 rounded-xl border border-emerald-300/30 bg-black/20 px-5 py-3">
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-emerald-200">Final Score</p>
-              <p className="mt-1 font-mono text-3xl font-black tabular-nums sm:text-4xl">
-                {leftTeamName} {leftScore} <span className="px-2 text-emerald-300">–</span> {rightScore} {rightTeamName}
-              </p>
+      {showWinnerOverlay && winnerName && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center overflow-hidden rounded-xl bg-black/60 backdrop-blur-sm animate-in fade-in duration-700">
+          <div className="relative flex flex-col items-center justify-center rounded-2xl border border-emerald-500/40 bg-gradient-to-b from-slate-950 to-black px-12 py-10 shadow-[0_0_80px_-15px_rgba(16,185,129,0.4)] animate-in zoom-in-90 slide-in-from-bottom-8 duration-700 ease-out">
+            
+            {/* Subtle background glow inside the card */}
+            <div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/30 via-transparent to-transparent opacity-100 rounded-2xl" />
+
+            {/* Floating Trophy Icon */}
+            <div className="relative z-10 mb-5 flex size-20 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-500/10 shadow-[0_0_30px_rgba(16,185,129,0.2)]">
+              <Trophy className="size-10 text-emerald-400" strokeWidth={1.5} />
             </div>
-            <div className="mt-3 text-2xl" aria-hidden="true">🎉 ✨ 🏆 ✨ 🎉</div>
+
+            <p className="relative z-10 text-xs font-bold uppercase tracking-[0.4em] text-muted-foreground">
+              Match Concluded
+            </p>
+
+            <h2 className="relative z-10 mt-2 text-center text-4xl font-black uppercase tracking-tight text-white sm:text-6xl drop-shadow-md">
+              {winnerName}
+            </h2>
+
+            {/* Glowing Accent Lines */}
+            <div className="relative z-10 mt-6 flex items-center gap-4">
+              <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-emerald-500/50" />
+              <span className="text-sm font-black uppercase tracking-[0.3em] text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]">
+                Winner
+              </span>
+              <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-emerald-500/50" />
+            </div>
+
           </div>
         </div>
       )}
