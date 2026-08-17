@@ -10,7 +10,7 @@ import { auth } from "@/lib/store";
 export const Route = createFileRoute("/admin")({
   head: () => ({
     meta: [
-      { title: "Admin dashboard — Drone Soccer League Control" },
+      { title: "Admin dashboard — AW Drone Soccer Leagues System" },
       { name: "description", content: "Review registrations, approve teams and players, and monitor league activity." },
       { property: "og:title", content: "Admin dashboard — Drone Soccer" },
       { property: "og:description", content: "Registration oversight for the drone soccer league." },

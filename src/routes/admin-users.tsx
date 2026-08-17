@@ -9,7 +9,7 @@ import type { AppUser, UserTag } from "@/lib/types";
 export const Route = createFileRoute("/admin-users")({
   head: () => ({
     meta: [
-      { title: "Users — Drone Soccer League Control" },
+      { title: "Users — AW Drone Soccer Leagues System" },
       { name: "description", content: "Manage system users across referee, coach, player, and spectator roles." },
     ],
   }),

@@ -9,7 +9,7 @@ import type { AuditLogEntry } from "@/lib/types";
 export const Route = createFileRoute("/admin-audit-log")({
   head: () => ({
     meta: [
-      { title: "Audit Log — Drone Soccer League Control" },
+      { title: "Audit Log — AW Drone Soccer Leagues System" },
       { name: "description", content: "Dedicated administrative log for system activities and security events." },
     ],
   }),

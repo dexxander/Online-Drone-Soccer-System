@@ -7,7 +7,7 @@ import { LogoMark } from "@/components/LogoMark";
 export const Route = createFileRoute("/admin-login")({
   head: () => ({
     meta: [
-      { title: "Admin Portal — Drone Soccer League Control" },
+      { title: "Admin Portal — AW Drone Soccer Leagues System" },
       { name: "description", content: "Internal League Administration Portal" },
     ],
   }),

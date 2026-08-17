@@ -9,7 +9,7 @@ import DroneArena from "@/components/DroneArena";
 export const Route = createFileRoute("/about")({
   head: () => ({
     meta: [
-      { title: "About — Drone Soccer League Control" },
+      { title: "About — AW Drone Soccer Leagues System" },
       {
         name: "description",
         content: "Why this platform exists, and the team building it.",
@@ -89,9 +89,9 @@ function AboutPage() {
           <Link to="/" className="flex items-center gap-3">
             <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block text-[13px] font-bold text-foreground"> AW DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                League Control
+                Leagues System
               </span>
             </span>
           </Link>
@@ -133,7 +133,7 @@ function AboutPage() {
             </h1>
             <p className="mt-5 text-[15px] leading-relaxed text-muted-foreground">
               {/* PLACEHOLDER copy — replace with your real project description. */}
-              Drone Soccer League Control exists to take a league's match day off spreadsheets and
+              AW Drone Soccer Leagues System exists to take a league's match day off spreadsheets and
               walkie-talkies and put it in one connected system. Coaches register their teams and
               rosters, admins approve entries and build tournament brackets, referees run the clock
               and score from pitchside, and every call is broadcast to the live scoreboard instantly —
@@ -247,7 +247,7 @@ function AboutPage() {
       {/* ── Footer ── */}
       <footer className="border-t border-border py-8">
         <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
-          Drone Soccer League Control — prototype build. Data is stored locally and synced across tabs.
+          AW Drone Soccer Leagues System
         </p>
       </footer>
     </div>

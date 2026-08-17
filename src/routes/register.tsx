@@ -7,9 +7,9 @@ import { AuthShell, Field } from "./login";
 export const Route = createFileRoute("/register")({
   head: () => ({
     meta: [
-      { title: "Create account — Drone Soccer League Control" },
+      { title: "Create account — AW Drone Soccer Leagues System" },
       { name: "description", content: "Create a coach, referee or administrator account for the drone soccer league." },
-      { property: "og:title", content: "Create account — Drone Soccer League Control" },
+      { property: "og:title", content: "Create account — AW Drone Soccer Leagues System" },
       { property: "og:description", content: "Join the league platform to register teams or officiate matches." },
     ],
   }),

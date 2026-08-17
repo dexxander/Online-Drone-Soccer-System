@@ -39,7 +39,7 @@ import {
 export const Route = createFileRoute("/referee")({
   head: () => ({
     meta: [
-      { title: "Referee control — Drone Soccer League Control" },
+      { title: "Referee control — AW Drone Soccer Leagues System" },
       { name: "description", content: "Officiate live drone soccer matches." },
     ],
   }),
@@ -285,12 +285,14 @@ function RefereePage() {
   const rounds = Array.from(new Set(knockoutMatches.map(m => m.round))).sort((a, b) => a - b);
   const maxRound = Math.max(...rounds, 0);
 
+  const customTitleStr = viewMode === "tournaments" ? "Referee Dashboard" : (viewMode === "bracket" && viewedTournament ? viewedTournament.name : null);
+
   return (
     <RefereeLayout 
       match={rawMatch} 
       slotId={slotId}
-      customTitle={viewMode === "tournaments" ? "Referee Dashboard" : viewMode === "bracket" && viewedTournament ? viewedTournament.name : undefined}
       hideMatchDetails={viewMode !== "control"}
+      {...(customTitleStr ? { customTitle: customTitleStr } : {})}
     >
       <div className="flex h-full flex-col gap-6 xl:flex-row">
 
@@ -309,11 +311,11 @@ function RefereePage() {
                 <select 
                   className="auth-input py-1.5 text-xs h-auto w-auto"
                   value={matchSlots[0]?.scoreboardMode || "courts"}
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                     const mode = e.target.value as any;
                     let tId = matchSlots[0]?.scoreboardTournamentId;
                     if ((mode === "bracket" || mode === "group") && !tId && tournaments.length > 0) {
-                      tId = tournaments[0].id;
+                      tId = tournaments[0]?.id; // Added the '?' here
                     }
                     emit("setScoreboardMode", (s: any) => s.setScoreboardMode(mode, tId));
                   }}
@@ -1164,7 +1166,7 @@ function RefereeGroupStage({
                 <div className="space-y-1.5">
                   {matches.length === 0 ? (
                     <p className="text-xs text-muted-foreground">No fixtures</p>
-                  ) : matches.map((match) => {
+                  ) : matches.map((match: TournamentMatch) => {
                     const decided = !!match.winnerId || match.result === "draw";
                     const isPlayable = Boolean(match.teamAId) && Boolean(match.teamBId);
                     

@@ -7,9 +7,9 @@ import { LogoMark } from "@/components/LogoMark";
 export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
-      { title: "Sign in — Drone Soccer League Control" },
+      { title: "Sign in — AW Drone Soccer Leagues System" },
       { name: "description", content: "Sign in to manage drone soccer registrations, matches and live scoring." },
-      { property: "og:title", content: "Sign in — Drone Soccer League Control" },
+      { property: "og:title", content: "Sign in — AW Drone Soccer Leagues System" },
       { property: "og:description", content: "Access the admin, referee or coach workspace." },
     ],
   }),
@@ -98,7 +98,7 @@ export function AuthShell({
       <div className="w-full max-w-md">
         <Link to="/" className="mb-8 flex items-center justify-center gap-3">
           <LogoMark />
-          <span className="text-sm font-bold">Drone Soccer League Control</span>
+          <span className="text-sm font-bold">AW Drone Soccer Leagues System</span>
         </Link>
         <div className="rounded-2xl border border-border bg-background p-7 shadow-card">
           <h1 className="text-xl font-bold tracking-tight">{title}</h1>

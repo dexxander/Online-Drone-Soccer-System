@@ -73,9 +73,9 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Drone Soccer League Control" },
+      { title: "AW Drone Soccer Leagues System" },
       { name: "description", content: "Tournament management for drone soccer leagues." },
-      { property: "og:title", content: "Drone Soccer League Control" },
+      { property: "og:title", content: "AW Drone Soccer Leagues System" },
       { property: "og:description", content: "Tournament management for drone soccer leagues." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },

@@ -24,7 +24,7 @@ export const Route = createFileRoute("/register-team")({
   },
   head: () => ({
     meta: [
-      { title: "Team registration — Drone Soccer League Control" },
+      { title: "Team registration — AW Drone Soccer Leagues System" },
       { name: "description", content: "Submit your drone soccer team and full player roster for league approval." },
       { property: "og:title", content: "Team registration — Drone Soccer" },
       { property: "og:description", content: "Register a team and roster for the drone soccer championship." },
@@ -128,9 +128,9 @@ function RegisterTeamPage() {
           <Link to="/" className="flex items-center gap-3">
             <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                League Control
+                Leagues System
               </span>
             </span>
           </Link>

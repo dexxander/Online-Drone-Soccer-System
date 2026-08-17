@@ -9,7 +9,7 @@ import type { Announcement, AnnouncementCategory } from "@/lib/types";
 export const Route = createFileRoute("/admin-announcements")({
   head: () => ({
     meta: [
-      { title: "Announcements — Drone Soccer League Control" },
+      { title: "Announcements — AW Drone Soccer Leagues System" },
       { name: "description", content: "Post, edit, pin, and manage league announcements for teams, coaches, and referees." },
     ],
   }),

@@ -10,7 +10,7 @@ import type { TeamCategory } from "@/lib/types";
 export const Route = createFileRoute("/admin-teams")({
   head: () => ({
     meta: [
-      { title: "Teams — Drone Soccer League Control" },
+      { title: "Teams — AW Drone Soccer Leagues System" },
       { name: "description", content: "Manage all registered drone soccer teams: edit details, review status, and remove entries." },
     ],
   }),

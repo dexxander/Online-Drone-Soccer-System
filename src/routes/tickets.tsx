@@ -27,7 +27,7 @@ import type { Tournament } from "@/lib/types";
 export const Route = createFileRoute("/tickets")({
   head: () => ({
     meta: [
-      { title: "Spectator Tickets — Drone Soccer League Control" },
+      { title: "Spectator Tickets — AW Drone Soccer Leagues System" },
       {
         name: "description",
         content: "Register as a spectator for live Drone Soccer tournaments. Free seating admission & instant E-ticket pass.",
@@ -107,9 +107,9 @@ function TicketsPage() {
           <Link to="/" className="flex items-center gap-3">
             <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                League Control
+                Leagues System
               </span>
             </span>
           </Link>

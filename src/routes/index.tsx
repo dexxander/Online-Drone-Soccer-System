@@ -11,13 +11,13 @@ import { auth } from "@/lib/store";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Drone Soccer League Control — Tournament Management" },
+      { title: "AW Drone Soccer Leagues System — Tournament Management" },
       {
         name: "description",
         content:
           "Run drone soccer competitions end to end: team registration, admin approvals, referee match control and a real-time live scoreboard.",
       },
-      { property: "og:title", content: "Drone Soccer League Control" },
+      { property: "og:title", content: "AW Drone Soccer Leagues System" },
       {
         property: "og:description",
         content: "Registration, approvals, referee controls and a real-time scoreboard for drone soccer leagues.",
@@ -79,9 +79,9 @@ function Landing() {
           <Link to="/" className="flex items-center gap-3">
             <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                League Control
+                Leagues System
               </span>
             </span>
           </Link>
@@ -175,7 +175,7 @@ function Landing() {
       {/* ── Footer ── */}
       <footer className="border-t border-border py-8">
         <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
-          Drone Soccer League Control
+          AW Drone Soccer Leagues System
         </p>
       </footer>
     </div>

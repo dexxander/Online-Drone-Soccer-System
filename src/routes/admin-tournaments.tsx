@@ -10,7 +10,7 @@ import { exportBracketPdf, exportGroupStagePdf, exportTournamentPdf } from "@/li
 export const Route = createFileRoute("/admin-tournaments")({
   head: () => ({
     meta: [
-      { title: "Tournaments — Drone Soccer League Control" },
+      { title: "Tournaments — AW Drone Soccer Leagues System" },
       { name: "description", content: "Create tournaments with Auto or Manual matchmaking brackets." },
     ],
   }),

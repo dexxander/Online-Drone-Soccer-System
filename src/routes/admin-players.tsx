@@ -10,7 +10,7 @@ import type { PlayerPosition } from "@/lib/types";
 export const Route = createFileRoute("/admin-players")({
   head: () => ({
     meta: [
-      { title: "Players — Drone Soccer League Control" },
+      { title: "Players — AW Drone Soccer Leagues System" },
       { name: "description", content: "Manage all registered players across every team: edit details, review status, and remove entries." },
     ],
   }),

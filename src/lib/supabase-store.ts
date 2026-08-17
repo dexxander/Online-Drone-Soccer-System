@@ -860,20 +860,7 @@ export class SupabaseStore implements DataStore {
 
   removeTournament(id: string) {
     this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
-    this.persist('tournament cascade delete', async () => {
-      await supabase.from('match_slots').update({ scoreboard_tournament_id: null }).eq('scoreboard_tournament_id', id);
-      const { data: matches } = await supabase.from('tournament_matches').select('id').eq('tournament_id', id);
-      if (matches && matches.length > 0) {
-        const matchIds = matches.map((m: any) => m.id);
-        await supabase.from('match_slots').update({ tournament_match_id: null }).in('tournament_match_id', matchIds);
-        await supabase.from('match_events').delete().in('match_id', matchIds);
-        await supabase.from('penalties').delete().in('match_id', matchIds);
-        await supabase.from('mock_battles').delete().in('id', matchIds);
-        await supabase.from('tournament_matches').delete().in('id', matchIds);
-      }
-      await supabase.from('tournament_teams').delete().eq('tournament_id', id);
-      await supabase.from('tournaments').delete().eq('id', id);
-    });
+    this.persist('tournament delete', () => supabase.from('tournaments').delete().eq('id', id));
     this.logAudit("Tournament deleted", currentAuditActor(), id, "Tournament");
   }
 

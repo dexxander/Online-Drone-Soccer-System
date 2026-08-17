@@ -67,8 +67,8 @@ export function DashboardLayout({
           <Link to="/" className="flex items-center gap-3 border-b border-border px-5 py-4">
             <LogoMark />
             <span className="leading-tight">
-              <span className="block text-sm font-bold text-foreground">Drone Soccer</span>
-              <span className="block text-xs text-muted-foreground">League Control</span>
+              <span className="block text-sm font-bold text-foreground">AW Drone Soccer</span>
+              <span className="block text-xs text-muted-foreground">Leagues System</span>
             </span>
           </Link>
           <nav className="flex-1 space-y-1 p-3">

@@ -13,7 +13,7 @@ import type { MatchStatus, Team, Tournament, TournamentMatch } from "@/lib/types
 export const Route = createFileRoute("/matches")({
   head: () => ({
     meta: [
-      { title: "Matches — Drone Soccer League Control" },
+      { title: "Matches — AW Drone Soccer Leagues System" },
       {
         name: "description",
         content: "Browse every match, follow the live scoreboard and track tournament brackets in one place.",
@@ -118,9 +118,9 @@ function MatchesPage() {
           <Link to="/" className="flex items-center gap-3">
             <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                League Control
+                Leagues System
               </span>
             </span>
           </Link>
@@ -151,7 +151,7 @@ function MatchesPage() {
 
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          League control
+          AW DRONE SOCCER LEAGUES SYSTEM
         </p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground">Matches</h1>
         <p className="mt-2 max-w-lg text-sm text-muted-foreground">

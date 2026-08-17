@@ -23,7 +23,7 @@ import type { MatchStatus, Tournament, TournamentMatch } from "@/lib/types";
 export const Route = createFileRoute("/tournaments")({
   head: () => ({
     meta: [
-      { title: "Tournaments — Drone Soccer League Control" },
+      { title: "Tournaments — AW Drone Soccer Leagues System" },
       {
         name: "description",
         content:
@@ -124,9 +124,9 @@ function TournamentsUserPage() {
           <Link to="/" className="flex items-center gap-3">
             <LogoMark className="size-9 shadow-lift" />
             <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">DRONE SOCCER</span>
+              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
               <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                League Control
+                Leagues System
               </span>
             </span>
           </Link>
