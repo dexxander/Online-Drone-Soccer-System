@@ -276,9 +276,10 @@ function RefereePage() {
   const dynamicCoachA = getDynamicCoach(rawMatch.teamAName);
   const dynamicCoachB = getDynamicCoach(rawMatch.teamBName);
 
-  const rounds = viewedTournament
-    ? Array.from(new Set(viewedTournament.matches.map(m => m.round))).sort((a, b) => a - b)
+  const knockoutMatches = viewedTournament
+    ? viewedTournament.matches.filter(m => (m.phase ?? "knockout") === "knockout")
     : [];
+  const rounds = Array.from(new Set(knockoutMatches.map(m => m.round))).sort((a, b) => a - b);
   const maxRound = Math.max(...rounds, 0);
 
   return (
@@ -481,6 +482,13 @@ function RefereePage() {
                 <button onClick={() => setViewMode("tournaments")} className="mb-4 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
                   <ChevronLeft className="size-3.5" /> Back to Tournaments
                 </button>
+                {knockoutMatches.length === 0 ? (
+                  <div className="rounded-2xl border border-border bg-muted/20 p-8 text-center mt-4">
+                    <Trophy className="mx-auto size-8 text-muted-foreground/40 mb-3" />
+                    <p className="font-semibold text-foreground">Knockout bracket is waiting for group results</p>
+                    <p className="mt-1 text-sm text-muted-foreground">The qualifying teams will be placed here after all group matches are decided.</p>
+                  </div>
+                ) : (
                 <div className="flex flex-col gap-6 overflow-x-auto pb-4">
                   <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
                     {rounds.map((round) => (
@@ -496,7 +504,7 @@ function RefereePage() {
                   </div>
                   <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
                     {rounds.map((round) => {
-                      const matches = viewedTournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+                      const matches = knockoutMatches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
                       const isLast = round === maxRound;
                       const pairs: TournamentMatch[][] = [];
                       for (let i = 0; i < matches.length; i += 2) {
@@ -563,6 +571,7 @@ function RefereePage() {
                     })}
                   </div>
                 </div>
+                )}
               </div>
             </Panel>
           ) : (
@@ -582,7 +591,7 @@ function RefereePage() {
                   </span>
                   {isFinished && (
                     <span className="rounded bg-destructive/10 px-4 py-1.5 font-bold uppercase tracking-widest text-destructive text-[11px]">
-                      Match Concluded (Read-Only)
+                      Match Concluded {tMatch?.result === "draw" ? "(Draw)" : "(Read-Only)"}
                     </span>
                   )}
                 </div>
@@ -651,7 +660,8 @@ function RefereePage() {
                   score={rawMatch.scoreA}
                   penalties={penaltiesA}
                   disabled={isFinished || teamADisqualified}
-                  isWinner={isFinished && rawMatch.scoreA > rawMatch.scoreB}
+                  isWinner={isFinished && tMatch?.winnerId === tMatch?.teamAId}
+                  isDraw={isFinished && tMatch?.result === "draw"}
                   onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", -1))}
                   onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1))}
                   onPenalty={(type: PenaltyType) => emit("updateMatch", (s: any) => s.issuePenalty(slotId, "A", type))}
@@ -668,7 +678,8 @@ function RefereePage() {
                   score={rawMatch.scoreB}
                   penalties={penaltiesB}
                   disabled={isFinished || teamBDisqualified}
-                  isWinner={isFinished && rawMatch.scoreB > rawMatch.scoreA}
+                  isWinner={isFinished && tMatch?.winnerId === tMatch?.teamBId}
+                  isDraw={isFinished && tMatch?.result === "draw"}
                   onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", -1))}
                   onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1))}
                   onPenalty={(type: PenaltyType) => emit("updateMatch", (s: any) => s.issuePenalty(slotId, "B", type))}
@@ -903,13 +914,13 @@ function NavCard({ href, onClick, icon, label, active, danger, external }: any) 
   return <Link to={href} className={classes}>{icon}<span className="text-[11px] font-bold uppercase tracking-wider">{label}</span></Link>;
 }
 
-function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, onOwnGoal, roster, isWinner }: any) {
+function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, penalties, disabled, onDecrement, onIncrement, onPenalty, onOwnGoal, roster, isWinner, isDraw, coach }: any) {
   const isPrimary = accentColor === "primary";
   const effectivePenalties = calculateEffectivePenalties(penalties);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className={cn("relative flex-1 flex flex-col rounded-xl border bg-background p-6 shadow-card transition-opacity", disabled ? "opacity-75" : "", isWinner ? "border-emerald-500 shadow-emerald-500/10" : "border-border")}>
+      <div className={cn("relative flex-1 flex flex-col rounded-xl border bg-background p-6 shadow-card transition-opacity", disabled ? "opacity-75" : "", isWinner ? "border-emerald-500 shadow-emerald-500/10" : isDraw ? "border-amber-500 shadow-amber-500/10" : "border-border")}>
         <div className="mb-6 flex items-center justify-between border-b border-border/30 pb-4">
           <div>
             <h2 className="text-xl font-bold text-foreground lg:text-2xl">{teamName}</h2>
