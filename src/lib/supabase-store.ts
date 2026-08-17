@@ -809,7 +809,11 @@ export class SupabaseStore implements DataStore {
     this.commit({ ...this.state, tournaments: mappedTournaments });
   }
 
-  setMatchResult(tournamentId: string, matchId: string, winnerId: string | null, result: "win" | "draw") {
+  setMatchWinner(tournamentId: string, matchId: string, winnerId: string, scoreA?: number, scoreB?: number) {
+    this.setMatchResult(tournamentId, matchId, winnerId, "win", scoreA, scoreB);
+  }
+
+  setMatchResult(tournamentId: string, matchId: string, winnerId: string | null, result: "win" | "draw", scoreA?: number, scoreB?: number) {
     const previousMatchIds = new Set(this.state.tournaments.find(x => x.id === tournamentId)?.matches.map(m => m.id) ?? []);
     const tournaments = this.state.tournaments.map((t) => {
       if (t.id !== tournamentId) return t;
@@ -818,6 +822,8 @@ export class SupabaseStore implements DataStore {
       if (!match) return t;
       match.winnerId = winnerId;
       match.result = result;
+      if (scoreA !== undefined) match.scoreA = scoreA;
+      if (scoreB !== undefined) match.scoreB = scoreB;
       if (match.phase === "group") {
         const updated = { ...t, matches };
         const qualified = groupQualifiedTeams(updated);
@@ -1069,6 +1075,7 @@ export class SupabaseStore implements DataStore {
     this.lockSlot(slotId);
     const slot = this.getSlot(slotId);
     const m = slot.match;
+    if (m.status === "finished") return;
     const match: Match = {
       ...m, status: "finished", elapsedMs: m.elapsedMs + (m.runningSince ? Date.now() - m.runningSince : 0), runningSince: null,
     };
@@ -1094,8 +1101,8 @@ export class SupabaseStore implements DataStore {
         else if (match.scoreA > match.scoreB) winnerId = tMatch.teamAId;
         else if (match.scoreB > match.scoreA) winnerId = tMatch.teamBId;
         
-        if (winnerId) this.setMatchWinner(t.id, match.id, winnerId);
-        else if (tMatch.phase === "group") this.setMatchResult(t.id, match.id, null, "draw");
+        if (winnerId) this.setMatchWinner(t.id, match.id, winnerId, match.scoreA, match.scoreB);
+        else if (tMatch.phase === "group") this.setMatchResult(t.id, match.id, null, "draw", match.scoreA, match.scoreB);
       }
     }
   }

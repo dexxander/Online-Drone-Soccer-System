@@ -121,7 +121,9 @@ function RefereePage() {
       } else if (currentPhase === "Half Time") {
         emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "2nd Half", "Half Time"));
       } else if (currentPhase === "2nd Half") {
-        if (rawMatch.scoreA === rawMatch.scoreB) {
+        const tMatch = activeMatchTournament?.matches.find((m) => m.id === rawMatch.id);
+        const isKnockout = (tMatch?.phase ?? "knockout") === "knockout";
+        if (rawMatch.scoreA === rawMatch.scoreB && isKnockout) {
           emit("updateMatch", (s: any) => s.changeMatchPhase(slotId, "Overtime", "2nd Half"));
         } else {
           emit("updateMatch", (s: any) => s.pauseMatch(slotId));
@@ -848,7 +850,13 @@ function RefereePage() {
                   emit("updateMatch", (s: any) => s.endMatch(slotId));
                   setShowFinalizePrompt(false);
                 }}
-                className="rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+                disabled={!winningTeamName && (activeMatchTournament?.matches.find((m) => m.id === rawMatch.id)?.phase ?? "knockout") === "knockout"}
+                className={cn(
+                  "rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition-colors",
+                  !winningTeamName && (activeMatchTournament?.matches.find((m) => m.id === rawMatch.id)?.phase ?? "knockout") === "knockout" 
+                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50" 
+                    : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                )}
               >
                 End Match & Finalize
               </button>
