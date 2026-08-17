@@ -14,7 +14,7 @@ function getMatchTitle(round: number, maxRound: number) {
   return `Round ${round}`;
 }
 
-export function RefereeLayout({ children, match, slotId }: { children: ReactNode; match: Match; slotId?: MatchSlotId }) {
+export function RefereeLayout({ children, match, slotId, customTitle, hideMatchDetails }: { children: ReactNode; match: Match; slotId?: MatchSlotId; customTitle?: string; hideMatchDetails?: boolean }) {
   const navigate = useNavigate();
   const user = auth.current();
   const { state } = useMockWebSocket();
@@ -27,7 +27,7 @@ export function RefereeLayout({ children, match, slotId }: { children: ReactNode
   const currentRound = tMatch?.round || 1;
   
   const matchTitle = activeTournament ? getMatchTitle(currentRound, maxRound) : "Friendly";
-  const tournamentName = activeTournament ? activeTournament.name : match.tournamentName;
+  const tournamentName = customTitle || (activeTournament ? activeTournament.name : match.tournamentName) || "Referee Dashboard";
   const matchDisplayNumber = tMatch ? tMatch.slot + 1 : match.id.split("-").pop()?.slice(-4);
 
   return (
@@ -48,13 +48,17 @@ export function RefereeLayout({ children, match, slotId }: { children: ReactNode
           <h1 className="text-xl font-bold tracking-tight text-foreground lg:hidden">
             NDSC
           </h1>
-          <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
-            {matchTitle} &gt; Match {matchDisplayNumber}
-          </span>
-          {slotId && (
-            <span className="hidden rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
-              Court {slotId}
-            </span>
+          {!hideMatchDetails && (
+            <>
+              <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
+                {matchTitle} &gt; Match {matchDisplayNumber}
+              </span>
+              {slotId && (
+                <span className="hidden rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
+                  Court {slotId}
+                </span>
+              )}
+            </>
           )}
         </div>
 

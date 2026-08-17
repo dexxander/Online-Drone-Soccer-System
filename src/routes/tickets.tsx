@@ -39,7 +39,7 @@ export const Route = createFileRoute("/tickets")({
 
 type PricingMode = "free" | "paid";
 
-export function TicketsPage() {
+function TicketsPage() {
   const { state } = useMockWebSocket();
   const search = useSearch({ strict: false }) as { tournamentId?: string };
 
