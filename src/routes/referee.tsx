@@ -341,14 +341,22 @@ function RefereePage() {
               <div className="flex items-center gap-2 border-r border-border pr-4">
                 <select
                   className="auth-input py-1.5 text-xs h-auto w-auto"
-                  value={matchSlots[0]?.scoreboardMode || "courts"}
+                  value={matchSlots[0]?.scoreboardMode?.startsWith("leaderboard") ? "leaderboard" : (matchSlots[0]?.scoreboardMode || "courts")}
                   onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                    const mode = e.target.value as any;
+                    const baseMode = e.target.value;
+                    let modeToSave = baseMode;
                     let tId = matchSlots[0]?.scoreboardTournamentId || null;
-                    if ((mode === "bracket" || mode === "group" || mode === "leaderboard") && !tId && tournaments.length > 0) {
+                    
+                    if ((baseMode === "bracket" || baseMode === "group" || baseMode === "leaderboard") && !tId && tournaments.length > 0) {
                       tId = tournaments[0]?.id ?? null;
                     }
-                    emit("setScoreboardMode", (s: any) => s.setScoreboardMode(mode, tId));
+                    
+                    // THE FIX: Pack the stage into the MODE string, leaving the UUID clean!
+                    if (baseMode === "leaderboard") {
+                      modeToSave = "leaderboard_group";
+                    }
+                    
+                    emit("setScoreboardMode", (s: any) => s.setScoreboardMode(modeToSave as any, tId));
                   }}
                 >
                   <option value="courts">Live Courts</option>
@@ -362,7 +370,7 @@ function RefereePage() {
                     className="auth-input py-1.5 text-xs h-auto w-auto max-w-[200px]"
                     value={matchSlots[0]?.scoreboardTournamentId || ""}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
-                      emit("setScoreboardMode", (s: any) => s.setScoreboardMode(matchSlots[0]?.scoreboardMode || "courts", e.target.value));
+                      emit("setScoreboardMode", (s: any) => s.setScoreboardMode(matchSlots[0]?.scoreboardMode as any, e.target.value));
                     }}
                   >
                     {tournaments.map((t: Tournament) => (
@@ -371,12 +379,15 @@ function RefereePage() {
                   </select>
                 )}
 
-                {matchSlots[0]?.scoreboardMode === "leaderboard" && (
+                {/* THE FIX: Read and Write the stage to the scoreboardMode string */}
+                {matchSlots[0]?.scoreboardMode?.startsWith("leaderboard") && (
                   <>
                     <select
                       className="auth-input py-1.5 text-xs h-auto w-auto max-w-[200px]"
                       value={matchSlots[0]?.scoreboardTournamentId || ""}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => emit("setScoreboardMode", (s: any) => s.setScoreboardMode("leaderboard", e.target.value))}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                        emit("setScoreboardMode", (s: any) => s.setScoreboardMode(matchSlots[0]?.scoreboardMode as any, e.target.value));
+                      }}
                     >
                       {tournaments.map((t: Tournament) => (
                         <option key={t.id} value={t.id}>{t.name}</option>
@@ -384,8 +395,10 @@ function RefereePage() {
                     </select>
                     <select
                       className="auth-input py-1.5 text-xs h-auto w-auto"
-                      value={leaderboardStage}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLeaderboardStage(e.target.value as LeaderboardStage)}
+                      value={matchSlots[0]?.scoreboardMode === "leaderboard_knockout" ? "knockout" : "group"}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                        emit("setScoreboardMode", (s: any) => s.setScoreboardMode(`leaderboard_${e.target.value}` as any, matchSlots[0]?.scoreboardTournamentId));
+                      }}
                     >
                       <option value="group">Group Stage</option>
                       <option value="knockout">Knockout</option>

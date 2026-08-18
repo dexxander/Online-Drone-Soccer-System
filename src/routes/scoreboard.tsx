@@ -349,10 +349,14 @@ function Scoreboard() {
   
   // Drives the entire dashboard. Synced from referee.tsx via websockets!
   const configSlot = slots.find(s => s.slotId === 1) || slots[0];
-  const scoreboardMode = configSlot?.scoreboardMode || "courts";
+  
+  // THE FIX: Unpack the mode and the stage cleanly
+  const rawMode = configSlot?.scoreboardMode || "courts";
+  const scoreboardMode = rawMode.startsWith("leaderboard") ? "leaderboard" : rawMode;
+  const activeLeaderboardStage = rawMode === "leaderboard_knockout" ? "knockout" : "group";
+  
   const scoreboardTournamentId = configSlot?.scoreboardTournamentId;
   const anyLive = visibleSlots.some((slot) => slot.match.status === "live" || slot.match.status === "paused");
-
   return (
     <div className={cn("relative z-0 flex min-h-screen flex-col font-sans transition-all duration-700", theme.appBg, theme.textMain)}>
       
@@ -461,6 +465,7 @@ function Scoreboard() {
               tournament={tournaments.find(t => t.id === scoreboardTournamentId)!} 
               teams={teams} 
               theme={theme} 
+              activeStage={activeLeaderboardStage} 
             />
           )}
         </div>
@@ -471,8 +476,9 @@ function Scoreboard() {
 
 // ─── TOURNAMENT VIEWER COMPONENTS ──────────────────────────────────────────
 
-function LeaderboardBoard({ tournament, teams, theme }: { tournament: Tournament; teams: any[]; theme: ThemeDef }) {
-  const [stage] = useLeaderboardStageSync();
+// THE FIX: Accept activeStage as a prop
+function LeaderboardBoard({ tournament, teams, theme, activeStage }: { tournament: Tournament; teams: any[]; theme: ThemeDef; activeStage: "group" | "knockout" }) {
+  const stage = activeStage; 
 
   const matchIds = tournament
     ? (stage === "group"
