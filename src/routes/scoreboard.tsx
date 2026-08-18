@@ -1,11 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Palette, Radio, Sparkles, Timer, Trophy, MonitorSmartphone, GitMerge, LayoutGrid, ShieldAlert, AlertCircle } from "lucide-react";
+import { ArrowLeftRight, Palette, Radio, Sparkles, Timer, Trophy } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
 import type { MatchSlot, Tournament, TournamentMatch, MatchEventType } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
+import { 
+  buildLeaderboardRows, 
+  sortLeaderboardRows, 
+  usePenaltiesByMatch, 
+  useLeaderboardStageSync, 
+  type LeaderboardRow 
+} from "@/lib/leaderboard";
 
 export const Route = createFileRoute("/scoreboard")({
   head: () => ({
@@ -29,12 +36,12 @@ const PATTERNS: Record<string, { id: string; name: string; className: string }> 
   dots: { 
     id: "dots", 
     name: "Dot Matrix", 
-    className: "bg-[radial-gradient(currentColor_2px,transparent_2px)] bg-[length:2.5rem_2.5rem] opacity-[0.04] dark:opacity-[0.07]" 
+    className: "bg-[radial-gradient(currentColor_2px,transparent_2px)] bg-[size:1.5rem_1.5rem] opacity-[0.15] dark:opacity-[0.25]" 
   },
   scanlines: { 
     id: "scanlines", 
     name: "CRT Scanlines", 
-    className: "bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.2)_50%)] bg-[length:100%_4px]" 
+    className: "bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.2)_50%)] bg-[size:100%_4px]" 
   },
   stripes: { 
     id: "stripes", 
@@ -46,25 +53,45 @@ const PATTERNS: Record<string, { id: string; name: string; className: string }> 
     name: "Dark Vignette",
     className: "bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.8)_100%)] opacity-80 pointer-events-none"
   },
-  stars: { 
-    id: "stars", 
-    name: "Blinking Stars", 
-    className: "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Ccircle cx='20' cy='30' r='1' fill='%23fff' opacity='0.5'/%3E%3Ccircle cx='80' cy='120' r='1.5' fill='%23fff' opacity='0.8'/%3E%3Ccircle cx='150' cy='60' r='1' fill='%23fff' opacity='0.3'/%3E%3Ccircle cx='110' cy='170' r='2' fill='%23fff' opacity='0.6'/%3E%3Ccircle cx='180' cy='10' r='1' fill='%23fff' opacity='0.9'/%3E%3Ccircle cx='50' cy='180' r='1.5' fill='%23fff' opacity='0.4'/%3E%3C/svg%3E\")] animate-pulse opacity-40 dark:opacity-60" 
+  crosshatch: {
+    id: "crosshatch",
+    name: "Solid Crosshatch",
+    className: "bg-[linear-gradient(to_right,currentColor_2px,transparent_2px),linear-gradient(to_bottom,currentColor_2px,transparent_2px)] bg-[size:2rem_2rem] opacity-[0.12] dark:opacity-[0.25]"
   },
-  bubbles: { 
-    id: "bubbles", 
-    name: "Floating Bubbles", 
-    className: "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Ccircle cx='25' cy='25' r='10' fill='none' stroke='%23fff' stroke-width='1' opacity='0.2'/%3E%3Ccircle cx='75' cy='75' r='15' fill='none' stroke='%23fff' stroke-width='1' opacity='0.15'/%3E%3Ccircle cx='80' cy='20' r='5' fill='none' stroke='%23fff' stroke-width='1' opacity='0.25'/%3E%3Ccircle cx='20' cy='80' r='8' fill='none' stroke='%23fff' stroke-width='1' opacity='0.1'/%3E%3C/svg%3E\")] opacity-40 dark:opacity-60" 
+  radar: {
+    id: "radar",
+    name: "Radar Rings",
+    className: "bg-[repeating-radial-gradient(circle_at_center,transparent_0,currentColor_2px,transparent_2px,transparent_4rem)] opacity-[0.15] dark:opacity-[0.25]"
   },
-  circuit: { 
-    id: "circuit", 
-    name: "Copper Circuits", 
-    className: "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100'%3E%3Cpath d='M10 10h20v20H10z' fill='none' stroke='%23fff' stroke-width='1' opacity='0.15'/%3E%3Cpath d='M30 20h20l20 20v20m-40-40l-20 20v20' fill='none' stroke='%23fff' stroke-width='1' opacity='0.15'/%3E%3Ccircle cx='70' cy='60' r='2' fill='%23fff' opacity='0.15'/%3E%3Ccircle cx='10' cy='60' r='2' fill='%23fff' opacity='0.15'/%3E%3C/svg%3E\")] opacity-50 dark:opacity-70" 
+  checkerboard: {
+    id: "checkerboard",
+    name: "Retro Checkers",
+    className: "bg-[repeating-conic-gradient(currentColor_0_25%,transparent_0_50%)] bg-[size:2rem_2rem] opacity-[0.03] dark:opacity-[0.06]"
   },
-  hexagons: { 
-    id: "hexagons", 
-    name: "Hexagon Grid", 
-    className: "bg-[url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='28' height='49' viewBox='0 0 28 49'%3E%3Cpath d='M13.99 9.25l13 7.5v15l-13 7.5L1 31.75v-15l12.99-7.5zM3 17.9v12.7l10.99 6.34 11-6.35V17.9l-11-6.34L3 17.9zM0 15l12.98-7.5V0h-2v6.35L0 12.69v2.3zm0 18.5L12.98 41v8h-2v-6.85L0 35.81v-2.3zM15 0v7.5L27.99 15H28v-2.31h-.01L17 6.35V0h-2zm0 49v-8l12.99-7.5H28v2.31h-.01L17 42.15V49h-2z' fill='%23fff' fill-opacity='0.05'/%3E%3C/svg%3E\")] opacity-60 dark:opacity-80" 
+  dataTracks: {
+    id: "dataTracks",
+    name: "Data Tracks",
+    className: "bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_2rem,currentColor_2rem,currentColor_2.15rem)] opacity-[0.15] dark:opacity-[0.25]"
+  },
+  starlight: {
+    id: "starlight",
+    name: "Starlight",
+    className: "bg-[radial-gradient(currentColor_1px,transparent_1px),radial-gradient(currentColor_1px,transparent_1px)] bg-[size:3rem_3rem] bg-[position:0_0,1.5rem_1.5rem] opacity-[0.25] dark:opacity-[0.4]"
+  },
+  blueprint: {
+    id: "blueprint",
+    name: "Heavy Blueprint",
+    className: "bg-[linear-gradient(to_right,currentColor_2px,transparent_2px),linear-gradient(to_bottom,currentColor_2px,transparent_2px)] bg-[size:5rem_5rem] opacity-[0.05] dark:opacity-[0.1]"
+  },
+  isometric: {
+    id: "isometric",
+    name: "Circuit Nodes",
+    className: "bg-[radial-gradient(currentColor_3px,transparent_3px),linear-gradient(to_right,currentColor_1px,transparent_1px),linear-gradient(to_bottom,currentColor_1px,transparent_1px)] bg-[size:3rem_3rem] opacity-[0.15] dark:opacity-[0.3]"
+  },
+  blinds: {
+    id: "blinds",
+    name: "Vertical Blinds",
+    className: "bg-[repeating-linear-gradient(to_right,transparent_0,transparent_1rem,currentColor_1rem,currentColor_1.1rem)] opacity-[0.1] dark:opacity-[0.2]"
   }
 };
 
@@ -330,9 +357,9 @@ function Scoreboard() {
     <div className={cn("relative z-0 flex min-h-screen flex-col font-sans transition-all duration-700", theme.appBg, theme.textMain)}>
       
       {/* GLOBAL BACKGROUND PATTERN LAYER */}
-      <div className={cn("pointer-events-none absolute inset-0 z-[-1] transition-all duration-700", activePattern.className)} />
+      <div className={cn("pointer-events-none absolute inset-0 transition-all duration-700", activePattern.className)} />
 
-      <header className={cn("flex items-center justify-between px-6 py-4 shadow-sm transition-all duration-700", theme.headerBg, theme.border)}>
+      <header className={cn("relative z-10 flex items-center justify-between px-6 py-4 shadow-sm transition-all duration-700", theme.headerBg, theme.border)}>
         <div className="flex items-center gap-6">
           <h1 className="text-xl font-bold uppercase tracking-tight drop-shadow-sm">
             Drone Soccer Arena
@@ -376,7 +403,7 @@ function Scoreboard() {
         )}
       </header>
 
-      <main className="flex-1 p-6">
+      <main className="relative z-10 flex-1 p-6">
         <div className={cn("mx-auto flex w-full flex-col gap-8 transition-all duration-500", (scoreboardMode === "courts" && visibleSlots.length === 2) ? "max-w-[100rem]" : "max-w-6xl")}>
           {scoreboardMode === "courts" && visibleSlots.length === 0 && <EmptyBoardState theme={theme} />}
 
@@ -428,6 +455,14 @@ function Scoreboard() {
               theme={theme} 
             />
           )}
+
+          {scoreboardMode === "leaderboard" && scoreboardTournamentId && (
+            <LeaderboardBoard 
+              tournament={tournaments.find(t => t.id === scoreboardTournamentId)!} 
+              teams={teams} 
+              theme={theme} 
+            />
+          )}
         </div>
       </main>
     </div>
@@ -435,6 +470,104 @@ function Scoreboard() {
 }
 
 // ─── TOURNAMENT VIEWER COMPONENTS ──────────────────────────────────────────
+
+function LeaderboardBoard({ tournament, teams, theme }: { tournament: Tournament; teams: any[]; theme: ThemeDef }) {
+  const [stage] = useLeaderboardStageSync();
+
+  const matchIds = tournament
+    ? (stage === "group"
+      ? tournament.matches.filter((m: TournamentMatch) => m.phase === "group")
+      : tournament.matches.filter((m: TournamentMatch) => (m.phase ?? "knockout") === "knockout" && !m.isBye)
+    ).map((m: TournamentMatch) => m.id)
+    : [];
+
+  const penaltiesByMatch = usePenaltiesByMatch(matchIds);
+  const rows = tournament ? buildLeaderboardRows(tournament, teams, stage, penaltiesByMatch) : [];
+  const ranked = sortLeaderboardRows(rows, "totalScore", "desc", stage);
+
+  return (
+    <div className={cn("flex flex-col gap-8 p-8 rounded-xl border backdrop-blur-xl transition-all duration-700", theme.cardBg, theme.border)}>
+      <div className="text-center mb-4">
+        <h2 className={cn("text-4xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+        <p className={cn("mt-2 text-lg font-semibold uppercase tracking-widest", theme.textMuted)}>
+          {stage === "group" ? "Group Stage Leaderboard" : "Knockout Leaderboard"}
+        </p>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-base">
+          <thead>
+            <tr className={cn("border-b text-xs font-bold uppercase tracking-wider bg-black/10 dark:bg-white/5", theme.border, theme.textMuted)}>
+              <th className="w-16 py-4 text-center">#</th>
+              <th className="py-4 pl-4 text-left">Team</th>
+              <th className="w-32 py-4 text-center">Avg Score</th>
+              <th className="w-32 py-4 text-center">Highest</th>
+              <th className="w-28 py-4 text-center">GD</th>
+              <th className="w-32 py-4 pr-4 text-center font-bold">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ranked.map((row: LeaderboardRow, index: number) => {
+              const isDQ = row.isDisqualified;
+              const isQual = row.isQualifier;
+
+              let rowClass = "border-b last:border-0 bg-transparent";
+              let rankClass = "bg-black/20 text-muted-foreground";
+              let textClass = theme.textMuted;
+
+              if (stage === "group") {
+                if (isDQ) {
+                  rowClass = "border-b last:border-0 opacity-50 bg-red-500/10";
+                  rankClass = "bg-red-500/20 text-red-500";
+                } else if (isQual) {
+                  rowClass = cn("border-b last:border-0", theme.teamA.bg);
+                  rankClass = cn(theme.teamA.text, "bg-black/20 shadow-sm");
+                  textClass = theme.textMain;
+                }
+              } else {
+                if (isDQ) {
+                  rowClass = "border-b last:border-0 opacity-50 bg-red-500/10";
+                  rankClass = "bg-red-500/20 text-red-500";
+                } else if (index < 3) {
+                  rowClass = cn("border-b last:border-0", theme.teamA.bg);
+                  rankClass = cn(theme.teamA.text, "bg-black/20 shadow-sm");
+                  textClass = theme.textMain;
+                } else {
+                  textClass = theme.textMain;
+                  rankClass = cn(theme.textMain, "bg-black/10");
+                }
+              }
+
+              return (
+                <tr key={row.teamId} className={cn(theme.border, rowClass, "transition-colors duration-500")}>
+                  <td className="py-4 text-center">
+                    <span className={cn("inline-flex size-8 items-center justify-center rounded-full text-xs font-black", rankClass)}>
+                      {isDQ ? "DQ" : index + 1}
+                    </span>
+                  </td>
+                  <td className={cn("py-4 pl-4 font-bold text-left text-lg", textClass)}>
+                     {row.teamName}
+                     {stage === "group" && !isDQ && isQual && <span className="ml-4 align-middle text-[10px] uppercase tracking-widest font-black text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded shadow-sm">Qualified</span>}
+                     {stage === "group" && !isDQ && !isQual && <span className="ml-4 align-middle text-[10px] uppercase tracking-widest font-bold text-slate-400 bg-slate-500/10 border border-slate-500/20 px-2.5 py-1 rounded shadow-sm">Eliminated</span>}
+                  </td>
+                  <td className={cn("py-4 text-center tabular-nums font-medium", theme.textMuted)}>{row.avgScore.toFixed(1)}</td>
+                  <td className={cn("py-4 text-center tabular-nums font-bold", textClass)}>{row.highestScore}</td>
+                  <td className={cn("py-4 text-center tabular-nums font-bold text-lg", row.goalDiff > 0 ? "text-emerald-500" : row.goalDiff < 0 ? "text-red-500" : theme.textMuted)}>
+                    {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff}
+                  </td>
+                  <td className={cn("py-4 pr-4 text-center tabular-nums font-black text-2xl", textClass)}>{row.totalScore}</td>
+                </tr>
+              );
+            })}
+            {ranked.length === 0 && (
+              <tr><td colSpan={6} className={cn("py-12 text-center text-lg font-semibold", theme.textMuted)}>No completed matches yet.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function BracketBoard({ tournament, teams, slots, theme }: { tournament: Tournament; teams: any[]; slots: MatchSlot[]; theme: ThemeDef }) {
   const getTeamName = (id: string | null) => (id ? teams.find((t: any) => t.id === id)?.name ?? "—" : "TBD");
@@ -458,66 +591,89 @@ function BracketBoard({ tournament, teams, slots, theme }: { tournament: Tournam
   const maxRound = Math.max(...rounds, 0);
 
   return (
-    <div className={cn("flex flex-col gap-6 overflow-x-auto pb-4 p-8 rounded-xl border backdrop-blur-xl transition-all duration-700", theme.cardBg, theme.border)}>
-      <div className={cn("text-center mb-4")}>
-        <h2 className={cn("text-3xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
-        <p className={cn("mt-1 text-sm font-semibold uppercase tracking-widest", theme.textMuted)}>Knockout Bracket</p>
+    <div className={cn("flex flex-col gap-4 w-full p-4 sm:p-8 rounded-xl border backdrop-blur-xl transition-all duration-700", theme.cardBg, theme.border)}>
+      <div className={cn("text-center mb-2")}>
+        <h2 className={cn("text-2xl sm:text-3xl font-black uppercase tracking-widest drop-shadow-sm", theme.textMain)}>{tournament.name}</h2>
+        <p className={cn("mt-1 text-xs sm:text-sm font-semibold uppercase tracking-widest", theme.textMuted)}>Knockout Bracket</p>
       </div>
 
-      <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
+      {/* Header Row */}
+      <div className={cn("flex w-full items-center border-b pb-3", theme.border)}>
         {rounds.map((round: number) => (
-          <div key={round} className="w-[320px] flex items-center justify-between">
-            <span className={cn("text-sm font-bold uppercase tracking-wider flex items-center gap-2", theme.textMuted)}>
-              <span className={cn("flex size-6 items-center justify-center rounded-full text-[11px] font-bold", theme.teamA.bg, theme.textMain)}>
+          <div key={round} className="flex-1 flex items-center justify-center text-center px-1">
+            <span className={cn("text-[9px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 truncate", theme.textMuted)}>
+              <span className={cn("hidden lg:flex size-5 items-center justify-center rounded-full text-[10px] font-bold shrink-0", theme.teamA.bg, theme.textMain)}>
                 {round}
               </span>
-              {getMatchTitle(round, maxRound)}
+              <span className="truncate">{getMatchTitle(round, maxRound)}</span>
             </span>
           </div>
         ))}
       </div>
 
-      <div className="flex items-stretch gap-16 min-w-max py-2">
+      {/* Bracket Tree Canvas */}
+      <div className="flex w-full items-stretch py-2 min-h-[400px]">
         {rounds.map((round: number) => {
           const matches = knockoutMatches.filter((m: TournamentMatch) => m.round === round).sort((a: TournamentMatch, b: TournamentMatch) => a.slot - b.slot);
-          const pairs: TournamentMatch[][] = [];
-          for (let i = 0; i < matches.length; i += 2) {
-            const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
-            pairs.push(pair);
-          }
+          const isLastRound = round === maxRound;
+
           return (
-            <div key={round} className="w-[320px] flex flex-col justify-around">
-              {pairs.map((pair: TournamentMatch[], pi: number) => (
-                <div key={pi} className="relative flex flex-col justify-around h-full my-6">
-                  {pair.map((m: TournamentMatch) => {
-                    const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
-                    const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
-                    const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
-                    const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
+            <div key={round} className="flex-1 flex flex-col relative z-10">
+              {matches.map((m: TournamentMatch, i: number) => {
+                const isEven = i % 2 === 0;
+
+                const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
+                const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
+                const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
+                const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
+                
+                const liveSlot = slots.find((s: MatchSlot) => s.match.id === m.id);
+                const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : (m.scoreA !== undefined ? m.scoreA : "-"));
+                const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : (m.scoreB !== undefined ? m.scoreB : "-"));
+                
+                return (
+                  <div key={m.id} className={cn("flex-1 flex flex-col justify-center relative py-1", isLastRound ? "px-1 sm:px-2" : "pr-5 pl-1 sm:pr-8 sm:pl-2")}>
                     
-                    const liveSlot = slots.find((s: MatchSlot) => s.match.id === m.id);
-                    const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : (m.scoreA !== undefined ? m.scoreA : "-"));
-                    const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : (m.scoreB !== undefined ? m.scoreB : "-"));
-                    
-                    return (
-                      <div key={m.id} className="relative py-3 z-10">
-                        <div className={cn("relative flex flex-col rounded-xl border p-4 shadow-sm transition-all", theme.appBg, theme.border)}>
-                          <div className="flex flex-col gap-3">
-                            <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-base font-bold border", isTeamAWinner ? cn("border-transparent ring-1", theme.teamA.ring, theme.teamA.bg) : cn("bg-black/20", theme.border))}>
-                              <span className={cn(displayTeamA === "BYE" ? "italic opacity-50" : "", isTeamAWinner ? theme.textMain : theme.textMuted)}>{displayTeamA}</span>
-                              <span className={cn("font-mono text-lg", liveSlot ? "text-emerald-500 animate-pulse" : "")}>{scoreA}</span>
-                            </div>
-                            <div className={cn("flex items-center justify-between rounded-lg px-4 py-3 text-base font-bold border", isTeamBWinner ? cn("border-transparent ring-1", theme.teamB.ring, theme.teamB.bg) : cn("bg-black/20", theme.border))}>
-                              <span className={cn(displayTeamB === "BYE" ? "italic opacity-50" : "", isTeamBWinner ? theme.textMain : theme.textMuted)}>{displayTeamB}</span>
-                              <span className={cn("font-mono text-lg", liveSlot ? "text-emerald-500 animate-pulse" : "")}>{scoreB}</span>
-                            </div>
-                          </div>
+                    {/* --- VISIBLE CONNECTOR LINES ENGINE --- */}
+                    {/* Top Branch */}
+                    {!isLastRound && isEven && (
+                      <div
+                        className={cn("absolute border-r-2 border-t-2 border-current rounded-tr-xl z-0 opacity-50", theme.textMuted)}
+                        style={{ right: '0.75rem', width: '1rem', top: '50%', bottom: '0%' }}
+                      />
+                    )}
+                    {/* Bottom Branch */}
+                    {!isLastRound && !isEven && (
+                      <div
+                        className={cn("absolute border-r-2 border-b-2 border-current rounded-br-xl z-0 opacity-50", theme.textMuted)}
+                        style={{ right: '0.75rem', width: '1rem', top: '0%', bottom: '50%' }}
+                      />
+                    )}
+                    {/* Stem connecting to next round */}
+                    {!isLastRound && isEven && (
+                      <div
+                        className={cn("absolute border-t-2 border-current z-0 opacity-50", theme.textMuted)}
+                        style={{ right: '-0.25rem', width: '1rem', top: '100%' }}
+                      />
+                    )}
+                    {/* -------------------------------------- */}
+
+                    {/* The Match Card */}
+                    <div className={cn("relative z-10 flex flex-col rounded-lg border p-1.5 sm:p-2 shadow-sm transition-all w-full", theme.appBg, theme.border)}>
+                      <div className="flex flex-col gap-1 sm:gap-1.5">
+                        <div className={cn("flex items-center justify-between rounded px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[9px] sm:text-xs lg:text-sm font-bold border", isTeamAWinner ? cn("border-transparent ring-1", theme.teamA.ring, theme.teamA.bg) : cn("bg-black/20", theme.border))}>
+                          <span className={cn("truncate max-w-[50px] sm:max-w-[70px] lg:max-w-[120px] xl:max-w-[150px]", displayTeamA === "BYE" ? "italic opacity-50" : "", isTeamAWinner ? theme.textMain : theme.textMuted)} title={displayTeamA}>{displayTeamA}</span>
+                          <span className={cn("font-mono shrink-0", liveSlot ? "text-emerald-500 animate-pulse" : "")}>{scoreA}</span>
+                        </div>
+                        <div className={cn("flex items-center justify-between rounded px-1.5 py-1 sm:px-2.5 sm:py-1.5 text-[9px] sm:text-xs lg:text-sm font-bold border", isTeamBWinner ? cn("border-transparent ring-1", theme.teamB.ring, theme.teamB.bg) : cn("bg-black/20", theme.border))}>
+                          <span className={cn("truncate max-w-[50px] sm:max-w-[70px] lg:max-w-[120px] xl:max-w-[150px]", displayTeamB === "BYE" ? "italic opacity-50" : "", isTeamBWinner ? theme.textMain : theme.textMuted)} title={displayTeamB}>{displayTeamB}</span>
+                          <span className={cn("font-mono shrink-0", liveSlot ? "text-emerald-500 animate-pulse" : "")}>{scoreB}</span>
                         </div>
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           );
         })}
@@ -542,7 +698,7 @@ function GroupBoard({ tournament, teams, slots, theme }: { tournament: Tournamen
     teamIds.forEach((id: string) => stats.set(id, { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 }));
     
     matches.forEach((m: TournamentMatch) => {
-      const liveSlot = slots.find((s: MatchSlot) => s.match.id === m.id);
+      const liveSlot = slots.find(s => s.match.id === m.id);
       const isLive = Boolean(liveSlot);
       const isCompleted = m.winnerId !== null || m.result === "draw";
       
@@ -607,7 +763,7 @@ function GroupBoard({ tournament, teams, slots, theme }: { tournament: Tournamen
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className={cn("border-b text-[10px] font-bold uppercase tracking-wider", theme.border, theme.textMuted, "bg-black/10 dark:bg-white/5")}>
+                    <tr className={cn("border-b text-[10px] font-bold uppercase tracking-wider bg-black/10 dark:bg-white/5", theme.border, theme.textMuted)}>
                       <th className="w-8 py-2.5 text-center">#</th>
                       <th className="py-2.5 pl-2 text-left">Team</th>
                       <th className="w-8 py-2.5 text-center">P</th>

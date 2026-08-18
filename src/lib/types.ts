@@ -91,7 +91,7 @@ export interface MatchEvent {
  */
 export type MatchSlotId = 1 | 2;
 
-export type ScoreboardMode = "courts" | "bracket" | "group";
+export type ScoreboardMode = "courts" | "bracket" | "group" | "leaderboard";
 
 export interface MatchSlot {
   slotId: MatchSlotId;

@@ -167,11 +167,17 @@ function groupQualifiedTeams(tournament: Tournament): string[] | null {
       if (sorted[2]) thirdPlaced.push(sorted[2]);
     }
 
-    // Rank 3rd-placed teams by: goal diff desc → goals for desc → fewest goals against asc
+    // Rank 3rd-placed teams by: Points desc → Goal diff desc → Goals for desc
     thirdPlaced.sort((a, b) => {
       const sa = stats.get(a)!; const sb = stats.get(b)!;
       const diffA = sa.gf - sa.ga; const diffB = sb.gf - sb.ga;
-      return (diffB - diffA) || (sb.gf - sa.gf) || (sa.ga - sb.ga);
+      
+      // 1. Compare Points (Total Score)
+      if (sb.pts !== sa.pts) return sb.pts - sa.pts;
+      // 2. Compare Goal Difference
+      if (diffB !== diffA) return diffB - diffA;
+      // 3. Compare Goals For (Highest Score)
+      return sb.gf - sa.gf;
     });
 
     // Top 2 wildcard 3rd-placed teams qualify
@@ -1144,40 +1150,28 @@ export class SupabaseStore implements DataStore {
     this.persistMatchEvents(slotId, events);
   }
 
-  issuePenalty(slotId: MatchSlotId, side: "A" | "B", type: PenaltyType) {
-    this.lockSlot(slotId);
-    const slot = this.getSlot(slotId);
-    const m = slot.match;
-    if (calculateEffectivePenalties(m.penalties.filter((penalty) => penalty.side === side)).isDisqualified) return;
-    const penalty = { id: uid(), matchId: m.id, side, type, createdAt: Date.now() };
-    const match: Match = { ...m, penalties: [penalty, ...m.penalties] };
-    const name = side === "A" ? m.teamAName : m.teamBName;
-    let events = this.log("penalty_issued", `${type} penalty — ${name}`, match.id, slot.events);
-    const isDisqualified = calculateEffectivePenalties(match.penalties.filter((item) => item.side === side)).isDisqualified;
-    if (isDisqualified && match.status === "live") {
-      match.elapsedMs += match.runningSince ? Date.now() - match.runningSince : 0;
-      match.status = "paused";
-      match.runningSince = null;
-      events = this.log("match_paused", `${name} disqualified — clock stopped`, match.id, events);
-    }
-    this.commitSlot(slotId, { match, events });
-    this.logAudit("Penalty issued", currentAuditActor(), match.id, "System", `${type} penalty for ${name}`);
-  }
-
-  // FIX: Properly register synthetic manual events into `persistedEventIds` to prevent 409 Conflicts
   resetMatch(slotId: MatchSlotId) {
     this.lockSlot(slotId);
     const slot = this.getSlot(slotId);
+    
+    // 1. Wipe everything locally, including the penalties array
     const match: Match = { ...slot.match, scoreA: 0, scoreB: 0, status: "scheduled", elapsedMs: 0, runningSince: null, penalties: [] };
     
     const pauseEvt: MatchEvent = { id: uid(), matchId: match.id, type: "match_paused" as MatchEventType, message: "PHASE_CHANGE:Testing", createdAt: Date.now() };
     const freshEvents: MatchEvent[] = [pauseEvt];
     
+    // 2. Sync the wiped score AND clear the winner/result to the local tournament bracket
     const tournaments = this.state.tournaments.map(t => {
       if (!t.matches.some(tm => tm.id === match.id)) return t;
       return {
         ...t,
-        matches: t.matches.map(tm => tm.id === match.id ? { ...tm, scoreA: 0, scoreB: 0 } : tm)
+        matches: t.matches.map(tm => tm.id === match.id ? { 
+          ...tm, 
+          scoreA: 0, 
+          scoreB: 0,
+          winnerId: null, 
+          result: null    
+        } : tm)
       };
     });
 
@@ -1186,9 +1180,24 @@ export class SupabaseStore implements DataStore {
     
     this.persist('reset bundle', async () => {
         await supabase.from('match_events').delete().eq('slot_id', slotId);
-        await supabase.from('penalties').delete().eq('slot_id', slotId);
-        await supabase.from('match_slots').update({ score_a: 0, score_b: 0, elapsed_ms: 0, running_since: null }).eq('slot_id', slotId);
-        await supabase.from('tournament_matches').update({ score_a: 0, score_b: 0 }).eq('id', match.id);
+        
+        // Deleting penalties by match_id ensures we wipe the correct team DQs
+        await supabase.from('penalties').delete().eq('match_id', match.id);
+        
+        await supabase.from('match_slots').update({ 
+          score_a: 0, 
+          score_b: 0, 
+          status: "scheduled", 
+          elapsed_ms: 0, 
+          running_since: null 
+        }).eq('slot_id', slotId);
+        
+        await supabase.from('tournament_matches').update({ 
+          score_a: 0, 
+          score_b: 0,
+          winner_id: null, 
+          result: null 
+        }).eq('id', match.id);
         
         // Track the inserted ID so we don't duplicate it in loop
         this.persistedEventIds.add(pauseEvt.id);
@@ -1197,6 +1206,82 @@ export class SupabaseStore implements DataStore {
         }]);
         return { error: null };
     });
+
+    this.logAudit("Match reset", currentAuditActor(), match.id, "System", "Match fully reset");
+  }
+
+  // ... (adjustScore goes here) ...
+
+  issuePenalty(slotId: MatchSlotId, side: "A" | "B", type: PenaltyType) {
+    this.lockSlot(slotId);
+    const slot = this.getSlot(slotId);
+    const m = slot.match;
+    
+    const sidePenalties = m.penalties.filter((penalty) => penalty.side === side);
+    if (calculateEffectivePenalties(sidePenalties).isDisqualified) return;
+    
+    // Create the penalty with a numeric timestamp
+    const penalty = { id: uid(), matchId: m.id, side, type, createdAt: Date.now() };
+    const match: Match = { ...m, penalties: [penalty, ...m.penalties] };
+    const name = side === "A" ? m.teamAName : m.teamBName;
+    let events = this.log("penalty_issued", `${type} penalty — ${name}`, match.id, slot.events);
+    
+    const isDisqualified = calculateEffectivePenalties(match.penalties.filter((item) => item.side === side)).isDisqualified;
+    let scoreChanged = false;
+
+    if (isDisqualified) {
+      // Wipe the score locally
+      if (side === "A" && match.scoreA !== 0) { match.scoreA = 0; scoreChanged = true; }
+      if (side === "B" && match.scoreB !== 0) { match.scoreB = 0; scoreChanged = true; }
+      
+      // Stop the clock
+      if (match.status === "live") {
+        match.elapsedMs += match.runningSince ? Date.now() - match.runningSince : 0;
+        match.status = "paused";
+        match.runningSince = null;
+        events = this.log("match_paused", `${name} disqualified — clock stopped`, match.id, events);
+      }
+    }
+
+    const tournaments = this.state.tournaments.map(t => {
+      if (!t.matches.some(tm => tm.id === match.id)) return t;
+      return {
+        ...t,
+        matches: t.matches.map(tm => tm.id === match.id ? { ...tm, scoreA: match.scoreA, scoreB: match.scoreB } : tm)
+      };
+    });
+
+    const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, match, events } : s)) as [MatchSlot, MatchSlot];
+    this.commit({ ...this.state, matches, tournaments, match: matches[0].match, events: matches[0].events });
+
+    this.persist('issue penalty & dq', async () => {
+      await supabase.from('penalties').upsert({
+        id: penalty.id,
+        match_id: penalty.matchId,
+        side: penalty.side,
+        type: penalty.type,
+        created_at: penalty.createdAt 
+      }, { onConflict: 'id' });
+
+      await supabase.from('match_slots').update({
+        score_a: match.scoreA,
+        score_b: match.scoreB,
+        status: match.status,
+        elapsed_ms: match.elapsedMs,
+        running_since: match.runningSince
+      }).eq('slot_id', slotId);
+
+      if (scoreChanged) {
+        await supabase.from('tournament_matches').update({
+          score_a: match.scoreA,
+          score_b: match.scoreB
+        }).eq('id', match.id);
+      }
+      return { error: null };
+    });
+    
+    this.persistMatchEvents(slotId, events);
+    this.logAudit("Penalty issued", currentAuditActor(), match.id, "System", `${type} penalty for ${name}`);
   }
 
   changeMatchPhase(slotId: MatchSlotId, phase: string, endCurrentPhase?: string) {

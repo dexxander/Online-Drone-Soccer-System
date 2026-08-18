@@ -19,6 +19,11 @@ import {
   Swords as SwordsIcon,
   Trash2,
   AlertCircle,
+  ListOrdered,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  ArrowLeftRight,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
@@ -26,8 +31,18 @@ import { EmptyState, Panel } from "@/components/ui-kit";
 import { Switch } from "@/components/ui/switch";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
-import type { Match, MatchEventType, MatchSlot, MatchSlotId, PenaltyType, TournamentMatch } from "@/lib/types";
+import type { Match, MatchEventType, MatchSlot, MatchSlotId, PenaltyType, TournamentMatch, Tournament } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
+import {
+  buildLeaderboardRows,
+  sortLeaderboardRows,
+  usePenaltiesByMatch,
+  useLeaderboardStageSync,
+  type LeaderboardStage,
+  type LeaderboardRow,
+  type SortKey,
+  type SortDir,
+} from "@/lib/leaderboard";
 
 import {
   auth,
@@ -63,7 +78,7 @@ function getMatchTitle(round: number, maxRound: number) {
 }
 
 function getCurrentPhase(events: any[]) {
-  const phaseEvent = events.find((e) => e.message.startsWith("PHASE_CHANGE:"));
+  const phaseEvent = events.find((e: any) => e.message.startsWith("PHASE_CHANGE:"));
   return phaseEvent ? phaseEvent.message.replace("PHASE_CHANGE:", "") : "Testing";
 }
 
@@ -74,43 +89,47 @@ function RefereePage() {
     ? state.matches
     : [initialState.matches[0], initialState.matches[1]];
 
-  const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control">("tournaments");
+  const [viewMode, setViewMode] = useState<"tournaments" | "bracket" | "control" | "leaderboard">("tournaments");
   const [activeTournamentId, setActiveTournamentId] = useState<string | null>(null);
   const [joinConfirm, setJoinConfirm] = useState<{ slotId: MatchSlotId, matchId: string } | null>(null);
   const [showFinalizePrompt, setShowFinalizePrompt] = useState(false);
+  
+  // NEW: State for the Penalty Safety Confirmation Modal
+  const [penaltyConfirm, setPenaltyConfirm] = useState<{ side: "A" | "B", type: PenaltyType, teamName: string } | null>(null);
+  
   const [phaseConfirmation, setPhaseConfirmation] = useState<string | null>(null);
   const [slotId, setSlotId] = useState<MatchSlotId>(1);
+  const [leaderboardStage, setLeaderboardStage] = useLeaderboardStageSync();
 
-  const activeSlot = matchSlots.find((s) => s.slotId === slotId) ?? matchSlots[0] ?? initialState.matches[0];
+  const activeSlot = matchSlots.find((s: MatchSlot) => s.slotId === slotId) ?? matchSlots[0] ?? initialState.matches[0];
   const rawMatch = safeMatch(activeSlot?.match);
   const events = Array.isArray(activeSlot?.events) ? activeSlot.events : [];
 
-  const tournaments = Array.isArray(state.tournaments) ? state.tournaments : [];
-  const teams = Array.isArray(state.teams) ? state.teams : [];
-  const players = Array.isArray(state.players) ? state.players : [];
-  const mockBattles = Array.isArray(state.mockBattles) ? state.mockBattles : [];
+  const tournaments: Tournament[] = Array.isArray(state.tournaments) ? state.tournaments : [];
+  const teams: any[] = Array.isArray(state.teams) ? state.teams : [];
+  const players: any[] = Array.isArray(state.players) ? state.players : [];
+  const mockBattles: any[] = Array.isArray(state.mockBattles) ? state.mockBattles : [];
 
   const live = rawMatch.status === "live";
   const isFinished = rawMatch.status === "finished";
 
-  const viewedTournament = tournaments.find(t => t.id === activeTournamentId);
-  const activeMatchTournament = tournaments.find((t) => t.matches.some((tm) => tm.id === rawMatch.id));
-  const tMatch = activeMatchTournament?.matches?.find((m) => m.id === rawMatch.id);
-  
+  const viewedTournament = tournaments.find((t: Tournament) => t.id === activeTournamentId);
+  const activeMatchTournament = tournaments.find((t: Tournament) => t.matches?.some((tm: TournamentMatch) => tm.id === rawMatch.id));
+  const tMatch = activeMatchTournament?.matches?.find((m: TournamentMatch) => m.id === rawMatch.id);
+
   const currentPhase = getCurrentPhase(events);
   let activeDurationMinutes = 3;
   if (activeMatchTournament) {
     if (currentPhase === "Testing") activeDurationMinutes = activeMatchTournament.warmupDurationMinutes ?? 5;
     else if (currentPhase === "Half Time") activeDurationMinutes = activeMatchTournament.halftimeDurationMinutes ?? 2;
     else if (currentPhase === "Overtime") activeDurationMinutes = activeMatchTournament.overtimeDurationMinutes ?? 3;
-    else activeDurationMinutes = activeMatchTournament.halfDurationMinutes ?? 5; 
+    else activeDurationMinutes = activeMatchTournament.halfDurationMinutes ?? 5;
   }
 
   const MATCH_DURATION_MS = activeDurationMinutes * 60 * 1000;
   const elapsedMs = useMatchClock(rawMatch.elapsedMs, rawMatch.runningSince);
   const remainingMs = Math.max(0, MATCH_DURATION_MS - elapsedMs);
 
-  // FIX: Tie the auto-advance blocker directly to the specific Match ID to prevent cross-court bleeding
   const hasEndedRef = useRef<string | null>(null);
   useEffect(() => {
     if (live && remainingMs === 0 && hasEndedRef.current !== rawMatch.id) {
@@ -137,19 +156,19 @@ function RefereePage() {
     } else if (remainingMs > 0) {
       hasEndedRef.current = null;
     }
-  }, [live, remainingMs, slotId, currentPhase, rawMatch.scoreA, rawMatch.scoreB, rawMatch.id, emit]);
+  }, [live, remainingMs, slotId, currentPhase, rawMatch.scoreA, rawMatch.scoreB, rawMatch.id, tMatch?.phase, emit]);
 
   useEffect(() => {
     void socket.refreshMatchSlots();
     const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
-    
+
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         void socket.refreshMatchSlots();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);
-    
+
     return () => {
       clearInterval(id);
       document.removeEventListener("visibilitychange", handleVisibility);
@@ -158,13 +177,13 @@ function RefereePage() {
 
   useEffect(() => {
     if (viewMode !== "control") return;
-    emit("touchSlotPresence", (s) => s.touchSlotPresence(slotId));
+    emit("touchSlotPresence", (s: any) => s.touchSlotPresence(slotId));
     const id = setInterval(() => {
-      emit("touchSlotPresence", (s) => s.touchSlotPresence(slotId));
+      emit("touchSlotPresence", (s: any) => s.touchSlotPresence(slotId));
     }, PRESENCE_HEARTBEAT_MS);
     return () => {
       clearInterval(id);
-      emit("releaseSlotPresence", (s) => s.releaseSlotPresence(slotId));
+      emit("releaseSlotPresence", (s: any) => s.releaseSlotPresence(slotId));
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, slotId]);
@@ -181,37 +200,37 @@ function RefereePage() {
 
   const getTeamName = (id: string | null) => {
     if (!id) return "TBD";
-    const dynamicTeam = teams.find((t) => t.id === id);
+    const dynamicTeam = teams.find((t: any) => t.id === id);
     if (dynamicTeam) return dynamicTeam.name;
-    const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.id === id);
+    const fallbackTeam = AVAILABLE_TEAMS.find((t: any) => t.id === id);
     return fallbackTeam ? fallbackTeam.name : "TBD";
   };
 
   const getTeamDetailsByName = (name: string) => {
     if (!name || name === "TBD") return { initials: "TB", logo: undefined };
-    const dynamicTeam = teams.find((t) => t.name === name);
+    const dynamicTeam = teams.find((t: any) => t.name === name);
     if (dynamicTeam) return { initials: dynamicTeam.name.substring(0, 2).toUpperCase(), logo: dynamicTeam.logoUrl || (dynamicTeam as any).logo };
-    const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.name === name);
+    const fallbackTeam = AVAILABLE_TEAMS.find((t: any) => t.name === name);
     return fallbackTeam ? { initials: fallbackTeam.initials, logo: (fallbackTeam as any).logoUrl || (fallbackTeam as any).logo } : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
   };
 
   const getDynamicRoster = (teamName: string) => {
     if (!teamName || teamName === "TBD") return [];
 
-    const team = teams.find(t => t.name === teamName);
+    const team = teams.find((t: any) => t.name === teamName);
     if (!team) return [];
 
-    const teamPlayers = players.filter(p => p.teamId === team.id);
-    return teamPlayers.map(p => ({
+    const teamPlayers = players.filter((p: any) => p.teamId === team.id);
+    return teamPlayers.map((p: any) => ({
       name: p.name || "Unknown",
-      position: (p as any).position || (p as any).role || "Player",
-      highlight: (p as any).position === "Striker" || (p as any).role === "Striker"
+      position: p.position || p.role || "Player",
+      highlight: p.position === "Striker" || p.role === "Striker"
     }));
   };
 
   const getDynamicCoach = (teamName: string) => {
     if (!teamName || teamName === "TBD") return undefined;
-    const team = teams.find(t => t.name === teamName);
+    const team = teams.find((t: any) => t.name === teamName);
     return team?.coachName || undefined;
   };
 
@@ -221,7 +240,7 @@ function RefereePage() {
   };
 
   const handleSelectMatch = (matchId: string, teamAId: string | null, teamBId: string | null) => {
-    const existingSlotForMatch = matchSlots.find((s) => s.match.id === matchId);
+    const existingSlotForMatch = matchSlots.find((s: MatchSlot) => s.match.id === matchId);
 
     if (existingSlotForMatch) {
       if (existingSlotForMatch.slotId === slotId) {
@@ -235,7 +254,6 @@ function RefereePage() {
     const teamAName = getTeamName(teamAId);
     const teamBName = getTeamName(teamBId);
 
-    // Bypassed alert directly, smoothly archives the old match and sets up the new one
     if (rawMatch.id !== matchId) {
       emit("setupLiveMatch", (s: any) => s.setupLiveMatch(slotId, matchId, teamAName, teamBName));
     }
@@ -247,12 +265,12 @@ function RefereePage() {
     setViewMode("control");
   };
 
-  const handleSelectMockBattle = (battle: typeof mockBattles[number]) => {
+  const handleSelectMockBattle = (battle: any) => {
     socket.setupLiveMatch(slotId, battle.id, battle.blueTeamName, battle.redTeamName);
     setViewMode("control");
   };
 
-  const handleDeleteMockBattle = (battle: typeof mockBattles[number]) => {
+  const handleDeleteMockBattle = (battle: any) => {
     if (window.confirm(`Delete the mock battle ${battle.blueTeamName} vs ${battle.redTeamName}?`)) {
       socket.deleteMockBattle(battle.id);
     }
@@ -260,36 +278,49 @@ function RefereePage() {
 
   const teamAInfo = getTeamDetailsByName(rawMatch.teamAName);
   const teamBInfo = getTeamDetailsByName(rawMatch.teamBName);
-  const penaltiesA = rawMatch.penalties.filter((penalty) => penalty.side === "A");
-  const penaltiesB = rawMatch.penalties.filter((penalty) => penalty.side === "B");
+  const penaltiesA = rawMatch.penalties.filter((penalty: any) => penalty.side === "A");
+  const penaltiesB = rawMatch.penalties.filter((penalty: any) => penalty.side === "B");
   const teamADisqualified = calculateEffectivePenalties(penaltiesA).isDisqualified;
   const teamBDisqualified = calculateEffectivePenalties(penaltiesB).isDisqualified;
   const winningTeamName = teamADisqualified && !teamBDisqualified
     ? rawMatch.teamBName
     : teamBDisqualified && !teamADisqualified
-    ? rawMatch.teamAName
-    : rawMatch.scoreA > rawMatch.scoreB
-    ? rawMatch.teamAName
-    : rawMatch.scoreB > rawMatch.scoreA
-    ? rawMatch.teamBName
-    : null;
-  
+      ? rawMatch.teamAName
+      : rawMatch.scoreA > rawMatch.scoreB
+        ? rawMatch.teamAName
+        : rawMatch.scoreB > rawMatch.scoreA
+          ? rawMatch.teamBName
+          : null;
+
+  // NEW: Penalty Safety Interceptor
+  const handlePenaltyRequest = (side: "A" | "B", type: PenaltyType, teamName: string, currentPenalties: any[]) => {
+    // Simulate what the penalty status will be AFTER this new penalty is added
+    const simulatedPenalties = [...currentPenalties, { side, type }];
+    const willDQ = calculateEffectivePenalties(simulatedPenalties).isDisqualified;
+    
+    if (willDQ) {
+      // Intercept and ask for confirmation
+      setPenaltyConfirm({ side, type, teamName });
+    } else {
+      // Safe to issue immediately
+      emit("updateMatch", (s: any) => s.issuePenalty(slotId, side, type));
+    }
+  };
+
   const dynamicRosterA = getDynamicRoster(rawMatch.teamAName);
   const dynamicRosterB = getDynamicRoster(rawMatch.teamBName);
   const dynamicCoachA = getDynamicCoach(rawMatch.teamAName);
   const dynamicCoachB = getDynamicCoach(rawMatch.teamBName);
 
-  const knockoutMatches = viewedTournament
-    ? viewedTournament.matches.filter(m => (m.phase ?? "knockout") === "knockout")
-    : [];
-  const rounds = Array.from(new Set(knockoutMatches.map(m => m.round))).sort((a, b) => a - b);
+  const knockoutMatches = viewedTournament?.matches?.filter((m: TournamentMatch) => (m.phase ?? "knockout") === "knockout") || [];
+  const rounds = Array.from(new Set(knockoutMatches.map((m: TournamentMatch) => m.round))).sort((a, b) => a - b);
   const maxRound = Math.max(...rounds, 0);
 
   const customTitleStr = viewMode === "tournaments" ? "Referee Dashboard" : (viewMode === "bracket" && viewedTournament ? viewedTournament.name : null);
 
   return (
-    <RefereeLayout 
-      match={rawMatch} 
+    <RefereeLayout
+      match={rawMatch}
       slotId={slotId}
       hideMatchDetails={viewMode !== "control"}
       {...(customTitleStr ? { customTitle: customTitleStr } : {})}
@@ -305,17 +336,17 @@ function RefereePage() {
               <Monitor className="size-5" />
               <span className="text-xs font-bold uppercase tracking-widest text-foreground">Scoreboard Output</span>
             </div>
-            
+
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2 border-r border-border pr-4">
-                <select 
+                <select
                   className="auth-input py-1.5 text-xs h-auto w-auto"
                   value={matchSlots[0]?.scoreboardMode || "courts"}
                   onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
                     const mode = e.target.value as any;
-                    let tId = matchSlots[0]?.scoreboardTournamentId;
-                    if ((mode === "bracket" || mode === "group") && !tId && tournaments.length > 0) {
-                      tId = tournaments[0]?.id; // Added the '?' here
+                    let tId = matchSlots[0]?.scoreboardTournamentId || null;
+                    if ((mode === "bracket" || mode === "group" || mode === "leaderboard") && !tId && tournaments.length > 0) {
+                      tId = tournaments[0]?.id ?? null;
                     }
                     emit("setScoreboardMode", (s: any) => s.setScoreboardMode(mode, tId));
                   }}
@@ -323,24 +354,47 @@ function RefereePage() {
                   <option value="courts">Live Courts</option>
                   <option value="bracket">Knockout Bracket</option>
                   <option value="group">Group Stage</option>
+                  <option value="leaderboard">Leaderboard</option>
                 </select>
 
                 {(matchSlots[0]?.scoreboardMode === "bracket" || matchSlots[0]?.scoreboardMode === "group") && (
-                  <select 
+                  <select
                     className="auth-input py-1.5 text-xs h-auto w-auto max-w-[200px]"
                     value={matchSlots[0]?.scoreboardTournamentId || ""}
-                    onChange={(e) => {
-                      emit("setScoreboardMode", (s: any) => s.setScoreboardMode(matchSlots[0]?.scoreboardMode, e.target.value));
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                      emit("setScoreboardMode", (s: any) => s.setScoreboardMode(matchSlots[0]?.scoreboardMode || "courts", e.target.value));
                     }}
                   >
-                    {tournaments.map(t => (
+                    {tournaments.map((t: Tournament) => (
                       <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </select>
                 )}
+
+                {matchSlots[0]?.scoreboardMode === "leaderboard" && (
+                  <>
+                    <select
+                      className="auth-input py-1.5 text-xs h-auto w-auto max-w-[200px]"
+                      value={matchSlots[0]?.scoreboardTournamentId || ""}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => emit("setScoreboardMode", (s: any) => s.setScoreboardMode("leaderboard", e.target.value))}
+                    >
+                      {tournaments.map((t: Tournament) => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                    <select
+                      className="auth-input py-1.5 text-xs h-auto w-auto"
+                      value={leaderboardStage}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setLeaderboardStage(e.target.value as LeaderboardStage)}
+                    >
+                      <option value="group">Group Stage</option>
+                      <option value="knockout">Knockout</option>
+                    </select>
+                  </>
+                )}
               </div>
 
-              {matchSlots.map((slot) => (
+              {matchSlots.map((slot: MatchSlot) => (
                 <label key={slot.slotId} className={cn("flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2 transition-colors", matchSlots[0]?.scoreboardMode !== "courts" ? "opacity-50 grayscale bg-background" : "bg-muted/40 hover:bg-muted")}>
                   <div className="flex items-center gap-1.5">
                     {slot.visibleOnScoreboard ? (
@@ -355,7 +409,7 @@ function RefereePage() {
                   <Switch
                     disabled={matchSlots[0]?.scoreboardMode !== "courts"}
                     checked={slot.visibleOnScoreboard}
-                    onCheckedChange={(checked) => emit("setSlotVisibility", (s: any) => s.setSlotVisibility(slot.slotId, checked))}
+                    onCheckedChange={(checked: boolean) => emit("setSlotVisibility", (s: any) => s.setSlotVisibility(slot.slotId, checked))}
                   />
                 </label>
               ))}
@@ -364,11 +418,11 @@ function RefereePage() {
 
           {/* ── Court Selector ── */}
           <div className="grid grid-cols-2 gap-4">
-            {matchSlots.map((slot) => {
+            {matchSlots.map((slot: MatchSlot) => {
               const m = safeMatch(slot.match);
               const isActive = slot.slotId === slotId;
               const isLive = m.status === "live" || m.status === "paused";
-              const slotTourney = tournaments.find((t) => t.matches.some((tm) => tm.id === m.id));
+              const slotTourney = tournaments.find((t: Tournament) => t.matches?.some((tm: TournamentMatch) => tm.id === m.id));
 
               return (
                 <button
@@ -406,8 +460,9 @@ function RefereePage() {
             })}
           </div>
 
-          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
             <NavCard onClick={() => setViewMode("tournaments")} icon={<Trophy className="size-8" strokeWidth={1.6} />} label="Tournament Brackets" active={viewMode === "tournaments" || viewMode === "bracket"} />
+            <NavCard onClick={() => setViewMode("leaderboard")} icon={<ListOrdered className="size-8" strokeWidth={1.6} />} label="Leaderboard" active={viewMode === "leaderboard"} />
             <NavCard onClick={() => setViewMode("control")} icon={<Swords className="size-8" strokeWidth={1.6} />} label="Match Control" active={viewMode === "control"} />
             <NavCard href="/scoreboard" icon={<Monitor className="size-8" strokeWidth={1.6} />} label="Open Scoreboard" external />
             <NavCard onClick={signOut} icon={<LogOut className="size-8" strokeWidth={1.6} />} label="Sign Out" danger />
@@ -415,88 +470,90 @@ function RefereePage() {
 
           {viewMode === "tournaments" ? (
             <>
-            <Panel title="Mock Battles">
-              <div className="flex flex-col gap-4 p-5">
-                <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
-                  <div>
-                    <h2 className="font-bold text-foreground">Create an on-the-spot match</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">Create a shared Red Team vs Blue Team battle that every referee can access.</p>
+              <Panel title="Mock Battles">
+                <div className="flex flex-col gap-4 p-5">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <div>
+                      <h2 className="font-bold text-foreground">Create an on-the-spot match</h2>
+                      <p className="mt-1 text-sm text-muted-foreground">Create a shared Red Team vs Blue Team battle that every referee can access.</p>
+                    </div>
+                    <button onClick={handleCreateMockBattle} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
+                      <PlusCircle className="size-4" /> Create Mock Battle
+                    </button>
                   </div>
-                  <button onClick={handleCreateMockBattle} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground shadow-sm hover:bg-primary/90">
-                    <PlusCircle className="size-4" /> Create Mock Battle
-                  </button>
+                  {mockBattles.length === 0 ? (
+                    <p className="py-4 text-center text-sm text-muted-foreground">No mock battles have been created yet.</p>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      {mockBattles.map((battle: any) => {
+                        const assignedSlot = matchSlots.find((slot: MatchSlot) => slot.match.id === battle.id);
+                        return (
+                          <div key={battle.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40">
+                            <button onClick={() => handleSelectMockBattle(battle)} className="flex min-w-0 flex-1 items-center justify-between text-left">
+                              <span>
+                                <span className="flex items-center gap-2 font-bold text-foreground"><SwordsIcon className="size-4 text-primary" /> {battle.blueTeamName} <span className="font-normal text-muted-foreground">vs</span> {battle.redTeamName}</span>
+                                <span className="mt-1 block text-xs text-muted-foreground">Created {new Date(battle.createdAt).toLocaleString()}</span>
+                              </span>
+                              <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", assignedSlot ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                                {assignedSlot ? `Court ${assignedSlot.slotId}` : "Available"}
+                              </span>
+                            </button>
+                            <button onClick={() => handleDeleteMockBattle(battle)} className="ml-3 rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete mock battle" aria-label={`Delete ${battle.blueTeamName} versus ${battle.redTeamName}`}>
+                              <Trash2 className="size-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                {mockBattles.length === 0 ? (
-                  <p className="py-4 text-center text-sm text-muted-foreground">No mock battles have been created yet.</p>
+              </Panel>
+              <Panel title="Active Tournaments">
+                {tournaments.length === 0 ? (
+                  <EmptyState title="No active tournaments" description="Tournaments generated in the Admin dashboard will appear here." />
                 ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {mockBattles.map((battle) => {
-                      const assignedSlot = matchSlots.find((slot) => slot.match.id === battle.id);
-                      return (
-                        <div key={battle.id} className="flex items-center justify-between rounded-lg border border-border bg-background p-4 text-left transition-colors hover:border-primary/40 hover:bg-muted/40">
-                          <button onClick={() => handleSelectMockBattle(battle)} className="flex min-w-0 flex-1 items-center justify-between text-left">
-                          <span>
-                            <span className="flex items-center gap-2 font-bold text-foreground"><SwordsIcon className="size-4 text-primary" /> {battle.blueTeamName} <span className="font-normal text-muted-foreground">vs</span> {battle.redTeamName}</span>
-                            <span className="mt-1 block text-xs text-muted-foreground">Created {new Date(battle.createdAt).toLocaleString()}</span>
-                          </span>
-                          <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", assignedSlot ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
-                            {assignedSlot ? `Court ${assignedSlot.slotId}` : "Available"}
-                          </span>
-                          </button>
-                          <button onClick={() => handleDeleteMockBattle(battle)} className="ml-3 rounded-md p-2 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" title="Delete mock battle" aria-label={`Delete ${battle.blueTeamName} versus ${battle.redTeamName}`}>
-                            <Trash2 className="size-4" />
-                          </button>
-                        </div>
-                      );
-                    })}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                          <th className="px-5 py-3 font-semibold">Tournament Name</th>
+                          <th className="px-5 py-3 font-semibold">Status</th>
+                          <th className="px-5 py-3 font-semibold text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tournaments.map((t: Tournament) => (
+                          <tr key={t.id} onClick={() => handleOpenBracket(t.id)} className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/30">
+                            <td className="px-5 py-4 font-semibold text-foreground">{t.name}</td>
+                            <td className="px-5 py-4">
+                              <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", t.status === "completed" ? "bg-success/20 text-success" : "bg-primary/20 text-primary")}>
+                                {t.status}
+                              </span>
+                            </td>
+                            <td className="px-5 py-4 text-right">
+                              <ChevronRight className="inline size-4 text-muted-foreground" />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
-              </div>
-            </Panel>
-            <Panel title="Active Tournaments">
-              {tournaments.length === 0 ? (
-                <EmptyState title="No active tournaments" description="Tournaments generated in the Admin dashboard will appear here." />
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border text-left text-[11px] uppercase tracking-wider text-muted-foreground">
-                        <th className="px-5 py-3 font-semibold">Tournament Name</th>
-                        <th className="px-5 py-3 font-semibold">Status</th>
-                        <th className="px-5 py-3 font-semibold text-right">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {tournaments.map((t) => (
-                        <tr key={t.id} onClick={() => handleOpenBracket(t.id)} className="cursor-pointer border-b border-border/50 transition-colors hover:bg-muted/30">
-                          <td className="px-5 py-4 font-semibold text-foreground">{t.name}</td>
-                          <td className="px-5 py-4">
-                            <span className={cn("rounded px-2 py-1 text-[10px] font-bold uppercase", t.status === "completed" ? "bg-success/20 text-success" : "bg-primary/20 text-primary")}>
-                              {t.status}
-                            </span>
-                          </td>
-                          <td className="px-5 py-4 text-right">
-                            <ChevronRight className="inline size-4 text-muted-foreground" />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </Panel>
+              </Panel>
             </>
+          ) : viewMode === "leaderboard" ? (
+            <RefereeLeaderboardPanel tournaments={tournaments} teams={teams} />
           ) : viewMode === "bracket" && viewedTournament ? (
-            <Panel title={`Bracket: ${viewedTournament.name}`}>
+            <Panel title={`Tournament Overview: ${viewedTournament.name}`}>
               <div className="p-5">
                 <button onClick={() => setViewMode("tournaments")} className="mb-4 inline-flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-foreground">
                   <ChevronLeft className="size-3.5" /> Back to Tournaments
                 </button>
                 {viewedTournament.groupStageEnabled && (
                   <div className="mb-8">
-                    <RefereeGroupStage 
-                      tournament={viewedTournament} 
-                      teams={state.teams} 
+                    <RefereeGroupStage
+                      tournament={viewedTournament}
+                      teams={state.teams}
                       onSelectMatch={handleSelectMatch}
                     />
                   </div>
@@ -508,88 +565,88 @@ function RefereePage() {
                     <p className="mt-1 text-sm text-muted-foreground">The qualifying teams will be placed here after all group matches are decided.</p>
                   </div>
                 ) : (
-                <div className="flex flex-col gap-6 overflow-x-auto pb-4">
-                  <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
-                    {rounds.map((round) => (
-                      <div key={round} className="w-[280px] flex items-center justify-between">
-                        <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                          <span className="flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground">
-                            {round}
+                  <div className="flex flex-col gap-6 overflow-x-auto pb-4">
+                    <div className="flex items-center gap-16 min-w-max border-b border-border pb-3">
+                      {rounds.map((round: number) => (
+                        <div key={round} className="w-[280px] flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                            <span className="flex size-5 items-center justify-center rounded-full bg-muted text-[10px] font-bold text-foreground">
+                              {round}
+                            </span>
+                            {getMatchTitle(round, maxRound)}
                           </span>
-                          {getMatchTitle(round, maxRound)}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
-                    {rounds.map((round) => {
-                      const matches = knockoutMatches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
-                      const isLast = round === maxRound;
-                      const pairs: TournamentMatch[][] = [];
-                      for (let i = 0; i < matches.length; i += 2) {
-                        const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
-                        pairs.push(pair);
-                      }
-                      return (
-                        <div key={round} className="w-[280px] flex flex-col justify-around">
-                          {pairs.map((pair, pi) => (
-                            <div key={pi} className="relative flex flex-col justify-around h-full my-4">
-                              {pair.map((m) => {
-                                const isPlayable = !m.isBye && Boolean(m.teamAId) && Boolean(m.teamBId) && !m.winnerId;
-                                const isCompleted = m.winnerId !== null || m.result === "draw";
-                                const isClickable = isPlayable || (isCompleted && !m.isBye);
-                                const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
-                                const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
-                                const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
-                                const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
-                                const liveSlot = matchSlots.find((slot) => slot.match.id === m.id);
-                                const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : (m.scoreA !== undefined ? m.scoreA : "-"));
-                                const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : (m.scoreB !== undefined ? m.scoreB : "-"));
-                                const hasWinner = !!m.winnerId;
-                                return (
-                                  <div key={m.id} className="relative py-2 z-10">
-                                    <div
-                                      className={cn("relative flex flex-col rounded-xl border p-3 shadow-sm transition-all", isClickable ? "border-primary/50 bg-primary/5 hover:border-primary cursor-pointer" : "border-border bg-muted/20 opacity-80")}
-                                      onClick={() => isClickable && handleSelectMatch(m.id, m.teamAId, m.teamBId)}
-                                    >
-                                      <div className="flex flex-col gap-2">
-                                        <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamAWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
-                                          <div className="flex items-center gap-2">
-                                            <span className={displayTeamA === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamA}</span>
-                                            {isTeamAWinner && !m.isBye && <Trophy className="size-3.5 text-emerald-600" />}
-                                          </div>
-                                          <span className="font-mono text-muted-foreground">{scoreA}</span>
-                                        </div>
-                                        <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamBWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
-                                          <div className="flex items-center gap-2">
-                                            <span className={displayTeamB === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamB}</span>
-                                            {isTeamBWinner && !m.isBye && <Trophy className="size-3.5 text-emerald-600" />}
-                                          </div>
-                                          <span className="font-mono text-muted-foreground">{scoreB}</span>
-                                        </div>
-                                      </div>
-                                      {isPlayable && !liveSlot && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-primary px-3 py-0.5 text-[9px] font-bold uppercase text-primary-foreground shadow-sm">Officiate Match</div>}
-                                      {isPlayable && liveSlot && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-indigo-500 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm border border-indigo-400">{liveSlot.slotId === slotId ? `Resume Court ${liveSlot.slotId}` : `Switch to Court ${liveSlot.slotId}`}</div>}
-                                      {isCompleted && !m.isBye && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-600 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">Review Match</div>}
-                                      {m.isBye && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-muted-foreground/80 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">Auto-Advance</div>}
-                                    </div>
-                                    {!isLast && <div className={`absolute -right-8 top-1/2 h-[2.5px] w-8 -translate-y-1/2 transition-colors ${hasWinner ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />}
-                                  </div>
-                                );
-                              })}
-                              {!isLast && (
-                                <>
-                                  <div className={`absolute -right-8 top-[25%] bottom-[25%] w-[2.5px] z-0 transition-colors ${pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
-                                  <div className={`absolute -right-16 top-1/2 h-[2.5px] w-8 -translate-y-1/2 z-0 transition-colors ${pair.some((m) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
-                                </>
-                              )}
-                            </div>
-                          ))}
                         </div>
-                      );
-                    })}
+                      ))}
+                    </div>
+                    <div className="flex items-stretch gap-16 min-w-max min-h-[480px] py-2">
+                      {rounds.map((round: number) => {
+                        const matches = knockoutMatches.filter((m: TournamentMatch) => m.round === round).sort((a: TournamentMatch, b: TournamentMatch) => a.slot - b.slot);
+                        const isLast = round === maxRound;
+                        const pairs: TournamentMatch[][] = [];
+                        for (let i = 0; i < matches.length; i += 2) {
+                          const pair = [matches[i], matches[i + 1]].filter((m): m is TournamentMatch => Boolean(m));
+                          pairs.push(pair);
+                        }
+                        return (
+                          <div key={round} className="w-[280px] flex flex-col justify-around">
+                            {pairs.map((pair: TournamentMatch[], pi: number) => (
+                              <div key={pi} className="relative flex flex-col justify-around h-full my-4">
+                                {pair.map((m: TournamentMatch) => {
+                                  const isPlayable = !m.isBye && Boolean(m.teamAId) && Boolean(m.teamBId) && !m.winnerId;
+                                  const isCompleted = m.winnerId !== null || m.result === "draw";
+                                  const isClickable = isPlayable || (isCompleted && !m.isBye);
+                                  const isTeamAWinner = m.winnerId !== null && m.winnerId === m.teamAId;
+                                  const isTeamBWinner = m.winnerId !== null && m.winnerId === m.teamBId;
+                                  const displayTeamA = m.isBye && !m.teamAId ? "BYE" : getTeamName(m.teamAId);
+                                  const displayTeamB = m.isBye && !m.teamBId ? "BYE" : getTeamName(m.teamBId);
+                                  const liveSlot = matchSlots.find((slot: MatchSlot) => slot.match.id === m.id);
+                                  const scoreA = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreA : (m.scoreA !== undefined ? m.scoreA : "-"));
+                                  const scoreB = m.isBye ? "-" : (liveSlot ? liveSlot.match.scoreB : (m.scoreB !== undefined ? m.scoreB : "-"));
+                                  const hasWinner = !!m.winnerId;
+                                  return (
+                                    <div key={m.id} className="relative py-2 z-10">
+                                      <div
+                                        className={cn("relative flex flex-col rounded-xl border p-3 shadow-sm transition-all", isClickable ? "border-primary/50 bg-primary/5 hover:border-primary cursor-pointer" : "border-border bg-muted/20 opacity-80")}
+                                        onClick={() => isClickable && handleSelectMatch(m.id, m.teamAId, m.teamBId)}
+                                      >
+                                        <div className="flex flex-col gap-2">
+                                          <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamAWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
+                                            <div className="flex items-center gap-2">
+                                              <span className={displayTeamA === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamA}</span>
+                                              {isTeamAWinner && !m.isBye && <Trophy className="size-3.5 text-emerald-600" />}
+                                            </div>
+                                            <span className="font-mono text-muted-foreground">{scoreA}</span>
+                                          </div>
+                                          <div className={cn("flex items-center justify-between rounded-lg bg-background px-3 py-2 text-sm font-semibold border border-border", isTeamBWinner && "border-emerald-500 text-emerald-600 bg-emerald-500/10")}>
+                                            <div className="flex items-center gap-2">
+                                              <span className={displayTeamB === "BYE" ? "italic text-muted-foreground" : ""}>{displayTeamB}</span>
+                                              {isTeamBWinner && !m.isBye && <Trophy className="size-3.5 text-emerald-600" />}
+                                            </div>
+                                            <span className="font-mono text-muted-foreground">{scoreB}</span>
+                                          </div>
+                                        </div>
+                                        {isPlayable && !liveSlot && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-primary px-3 py-0.5 text-[9px] font-bold uppercase text-primary-foreground shadow-sm">Officiate Match</div>}
+                                        {isPlayable && liveSlot && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 whitespace-nowrap rounded-full bg-indigo-500 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm border border-indigo-400">{liveSlot.slotId === slotId ? `Resume Court ${liveSlot.slotId}` : `Switch to Court ${liveSlot.slotId}`}</div>}
+                                        {isCompleted && !m.isBye && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-emerald-600 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">Review Match</div>}
+                                        {m.isBye && <div className="absolute -bottom-3 left-1/2 -translate-x-1/2 z-20 rounded-full bg-muted-foreground/80 px-3 py-0.5 text-[9px] font-bold uppercase text-white shadow-sm">Auto-Advance</div>}
+                                      </div>
+                                      {!isLast && <div className={`absolute -right-8 top-1/2 h-[2.5px] w-8 -translate-y-1/2 transition-colors ${hasWinner ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />}
+                                    </div>
+                                  );
+                                })}
+                                {!isLast && (
+                                  <>
+                                    <div className={`absolute -right-8 top-[25%] bottom-[25%] w-[2.5px] z-0 transition-colors ${pair.some((m: TournamentMatch) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                                    <div className={`absolute -right-16 top-1/2 h-[2.5px] w-8 -translate-y-1/2 z-0 transition-colors ${pair.some((m: TournamentMatch) => !!m.winnerId) ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
                 )}
               </div>
             </Panel>
@@ -683,7 +740,7 @@ function RefereePage() {
                   isDraw={isFinished && tMatch?.result === "draw"}
                   onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", -1))}
                   onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1))}
-                  onPenalty={(type: PenaltyType) => emit("updateMatch", (s: any) => s.issuePenalty(slotId, "A", type))}
+                  onPenalty={(type: PenaltyType) => handlePenaltyRequest("A", type, rawMatch.teamAName, penaltiesA)}
                   onOwnGoal={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1, true))}
                   roster={dynamicRosterA}
                   coach={dynamicCoachA}
@@ -701,7 +758,7 @@ function RefereePage() {
                   isDraw={isFinished && tMatch?.result === "draw"}
                   onDecrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", -1))}
                   onIncrement={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "B", 1))}
-                  onPenalty={(type: PenaltyType) => emit("updateMatch", (s: any) => s.issuePenalty(slotId, "B", type))}
+                  onPenalty={(type: PenaltyType) => handlePenaltyRequest("B", type, rawMatch.teamBName, penaltiesB)}
                   onOwnGoal={() => emit("updateMatch", (s: any) => s.adjustScore(slotId, "A", 1, true))}
                   roster={dynamicRosterB}
                   coach={dynamicCoachB}
@@ -735,7 +792,7 @@ function RefereePage() {
                   </p>
                 )}
                 <ul className="space-y-1">
-                  {events.map((evt, idx) => {
+                  {events.map((evt: any, idx: number) => {
                     const isPhaseChange = evt.message.startsWith("PHASE_CHANGE:");
                     const isPhaseEnd = evt.message.startsWith("PHASE_END:");
                     let labelColor = "text-muted-foreground";
@@ -749,11 +806,11 @@ function RefereePage() {
                       messageColor = "text-indigo-600 dark:text-indigo-400 font-bold";
                     } else if (evt.type === "score_changed") {
                       if (evt.message.includes("OWN GOAL")) {
-                         labelColor = "text-destructive";
-                         messageColor = "text-destructive dark:text-red-500 font-bold";
+                        labelColor = "text-destructive";
+                        messageColor = "text-destructive dark:text-red-500 font-bold";
                       } else {
-                         labelColor = "text-emerald-600 dark:text-emerald-500";
-                         messageColor = "text-emerald-600 dark:text-emerald-500 font-bold";
+                        labelColor = "text-emerald-600 dark:text-emerald-500";
+                        messageColor = "text-emerald-600 dark:text-emerald-500 font-bold";
                       }
                     } else if (evt.type === "penalty_issued") {
                       if (evt.message.includes("Minor")) {
@@ -775,8 +832,8 @@ function RefereePage() {
                     const displayMsg = isPhaseEnd
                       ? `End of ${evt.message.replace("PHASE_END:", "")}`
                       : isPhaseChange
-                      ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}`
-                      : evt.message;
+                        ? `Phase changed to ${evt.message.replace("PHASE_CHANGE:", "")}`
+                        : evt.message;
 
                     return (
                       <li
@@ -804,6 +861,37 @@ function RefereePage() {
           </div>
         )}
       </div>
+
+      {/* NEW: Penalty Safety Confirmation Modal */}
+      {penaltyConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-xl border border-destructive/50 bg-background p-6 shadow-xl">
+            <h3 className="mb-3 text-lg font-bold text-destructive flex items-center gap-2">
+              <AlertCircle className="size-5" /> Confirm Disqualification
+            </h3>
+            <p className="mb-6 text-sm text-muted-foreground">
+              Issuing this <strong>{penaltyConfirm.type} Penalty</strong> will result in the immediate disqualification of <strong>{penaltyConfirm.teamName}</strong>. Their score will be set to 0 and the match will pause.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setPenaltyConfirm(null)}
+                className="rounded-lg px-4 py-2 text-sm font-semibold text-muted-foreground hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  emit("updateMatch", (s: any) => s.issuePenalty(slotId, penaltyConfirm.side, penaltyConfirm.type));
+                  setPenaltyConfirm(null);
+                }}
+                className="rounded-lg bg-destructive px-4 py-2 text-sm font-bold text-destructive-foreground hover:bg-destructive/90 shadow-sm"
+              >
+                Issue & Disqualify
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Join Confirmation Modal */}
       {joinConfirm && (
@@ -840,19 +928,25 @@ function RefereePage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
           <div className="w-full max-w-sm rounded-xl border border-border bg-background p-6 shadow-xl">
             <h3 className="mb-2 text-lg font-bold text-foreground">Finalize Match Score?</h3>
-            {winningTeamName && (
+            {winningTeamName ? (
               <div className="mb-5 overflow-hidden rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
                 <div className="mb-1 text-2xl animate-bounce" aria-hidden="true">🎉 🏆 🎉</div>
                 <p className="text-[11px] font-black uppercase tracking-[0.25em] text-emerald-600">Congratulations!</p>
                 <p className="mt-1 text-xl font-black uppercase text-emerald-700 dark:text-emerald-400">{winningTeamName} Wins!</p>
               </div>
+            ) : (rawMatch.scoreA === rawMatch.scoreB && !teamADisqualified && !teamBDisqualified && tMatch?.phase === "group") && (
+              <div className="mb-5 overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-center">
+                <div className="mb-1 text-2xl animate-pulse" aria-hidden="true">⚖️</div>
+                <p className="text-[11px] font-black uppercase tracking-[0.25em] text-amber-600">Match Drawn</p>
+                <p className="mt-1 text-xl font-black uppercase text-amber-700 dark:text-amber-400">Points Shared</p>
+              </div>
             )}
             <p className="mb-6 text-sm text-muted-foreground">
-              Are you sure you want to end the match and permanently finalize the score? <br/><br/>
+              Are you sure you want to end the match and permanently finalize the score? <br /><br />
               <strong className="text-foreground text-base block text-center bg-muted rounded-lg py-2">
                 {rawMatch.teamAName} {rawMatch.scoreA} - {rawMatch.scoreB} {rawMatch.teamBName}
               </strong>
-              <br/>
+              <br />
               This action cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
@@ -870,8 +964,8 @@ function RefereePage() {
                 disabled={!winningTeamName && (tMatch?.phase ?? "knockout") === "knockout"}
                 className={cn(
                   "rounded-lg px-4 py-2 text-sm font-bold shadow-sm transition-colors",
-                  !winningTeamName && (tMatch?.phase ?? "knockout") === "knockout" 
-                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50" 
+                  !winningTeamName && (tMatch?.phase ?? "knockout") === "knockout"
+                    ? "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
                     : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
                 )}
               >
@@ -983,7 +1077,7 @@ function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, pe
             <div className="flex items-center gap-1">
               {effectivePenalties.isDisqualified ? (
                 <span className="rounded bg-destructive/10 px-2 py-1 text-[10px] font-bold uppercase text-destructive">Disqualified</span>
-              ) : effectivePenalties.badges.map((badge, index) => (
+              ) : effectivePenalties.badges.map((badge: string, index: number) => (
                 <span key={`${badge}-${index}`} className={cn("h-4 w-3 rounded-sm shadow-sm", badge === "Yellow" ? "bg-warning" : "bg-muted-foreground")} />
               ))}
             </div>
@@ -1023,7 +1117,124 @@ function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, score, pe
           </div>
         </div>
       )}
+      {isDraw && (
+        <div className="flex justify-center">
+          <div className="flex items-center gap-2 rounded-full bg-amber-500/15 px-5 py-1.5 text-xs font-bold tracking-widest text-amber-600 border border-amber-500/30 shadow-sm">
+            <ArrowLeftRight className="size-4" /> MATCH DRAWN
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function RefereeLeaderboardPanel({ tournaments, teams }: { tournaments: any[]; teams: any[] }) {
+  const [tournamentId, setTournamentId] = useState<string | null>(tournaments[0]?.id ?? null);
+  const [stage, setStage] = useLeaderboardStageSync();
+  const [sort, setSort] = useState<{ key: SortKey; dir: SortDir }>({ key: "totalScore", dir: "desc" });
+
+  const tournament = tournaments.find((t) => t.id === tournamentId);
+  const matchIds = tournament
+    ? (stage === "group"
+      ? tournament.matches.filter((m: TournamentMatch) => m.phase === "group")
+      : tournament.matches.filter((m: TournamentMatch) => (m.phase ?? "knockout") === "knockout" && !m.isBye)
+    ).map((m: TournamentMatch) => m.id)
+    : [];
+
+  const penaltiesByMatch = usePenaltiesByMatch(matchIds);
+  const rows = tournament ? buildLeaderboardRows(tournament, teams, stage, penaltiesByMatch) : [];
+  const ranked = sortLeaderboardRows(rows, sort.key, sort.dir, stage);
+
+  const toggleSort = (key: SortKey) => {
+    setSort((prev) => (prev.key === key ? { key, dir: prev.dir === "asc" ? "desc" : "asc" } : { key, dir: key === "teamName" ? "asc" : "desc" }));
+  };
+
+  const headerButton = (label: string, key: SortKey, align: "left" | "center" = "center") => (
+    <button
+      onClick={() => toggleSort(key)}
+      className={cn("flex w-full items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground transition-colors", align === "center" ? "justify-center" : "justify-start")}
+    >
+      {label}
+      {sort.key === key ? (sort.dir === "asc" ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />) : <ArrowUpDown className="size-3 opacity-40" />}
+    </button>
+  );
+
+  if (!tournaments.length) {
+    return (
+      <Panel title="Leaderboard">
+        <EmptyState title="No tournaments yet" description="Create a tournament in the Admin dashboard to see leaderboards." />
+      </Panel>
+    );
+  }
+
+  return (
+    <Panel title="Leaderboard">
+      <div className="flex flex-col gap-4 p-5">
+        <div className="flex flex-wrap items-center gap-3">
+          <select className="auth-input py-1.5 text-xs h-auto w-auto max-w-[240px]" value={tournamentId ?? ""} onChange={(e) => setTournamentId(e.target.value)}>
+            {tournaments.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </select>
+          <div className="flex gap-1 rounded-lg bg-muted p-1">
+            {(["group", "knockout"] as LeaderboardStage[]).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStage(s)}
+                className={cn("rounded-md px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider transition-colors", stage === s ? "bg-background text-primary shadow-sm border border-border" : "text-muted-foreground hover:bg-accent")}
+              >
+                {s === "group" ? "Group Stage" : "Knockout"}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <th className="w-12 py-3 text-center">#</th>
+                <th className="py-3 pl-3 text-left">{headerButton("Team", "teamName", "left")}</th>
+                <th className="w-28 py-3">{headerButton("Avg Score", "avgScore")}</th>
+                <th className="w-28 py-3">{headerButton("Highest", "highestScore")}</th>
+                <th className="w-24 py-3">{headerButton("GD", "goalDiff")}</th>
+                <th className="w-28 py-3 pr-3">{headerButton("Total", "totalScore")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((row: LeaderboardRow, index: number) => {
+                const isDQ = row.isDisqualified;
+                const isQual = row.isQualifier;
+
+                return (
+                  <tr key={row.teamId} className={cn("border-b border-border/50 last:border-0", isDQ ? "opacity-50 bg-destructive/5" : isQual ? "bg-emerald-500/5" : "")}>
+                    <td className="py-3 text-center">
+                      <span className={cn("inline-flex size-6 items-center justify-center rounded-full text-[11px] font-bold", isDQ ? "bg-destructive/10 text-destructive" : isQual ? "bg-emerald-500/15 text-emerald-600" : "bg-muted text-muted-foreground")}>
+                        {isDQ ? "DQ" : index + 1}
+                      </span>
+                    </td>
+                    <td className="py-3 pl-3 font-semibold text-foreground">
+                       {row.teamName}
+                       {stage === "group" && !isDQ && isQual && <span className="ml-2 text-[9px] uppercase tracking-wider font-bold text-emerald-600 bg-emerald-500/10 px-1.5 py-0.5 rounded">Qualified</span>}
+                       {stage === "group" && !isDQ && !isQual && <span className="ml-2 text-[9px] uppercase tracking-wider font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">Eliminated</span>}
+                    </td>
+                    <td className="py-3 text-center tabular-nums text-muted-foreground">{row.avgScore.toFixed(1)}</td>
+                    <td className="py-3 text-center tabular-nums font-medium text-foreground">{row.highestScore}</td>
+                    <td className={cn("py-3 text-center tabular-nums font-medium", row.goalDiff > 0 ? "text-emerald-600" : row.goalDiff < 0 ? "text-red-500" : "text-muted-foreground")}>
+                      {row.goalDiff > 0 ? `+${row.goalDiff}` : row.goalDiff}
+                    </td>
+                    <td className="py-3 pr-3 text-center tabular-nums font-bold text-foreground">{row.totalScore}</td>
+                  </tr>
+                );
+              })}
+              {ranked.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No completed matches yet for this stage.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Panel>
   );
 }
 
@@ -1036,19 +1247,19 @@ function RefereeGroupStage({
   teams: any[];
   onSelectMatch: (matchId: string, teamAId: string | null, teamBId: string | null) => void;
 }) {
-  const teamName = (id: string | null) => (id ? teams.find((t) => t.id === id)?.name ?? "—" : "TBD");
-  const groupMatches = tournament.matches.filter((m: any) => m.phase === "group");
-  const groupCount = tournament.groupCount ?? Math.max(1, ...groupMatches.map((m: any) => m.groupNumber ?? 1));
-  const groups = Array.from({ length: groupCount }, (_, index) => groupMatches.filter((m: any) => m.groupNumber === index + 1));
+  const teamName = (id: string | null) => (id ? teams.find((t: any) => t.id === id)?.name ?? "—" : "TBD");
+  const groupMatches = tournament.matches.filter((m: TournamentMatch) => m.phase === "group");
+  const groupCount = tournament.groupCount ?? Math.max(1, ...groupMatches.map((m: TournamentMatch) => m.groupNumber ?? 1));
+  const groups = Array.from({ length: groupCount }, (_, index) => groupMatches.filter((m: TournamentMatch) => m.groupNumber === index + 1));
   const qualifiers = tournament.qualifiersPerGroup ?? 2;
   const scoringSystem = tournament.groupScoringSystem ?? "three-one-zero";
 
-  const buildStandings = (matches: any[]) => {
+  const buildStandings = (matches: TournamentMatch[]) => {
     const teamIds = new Set<string>();
-    matches.forEach((m) => { if (m.teamAId) teamIds.add(m.teamAId); if (m.teamBId) teamIds.add(m.teamBId); });
+    matches.forEach((m: TournamentMatch) => { if (m.teamAId) teamIds.add(m.teamAId); if (m.teamBId) teamIds.add(m.teamBId); });
     const stats = new Map<string, { played: number; wins: number; draws: number; losses: number; gf: number; ga: number; pts: number }>();
-    teamIds.forEach((id) => stats.set(id, { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 }));
-    matches.forEach((m) => {
+    teamIds.forEach((id: string) => stats.set(id, { played: 0, wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0 }));
+    matches.forEach((m: TournamentMatch) => {
       if (!m.winnerId && m.result !== "draw") return;
       const a = m.teamAId ? stats.get(m.teamAId) : undefined;
       const b = m.teamBId ? stats.get(m.teamBId) : undefined;
@@ -1072,7 +1283,7 @@ function RefereeGroupStage({
       .map(([id, s], rank) => ({ id, rank: rank + 1, ...s }));
   };
 
-  const decidedCount = groupMatches.filter((m: any) => m.winnerId || m.result === "draw").length;
+  const decidedCount = groupMatches.filter((m: TournamentMatch) => m.winnerId || m.result === "draw").length;
 
   return (
     <section className="rounded-2xl border border-border bg-background p-6 shadow-sm">
@@ -1098,7 +1309,7 @@ function RefereeGroupStage({
       </div>
 
       <div className="flex flex-wrap justify-center gap-5">
-        {groups.map((matches, index) => {
+        {groups.map((matches: TournamentMatch[], index: number) => {
           const standings = buildStandings(matches);
           return (
             <div key={index} className="w-full sm:w-[calc(50%-0.625rem)] xl:w-[calc(33.333%-0.875rem)] rounded-xl border border-border bg-background overflow-hidden">
@@ -1214,6 +1425,6 @@ function eventLabel(type: MatchEventType): string {
     case "match_ended": return "MATCH ENDED";
     case "score_changed": return "GOAL";
     case "penalty_issued": return "PENALTY";
-    default: return type;
+    default: return String(type);
   }
 }
