@@ -487,7 +487,10 @@ export class SupabaseStore implements DataStore {
         .filter((event) => event.slotId === slot.slotId && event.matchId === matchId)
         .map((event) => ({ ...event, matchId }));
       const slotPenalties = penaltyRows
-        .filter((penalty) => penalty.slotId === slot.slotId && penalty.matchId === matchId)
+        // Older penalty rows were written without slot_id. Match id is the
+        // authoritative identity, while slot_id prevents stale records from
+        // a reused court leaking into a new match.
+        .filter((penalty) => penalty.matchId === matchId && (penalty.slotId === slot.slotId || penalty.slotId == null))
         .map((penalty) => ({ ...penalty, matchId }));
       events.forEach((event) => this.persistedEventIds.add(event.id));
       slotPenalties.forEach((penalty) => this.persistedPenaltyIds.add(penalty.id));
@@ -1276,6 +1279,7 @@ export class SupabaseStore implements DataStore {
     this.persist('issue penalty & dq', async () => {
       await supabase.from('penalties').upsert({
         id: penalty.id,
+        slot_id: slotId,
         match_id: penalty.matchId,
         side: penalty.side,
         type: penalty.type,

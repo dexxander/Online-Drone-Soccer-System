@@ -989,11 +989,18 @@ function MatchBoard({
           </p>
           <div className="relative z-10 mt-6 flex min-h-[2rem] items-center justify-center gap-2">
             {penalties.isDisqualified ? (
-              <span className="rounded bg-destructive/20 px-4 py-1 text-sm font-bold tracking-widest text-destructive border border-destructive/30 shadow-[0_0_10px_rgba(239,68,68,0.3)]">DISQUALIFIED</span>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                {penalties.redCount > 0 && <span className="rounded bg-red-600 px-3 py-1 text-xs font-black tracking-widest text-white shadow-[0_0_10px_rgba(220,38,38,0.45)]">RED ×{penalties.redCount}</span>}
+                <span className="rounded bg-destructive/20 px-4 py-1 text-sm font-bold tracking-widest text-destructive border border-destructive/30 shadow-[0_0_10px_rgba(239,68,68,0.3)]">DISQUALIFIED</span>
+              </div>
             ) : (
-              penalties.badges.map((b: string, i: number) => (
-                <span key={`${b}-${i}`} className={cn("h-8 w-6 rounded-sm shadow-md border border-black/10 backdrop-blur-sm", b === "Yellow" ? "bg-amber-400" : "bg-slate-500/80")} />
-              ))
+              <>
+                {penalties.badges.map((b: string, i: number) => (
+                  <span key={`${b}-${i}`} className={cn("h-8 w-6 rounded-sm shadow-md border border-black/10 backdrop-blur-sm", b === "Yellow" ? "bg-amber-400" : "bg-slate-500/80")} />
+                ))}
+                {penalties.warningCount > 0 && <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Foul ×{penalties.warningCount}</span>}
+                {penalties.yellowCount > 0 && <span className="text-[10px] font-bold uppercase tracking-wider text-amber-500">Yellow ×{penalties.yellowCount}</span>}
+              </>
             )}
           </div>
         </div>

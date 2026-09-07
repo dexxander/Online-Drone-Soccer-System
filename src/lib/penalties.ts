@@ -21,6 +21,9 @@ export function calculateEffectivePenalties(penalties: Penalty[]) {
       ...Array.from({ length: effectiveYellows }, () => "Yellow" as const),
       ...Array.from({ length: effectiveWarnings }, () => "Warning" as const),
     ] as EffectivePenaltyBadge[],
+    warningCount: warnings,
+    yellowCount: totalYellows,
+    redCount: effectiveReds,
     isDisqualified: effectiveReds > 0,
   };
 }
