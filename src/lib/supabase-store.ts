@@ -379,15 +379,20 @@ export class SupabaseStore implements DataStore {
       const mappedTournaments = camelTournaments.map((t: any) => {
         const matches = camelMatches.filter((m: any) => m.tournamentId === t.id);
         const groupMatches = matches.filter((m: any) => m.phase === "group");
+        const linkedTeamIds = camelTournamentTeams
+          .filter((link: any) => link.tournamentId === t.id)
+          .map((link: any) => link.teamId);
+        // A tournament and its team-link rows are inserted sequentially. If
+        // hydration happens between those writes, derive the teams from the
+        // already-persisted match rows instead of briefly showing 0 teams.
+        const matchTeamIds = [...new Set(matches.flatMap((m: any) => [m.teamAId, m.teamBId].filter(Boolean)))];
         return {
         ...t,
         groupStageEnabled: t.groupStageEnabled ?? groupMatches.length > 0,
         groupCount: t.groupCount ?? (groupMatches.length ? Math.max(...groupMatches.map((m: any) => m.groupNumber ?? 1)) : undefined),
         qualifiersPerGroup: t.qualifiersPerGroup ?? (groupMatches.length ? 2 : undefined),
         groupScoringSystem: t.groupScoringSystem ?? "three-one-zero",
-        teamIds: camelTournamentTeams
-          .filter((link: any) => link.tournamentId === t.id)
-          .map((link: any) => link.teamId),
+        teamIds: linkedTeamIds.length ? linkedTeamIds : matchTeamIds,
         matches,
       }; });
 
@@ -752,7 +757,7 @@ export class SupabaseStore implements DataStore {
         if (matchResult.error) return matchResult;
       }
       const teamLinks = uniqueTeamIds.map((teamId) => ({ tournament_id: mapped.id, team_id: teamId }));
-      if (teamLinks.length) return supabase.from('tournament_teams').insert(teamLinks);
+      if (teamLinks.length) return supabase.from('tournament_teams').upsert(teamLinks, { onConflict: 'tournament_id,team_id' });
       return result;
     });
     this.logAudit("Tournament created", currentAuditActor(), tournament.name, "Tournament", `${uniqueTeamIds.length} team(s)`);
@@ -801,13 +806,18 @@ export class SupabaseStore implements DataStore {
     const mappedTournaments = tournaments.map((t: any) => {
       const tournamentMatches = matches.filter((m: any) => m.tournamentId === t.id);
       const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group");
+      const linkedTeamIds = links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId);
+      const existingTournament = this.state.tournaments.find((existing) => existing.id === t.id);
+      const matchTeamIds = [...new Set(tournamentMatches.flatMap((m: any) => [m.teamAId, m.teamBId].filter(Boolean)))];
       return {
         ...t,
         groupStageEnabled: t.groupStageEnabled ?? groupMatches.length > 0,
         groupCount: t.groupCount ?? (groupMatches.length ? Math.max(...groupMatches.map((m: any) => m.groupNumber ?? 1)) : undefined),
         qualifiersPerGroup: t.qualifiersPerGroup ?? (groupMatches.length ? 2 : undefined),
         groupScoringSystem: t.groupScoringSystem ?? "three-one-zero",
-        teamIds: links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId),
+        // Keep the local selection during the short interval before the
+        // link insert is visible, then use the database links once available.
+        teamIds: linkedTeamIds.length ? linkedTeamIds : existingTournament?.teamIds?.length ? existingTournament.teamIds : matchTeamIds,
         matches: tournamentMatches,
       };
     });
