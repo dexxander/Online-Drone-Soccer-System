@@ -945,12 +945,16 @@ export class SupabaseStore implements DataStore {
               score_a: m.scoreA ?? 0,
               score_b: m.scoreB ?? 0,
             })
-            .eq('id', m.id));
+            .eq('id', m.id)
+            .select('id')
+            .single());
         } else {
           this.persist('tournament match advancement update', () => supabase
             .from('tournament_matches')
             .update({ team_a_id: m.teamAId, team_b_id: m.teamBId, winner_id: m.winnerId, result: m.result ?? null })
-            .eq('id', m.id));
+            .eq('id', m.id)
+            .select('id')
+            .single());
         }
       });
       if (newMatches.length) {

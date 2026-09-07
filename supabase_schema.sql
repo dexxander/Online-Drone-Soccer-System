@@ -106,8 +106,7 @@ CREATE TABLE public.tournament_matches (
   ,bracket_group_key INTEGER GENERATED ALWAYS AS (COALESCE(group_number, 0)) STORED
 );
 CREATE UNIQUE INDEX tournament_matches_bracket_position_idx
-  ON public.tournament_matches (tournament_id, phase, round, slot, bracket_group_key)
-  WHERE tournament_id IS NOT NULL;
+  ON public.tournament_matches (tournament_id, phase, round, slot, bracket_group_key);
 
 -- Run these statements when upgrading an existing database created before group stages.
 ALTER TABLE public.tournaments ADD COLUMN IF NOT EXISTS group_stage_enabled BOOLEAN DEFAULT FALSE NOT NULL;
