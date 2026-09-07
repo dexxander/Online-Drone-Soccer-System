@@ -96,8 +96,11 @@ function generateGroupStage(teamIds: string[], groupCount: number): TournamentMa
     cursor += size;
   });
   const matches: TournamentMatch[] = [];
+  // Keep slots unique across the entire tournament. Group numbers still
+  // identify the group, but a global slot also keeps compatibility with
+  // databases that still have the earlier bracket-position index.
+  let slot = 0;
   groups.forEach((group, groupIndex) => {
-    let slot = 0;
     for (let i = 0; i < group.length; i++) {
       for (let j = i + 1; j < group.length; j++) {
         const sched = getMatchSchedule(1, matches.length);
