@@ -103,9 +103,10 @@ CREATE TABLE public.tournament_matches (
   ,phase TEXT DEFAULT 'knockout' NOT NULL
   ,group_number INTEGER
   ,result TEXT
+  ,bracket_group_key INTEGER GENERATED ALWAYS AS (COALESCE(group_number, 0)) STORED
 );
 CREATE UNIQUE INDEX tournament_matches_bracket_position_idx
-  ON public.tournament_matches (tournament_id, phase, round, slot)
+  ON public.tournament_matches (tournament_id, phase, round, slot, bracket_group_key)
   WHERE tournament_id IS NOT NULL;
 
 -- Run these statements when upgrading an existing database created before group stages.

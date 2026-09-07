@@ -908,7 +908,7 @@ export class SupabaseStore implements DataStore {
         this.persist('tournament knockout insert', () => supabase
           .from('tournament_matches')
           .upsert(newMatches.map(m => toSnake({ ...m, tournamentId })), {
-            onConflict: 'tournament_id,phase,round,slot',
+            onConflict: 'tournament_id,phase,round,slot,bracket_group_key',
             ignoreDuplicates: true,
           }));
       }
