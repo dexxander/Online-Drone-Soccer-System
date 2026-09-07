@@ -89,7 +89,7 @@ function AdminTournamentsPage() {
               >
                 {selected.status === "completed" ? <><Check className="size-3" /> Completed</> : <><Play className="size-3" /> Active</>}
               </button>
-              <span>· {selected.teamIds.length} Teams Registered {selected.teamQuota ? `(Quota: ${selected.teamQuota})` : ""}</span>
+              <span>· {getTournamentTeamIds(selected).length} Teams Registered {selected.teamQuota ? `(Quota: ${selected.teamQuota})` : ""}</span>
             </div>
 
             <p className="mt-1 text-xs text-muted-foreground">
@@ -186,7 +186,7 @@ function AdminTournamentsPage() {
                       </span>
                     </div>
                     <p className="mt-1 text-xs capitalize text-muted-foreground">
-                      Status: <strong className={t.status === 'completed' ? "text-emerald-500" : "text-blue-500"}>{t.status}</strong> · {t.teamIds.length} Teams
+                      Status: <strong className={t.status === 'completed' ? "text-emerald-500" : "text-blue-500"}>{t.status}</strong> · {getTournamentTeamIds(t).length} Teams
                       {t.teamQuota ? ` / Quota: ${t.teamQuota}` : ""}
                     </p>
                   </button>
@@ -226,6 +226,13 @@ function getAssignedTeamIdsExcept(
     }
   });
   return set;
+}
+
+function getTournamentTeamIds(tournament: Tournament): string[] {
+  return [...new Set([
+    ...tournament.teamIds,
+    ...tournament.matches.flatMap((match) => [match.teamAId, match.teamBId].filter((id): id is string => Boolean(id))),
+  ])];
 }
 
 function CreateTournamentForm({

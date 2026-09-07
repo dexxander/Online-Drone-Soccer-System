@@ -377,7 +377,14 @@ export class SupabaseStore implements DataStore {
       const camelTournamentTeams = toCamel(tournamentTeams || []);
 
       const mappedTournaments = camelTournaments.map((t: any) => {
-        const matches = camelMatches.filter((m: any) => m.tournamentId === t.id);
+        const matches = camelMatches
+          .filter((m: any) => m.tournamentId === t.id)
+          .map((m: any) => ({
+            ...m,
+            // group_number is the durable group-stage marker. Use it when
+            // older rows do not have a usable phase value.
+            phase: m.phase === "group" || m.groupNumber != null ? "group" : (m.phase ?? "knockout"),
+          }));
         const groupMatches = matches.filter((m: any) => m.phase === "group");
         const linkedTeamIds = camelTournamentTeams
           .filter((link: any) => link.tournamentId === t.id)
@@ -804,7 +811,12 @@ export class SupabaseStore implements DataStore {
     const matches = toCamel(matchRows.data || []) as any[];
     const links = toCamel(teamRows.data || []) as any[];
     const mappedTournaments = tournaments.map((t: any) => {
-      const tournamentMatches = matches.filter((m: any) => m.tournamentId === t.id);
+      const tournamentMatches = matches
+        .filter((m: any) => m.tournamentId === t.id)
+        .map((m: any) => ({
+          ...m,
+          phase: m.phase === "group" || m.groupNumber != null ? "group" : (m.phase ?? "knockout"),
+        }));
       const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group");
       const linkedTeamIds = links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId);
       const existingTournament = this.state.tournaments.find((existing) => existing.id === t.id);

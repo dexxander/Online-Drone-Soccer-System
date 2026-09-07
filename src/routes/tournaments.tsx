@@ -40,6 +40,13 @@ type SyncedTournamentMatch = TournamentMatch & {
   status?: MatchStatus;
 };
 
+function registeredTeamCount(tournament: Tournament) {
+  return new Set([
+    ...tournament.teamIds,
+    ...tournament.matches.flatMap((match) => [match.teamAId, match.teamBId].filter(Boolean)),
+  ]).size;
+}
+
 function TournamentsUserPage() {
   const { state } = useMockWebSocket();
   const [searchQuery, setSearchQuery] = useState("");
@@ -452,7 +459,7 @@ function TournamentsUserPage() {
                           Status: {t.status}
                         </span>
                         <span>
-                          {t.teamIds.length} / {t.teamQuota || 8} Teams Registered
+                          {registeredTeamCount(t)} / {t.teamQuota || 8} Teams Registered
                         </span>
                       </div>
 

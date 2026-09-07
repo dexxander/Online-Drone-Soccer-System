@@ -243,7 +243,10 @@ function TicketsPage() {
                               <span>·</span>
                               <span className="flex items-center gap-1"><MapPin className="size-3" /> Arena Court A</span>
                               <span>·</span>
-                              <span>{t.teamIds.length} Teams</span>
+                              <span>{new Set([
+                                ...t.teamIds,
+                                ...t.matches.flatMap((match) => [match.teamAId, match.teamBId].filter(Boolean)),
+                              ]).size} Teams</span>
                             </div>
                           </div>
                         </div>
