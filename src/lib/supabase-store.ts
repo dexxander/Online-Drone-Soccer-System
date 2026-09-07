@@ -112,7 +112,7 @@ function generateGroupStage(teamIds: string[], groupCount: number): TournamentMa
 }
 
 function groupQualifiedTeams(tournament: Tournament): string[] | null {
-  const groupMatches = tournament.matches.filter((m) => m.phase === "group");
+  const groupMatches = tournament.matches.filter((m) => m.phase === "group" || m.groupNumber != null);
   if (!groupMatches.length || groupMatches.some((m) => !m.winnerId && m.result !== "draw")) return null;
 
   // Collect team IDs per group
@@ -337,6 +337,9 @@ export class SupabaseStore implements DataStore {
   private writeQueue = Promise.resolve();
   private persistedEventIds = new Set<string>();
   private persistedPenaltyIds = new Set<string>();
+  // Prevent a background refresh from replacing an optimistic result with
+  // the older database snapshot while the result write is still queued.
+  private pendingTournamentIds = new Set<string>();
   
   private slotLocks: Record<number, number> = {};
 
@@ -385,7 +388,7 @@ export class SupabaseStore implements DataStore {
             // older rows do not have a usable phase value.
             phase: m.phase === "group" || m.groupNumber != null ? "group" : (m.phase ?? "knockout"),
           }));
-        const groupMatches = matches.filter((m: any) => m.phase === "group");
+      const groupMatches = matches.filter((m: any) => m.phase === "group" || m.groupNumber != null);
         const linkedTeamIds = camelTournamentTeams
           .filter((link: any) => link.tournamentId === t.id)
           .map((link: any) => link.teamId);
@@ -824,7 +827,9 @@ export class SupabaseStore implements DataStore {
           ...m,
           phase: m.phase === "group" || m.groupNumber != null ? "group" : (m.phase ?? "knockout"),
         }));
-      const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group");
+      const existingTournament = this.state.tournaments.find((existing) => existing.id === t.id);
+      if (this.pendingTournamentIds.has(t.id) && existingTournament) return existingTournament;
+      const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group" || m.groupNumber != null);
       const linkedTeamIds = links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId);
       if (t.groupStageEnabled && tournamentMatches.length === 0 && linkedTeamIds.length >= 2) {
         const repairedMatches = generateGroupStage(linkedTeamIds, t.groupCount ?? 4);
@@ -833,7 +838,6 @@ export class SupabaseStore implements DataStore {
           .from('tournament_matches')
           .upsert(tournamentMatches.map((match: any) => toSnake(match)), { onConflict: 'id' }));
       }
-      const existingTournament = this.state.tournaments.find((existing) => existing.id === t.id);
       const matchTeamIds = [...new Set(tournamentMatches.flatMap((m: any) => [m.teamAId, m.teamBId].filter(Boolean)))];
       return {
         ...t,
@@ -855,6 +859,7 @@ export class SupabaseStore implements DataStore {
   }
 
   setMatchResult(tournamentId: string, matchId: string, winnerId: string | null, result: "win" | "draw", scoreA?: number, scoreB?: number) {
+    this.pendingTournamentIds.add(tournamentId);
     const previousTournament = this.state.tournaments.find(x => x.id === tournamentId);
     const previousMatchIds = new Set(previousTournament?.matches.map(m => m.id) ?? []);
     const tournaments = this.state.tournaments.map((t) => {
@@ -866,7 +871,7 @@ export class SupabaseStore implements DataStore {
       match.result = result;
       if (scoreA !== undefined) match.scoreA = scoreA;
       if (scoreB !== undefined) match.scoreB = scoreB;
-      if (match.phase === "group") {
+      if (match.phase === "group" || match.groupNumber != null) {
         const updated = { ...t, matches };
         const qualified = groupQualifiedTeams(updated);
         if (qualified) {
@@ -912,6 +917,18 @@ export class SupabaseStore implements DataStore {
             ignoreDuplicates: true,
           }));
       }
+      // Refresh from Supabase only after all writes above have completed, so
+      // standings and the generated knockout bracket converge to the same
+      // canonical rows for every referee/admin tab.
+      this.persist('tournament result refresh', async () => {
+        try {
+          this.pendingTournamentIds.delete(tournamentId);
+          await this.refreshTournaments();
+          return { error: null };
+        } finally {
+          this.pendingTournamentIds.delete(tournamentId);
+        }
+      });
     }
   }
 
