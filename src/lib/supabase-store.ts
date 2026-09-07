@@ -829,7 +829,6 @@ export class SupabaseStore implements DataStore {
         }));
       const existingTournament = this.state.tournaments.find((existing) => existing.id === t.id);
       if (this.pendingTournamentIds.has(t.id) && existingTournament) return existingTournament;
-      const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group" || m.groupNumber != null);
       const linkedTeamIds = links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId);
       if (t.groupStageEnabled && tournamentMatches.length === 0 && linkedTeamIds.length >= 2) {
         const repairedMatches = generateGroupStage(linkedTeamIds, t.groupCount ?? 4);
@@ -837,6 +836,33 @@ export class SupabaseStore implements DataStore {
         this.persist('repair missing group matches', () => supabase
           .from('tournament_matches')
           .upsert(tournamentMatches.map((match: any) => toSnake(match)), { onConflict: 'id' }));
+      }
+      const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group" || m.groupNumber != null);
+      const knockoutMatches = tournamentMatches.filter((m: any) => m.phase !== "group" && m.groupNumber == null);
+      const groupStageComplete = groupMatches.length > 0 && groupMatches.every((match: any) => match.winnerId || match.result === "draw");
+      if (t.groupStageEnabled && groupStageComplete && knockoutMatches.length === 0) {
+        const groupTournament = {
+          ...t,
+          matches: groupMatches,
+          groupStageEnabled: true,
+          groupScoringSystem: t.groupScoringSystem ?? "three-one-zero",
+          qualifiersPerGroup: t.qualifiersPerGroup ?? 2,
+        } as Tournament;
+        const qualified = groupQualifiedTeams(groupTournament);
+        if (qualified?.length) {
+          const generatedKnockout = generateBracket(qualified).map((match) => ({
+            ...match,
+            tournamentId: t.id,
+            phase: "knockout" as const,
+          }));
+          tournamentMatches = [...tournamentMatches, ...generatedKnockout];
+          this.persist('repair missing knockout matches', () => supabase
+            .from('tournament_matches')
+            .upsert(generatedKnockout.map((match: any) => toSnake(match)), {
+              onConflict: 'tournament_id,phase,round,slot,bracket_group_key',
+              ignoreDuplicates: true,
+            }));
+        }
       }
       const matchTeamIds = [...new Set(tournamentMatches.flatMap((m: any) => [m.teamAId, m.teamBId].filter(Boolean)))];
       return {
@@ -1207,7 +1233,7 @@ export class SupabaseStore implements DataStore {
         else if (match.scoreB > match.scoreA) winnerId = tMatch.teamBId;
         
         if (winnerId) this.setMatchWinner(t.id, match.id, winnerId, match.scoreA, match.scoreB);
-        else if (tMatch.phase === "group") this.setMatchResult(t.id, match.id, null, "draw", match.scoreA, match.scoreB);
+        else if (tMatch.phase === "group" || tMatch.groupNumber != null) this.setMatchResult(t.id, match.id, null, "draw", match.scoreA, match.scoreB);
       }
     }
   }
