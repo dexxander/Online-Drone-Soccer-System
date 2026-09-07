@@ -160,11 +160,18 @@ function RefereePage() {
 
   useEffect(() => {
     void socket.refreshMatchSlots();
-    const id = setInterval(() => void socket.refreshMatchSlots(), 1000);
+    // Tournament matches are shared by every referee. Refreshing only the
+    // reusable court slot leaves each tab with a stale bracket snapshot, so a
+    // simultaneous finalization can generate competing knockout brackets.
+    const id = setInterval(() => {
+      void socket.refreshMatchSlots();
+      void socket.refreshTournaments();
+    }, 1000);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
         void socket.refreshMatchSlots();
+        void socket.refreshTournaments();
       }
     };
     document.addEventListener("visibilitychange", handleVisibility);

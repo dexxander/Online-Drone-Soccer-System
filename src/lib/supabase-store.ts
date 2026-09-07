@@ -816,7 +816,8 @@ export class SupabaseStore implements DataStore {
   }
 
   setMatchResult(tournamentId: string, matchId: string, winnerId: string | null, result: "win" | "draw", scoreA?: number, scoreB?: number) {
-    const previousMatchIds = new Set(this.state.tournaments.find(x => x.id === tournamentId)?.matches.map(m => m.id) ?? []);
+    const previousTournament = this.state.tournaments.find(x => x.id === tournamentId);
+    const previousMatchIds = new Set(previousTournament?.matches.map(m => m.id) ?? []);
     const tournaments = this.state.tournaments.map((t) => {
       if (t.id !== tournamentId) return t;
       const matches = t.matches.map((m) => ({ ...m }));
@@ -848,11 +849,29 @@ export class SupabaseStore implements DataStore {
       this.persist('tournament status update', () => supabase.from('tournaments').update({ status: t.status }).eq('id', tournamentId));
 
       const newMatches = t.matches.filter((m) => !previousMatchIds.has(m.id));
-      t.matches.filter((m) => previousMatchIds.has(m.id)).forEach(m => {
+      // Never write the whole locally cached bracket. Multiple referees can
+      // finalize different matches at the same time, and a stale tab must not
+      // overwrite another referee's newer winner/advancement.
+      const changedIds = new Set<string>([matchId]);
+      const changedMatch = t.matches.find((m) => m.id === matchId);
+      if (changedMatch && changedMatch.phase === "knockout") {
+        const next = t.matches.find((m) => m.round === changedMatch.round + 1 && m.slot === Math.floor(changedMatch.slot / 2));
+        if (next) changedIds.add(next.id);
+      }
+      t.matches.filter((m) => previousMatchIds.has(m.id) && changedIds.has(m.id)).forEach(m => {
         this.persist('tournament match update', () => supabase.from('tournament_matches').update(toSnake(m)).eq('id', m.id));
       });
       if (newMatches.length) {
-        this.persist('tournament knockout insert', () => supabase.from('tournament_matches').insert(newMatches.map(m => toSnake({ ...m, tournamentId }))));
+        // A concurrent referee may have generated the same logical bracket
+        // slot with a different client UUID. The unique tournament/phase/round/
+        // slot constraint makes this an idempotent upsert; the next refresh
+        // replaces the local UUIDs with the canonical database rows.
+        this.persist('tournament knockout insert', () => supabase
+          .from('tournament_matches')
+          .upsert(newMatches.map(m => toSnake({ ...m, tournamentId })), {
+            onConflict: 'tournament_id,phase,round,slot',
+            ignoreDuplicates: true,
+          }));
       }
     }
   }
