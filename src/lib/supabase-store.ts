@@ -377,7 +377,7 @@ export class SupabaseStore implements DataStore {
       const camelTournamentTeams = toCamel(tournamentTeams || []);
 
       const mappedTournaments = camelTournaments.map((t: any) => {
-        const matches = camelMatches
+        let matches = camelMatches
           .filter((m: any) => m.tournamentId === t.id)
           .map((m: any) => ({
             ...m,
@@ -389,6 +389,13 @@ export class SupabaseStore implements DataStore {
         const linkedTeamIds = camelTournamentTeams
           .filter((link: any) => link.tournamentId === t.id)
           .map((link: any) => link.teamId);
+        if (t.groupStageEnabled && matches.length === 0 && linkedTeamIds.length >= 2) {
+          const repairedMatches = generateGroupStage(linkedTeamIds, t.groupCount ?? 4);
+          matches = repairedMatches.map((match) => ({ ...match, tournamentId: t.id }));
+          this.persist('repair missing group matches', () => supabase
+            .from('tournament_matches')
+            .upsert(matches.map((match: any) => toSnake(match)), { onConflict: 'id' }));
+        }
         // A tournament and its team-link rows are inserted sequentially. If
         // hydration happens between those writes, derive the teams from the
         // already-persisted match rows instead of briefly showing 0 teams.
@@ -760,7 +767,7 @@ export class SupabaseStore implements DataStore {
       const result = await supabase.from('tournaments').insert(mapped);
       if (result.error) return result;
       if (tMatches.length) {
-        const matchResult = await supabase.from('tournament_matches').insert(tMatches);
+        const matchResult = await supabase.from('tournament_matches').upsert(tMatches, { onConflict: 'id' });
         if (matchResult.error) return matchResult;
       }
       const teamLinks = uniqueTeamIds.map((teamId) => ({ tournament_id: mapped.id, team_id: teamId }));
@@ -811,7 +818,7 @@ export class SupabaseStore implements DataStore {
     const matches = toCamel(matchRows.data || []) as any[];
     const links = toCamel(teamRows.data || []) as any[];
     const mappedTournaments = tournaments.map((t: any) => {
-      const tournamentMatches = matches
+      let tournamentMatches = matches
         .filter((m: any) => m.tournamentId === t.id)
         .map((m: any) => ({
           ...m,
@@ -819,6 +826,13 @@ export class SupabaseStore implements DataStore {
         }));
       const groupMatches = tournamentMatches.filter((m: any) => m.phase === "group");
       const linkedTeamIds = links.filter((link: any) => link.tournamentId === t.id).map((link: any) => link.teamId);
+      if (t.groupStageEnabled && tournamentMatches.length === 0 && linkedTeamIds.length >= 2) {
+        const repairedMatches = generateGroupStage(linkedTeamIds, t.groupCount ?? 4);
+        tournamentMatches = repairedMatches.map((match) => ({ ...match, tournamentId: t.id }));
+        this.persist('repair missing group matches', () => supabase
+          .from('tournament_matches')
+          .upsert(tournamentMatches.map((match: any) => toSnake(match)), { onConflict: 'id' }));
+      }
       const existingTournament = this.state.tournaments.find((existing) => existing.id === t.id);
       const matchTeamIds = [...new Set(tournamentMatches.flatMap((m: any) => [m.teamAId, m.teamBId].filter(Boolean)))];
       return {
@@ -910,7 +924,35 @@ export class SupabaseStore implements DataStore {
 
   removeTournament(id: string) {
     this.commit({ ...this.state, tournaments: this.state.tournaments.filter((t) => t.id !== id) });
-    this.persist('tournament delete', () => supabase.from('tournaments').delete().eq('id', id));
+    this.persist('tournament delete', async () => {
+      const { data: matchRows, error: matchLookupError } = await supabase
+        .from('tournament_matches')
+        .select('id')
+        .eq('tournament_id', id);
+      if (matchLookupError) return { error: matchLookupError };
+
+      const matchIds = (matchRows || []).map((row) => row.id);
+      if (matchIds.length) {
+        // match_slots has a reusable-court FK without ON DELETE CASCADE, so
+        // detach courts before deleting their tournament matches.
+        const clearSlots = await supabase
+          .from('match_slots')
+        .update({ tournament_match_id: null, scoreboard_tournament_id: null })
+          .in('tournament_match_id', matchIds);
+        if (clearSlots.error) return clearSlots;
+
+        const deleteEvents = await supabase.from('match_events').delete().in('match_id', matchIds);
+        if (deleteEvents.error) return deleteEvents;
+        const deletePenalties = await supabase.from('penalties').delete().in('match_id', matchIds);
+        if (deletePenalties.error) return deletePenalties;
+        const deleteMatches = await supabase.from('tournament_matches').delete().in('id', matchIds);
+        if (deleteMatches.error) return deleteMatches;
+      }
+
+      const deleteLinks = await supabase.from('tournament_teams').delete().eq('tournament_id', id);
+      if (deleteLinks.error) return deleteLinks;
+      return supabase.from('tournaments').delete().eq('id', id);
+    });
     this.logAudit("Tournament deleted", currentAuditActor(), id, "Tournament");
   }
 
