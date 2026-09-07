@@ -932,7 +932,25 @@ export class SupabaseStore implements DataStore {
         if (next) changedIds.add(next.id);
       }
       t.matches.filter((m) => previousMatchIds.has(m.id) && changedIds.has(m.id)).forEach(m => {
-        this.persist('tournament match update', () => supabase.from('tournament_matches').update(toSnake(m)).eq('id', m.id));
+        if (m.id === matchId) {
+          // Send only the result columns. Updating the whole locally cached
+          // object can include stale/generated bracket fields and obscure the
+          // actual result error behind a generic PostgREST update failure.
+          this.persist('tournament result update', () => supabase
+            .from('tournament_matches')
+            .update({
+              winner_id: m.winnerId,
+              result: m.result ?? null,
+              score_a: m.scoreA ?? 0,
+              score_b: m.scoreB ?? 0,
+            })
+            .eq('id', m.id));
+        } else {
+          this.persist('tournament match advancement update', () => supabase
+            .from('tournament_matches')
+            .update({ team_a_id: m.teamAId, team_b_id: m.teamBId, winner_id: m.winnerId, result: m.result ?? null })
+            .eq('id', m.id));
+        }
       });
       if (newMatches.length) {
         // A concurrent referee may have generated the same logical bracket
