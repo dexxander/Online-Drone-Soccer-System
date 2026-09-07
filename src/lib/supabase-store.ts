@@ -150,7 +150,7 @@ function groupQualifiedTeams(tournament: Tournament): string[] | null {
   const sortByRank = (a: string, b: string) => {
     const sa = stats.get(a)!; const sb = stats.get(b)!;
     const diffA = sa.gf - sa.ga; const diffB = sb.gf - sb.ga;
-    return (sb.pts - sa.pts) || (diffB - diffA) || (sb.gf - sa.gf);
+    return (sb.pts - sa.pts) || (diffB - diffA) || (sb.gf - sa.gf) || a.localeCompare(b);
   };
 
   const qualifiers = tournament.qualifiersPerGroup ?? 2;
@@ -180,7 +180,7 @@ function groupQualifiedTeams(tournament: Tournament): string[] | null {
       // 2. Compare Goal Difference
       if (diffB !== diffA) return diffB - diffA;
       // 3. Compare Goals For (Highest Score)
-      return sb.gf - sa.gf;
+      return (sb.gf - sa.gf) || a.localeCompare(b);
     });
 
     // Top 2 wildcard 3rd-placed teams qualify
@@ -194,8 +194,9 @@ function groupQualifiedTeams(tournament: Tournament): string[] | null {
     .slice(0, Math.min(qualifiers, ids.length)));
 }
 
-function generateBracket(teamIds: string[]): TournamentMatch[] {
-  const shuffled = [...new Set(teamIds)].sort(() => Math.random() - 0.5);
+function generateBracket(teamIds: string[], randomize = true): TournamentMatch[] {
+  const shuffled = [...new Set(teamIds)];
+  if (randomize) shuffled.sort(() => Math.random() - 0.5);
   const size = nextPowerOf2(shuffled.length);
   const byeTeams = shuffled.slice(0, size - shuffled.length);
   const playingTeams = shuffled.slice(size - shuffled.length);
@@ -853,7 +854,7 @@ export class SupabaseStore implements DataStore {
         } as Tournament;
         const qualified = groupQualifiedTeams(groupTournament);
         if (qualified?.length) {
-          const generatedKnockout = generateBracket(qualified).map((match) => ({
+          const generatedKnockout = generateBracket(qualified, false).map((match) => ({
             ...match,
             tournamentId: t.id,
             phase: "knockout" as const,
@@ -904,7 +905,7 @@ export class SupabaseStore implements DataStore {
         const updated = { ...t, matches };
         const qualified = groupQualifiedTeams(updated);
         if (qualified) {
-          const knockout = generateBracket(qualified).map((m) => ({ ...m, phase: "knockout" as const }));
+          const knockout = generateBracket(qualified, false).map((m) => ({ ...m, phase: "knockout" as const }));
           return { ...updated, matches: [...matches.filter((m) => m.phase !== "knockout"), ...knockout], status: "active" as const };
         }
         return { ...updated, matches, status: "active" as const };
