@@ -1,25 +1,16 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeftRight, Palette, Radio, Sparkles, Timer, Trophy } from "lucide-react";
-import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
+import { Palette, Radio, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
-import type { MatchSlot, Tournament, TournamentMatch, MatchEventType } from "@/lib/types";
-import { calculateEffectivePenalties } from "@/lib/penalties";
-import { getMatchTitle, getCurrentPhase, eventLabel, getTeamDetailsByName } from "@/lib/match-helpers";
+import { initialState } from "@/lib/store";
+import { useMockWebSocket } from "@/hooks/useMockWebSocket";
+import type { MatchSlot } from "@/lib/types";
 import { LeaderboardBoard } from "@/components/scoreboard/LeaderboardBoard";
 import { BracketBoard } from "@/components/scoreboard/BracketBoard";
 import { GroupBoard } from "@/components/scoreboard/GroupBoard";
 import { EmptyBoardState } from "@/components/scoreboard/EmptyBoardState";
 import { MatchBoard } from "@/components/scoreboard/MatchBoard";
-import { THEMES, type ThemeDef } from "@/lib/scoreboard-themes"; 
-import { 
-  buildLeaderboardRows, 
-  sortLeaderboardRows, 
-  usePenaltiesByMatch, 
-  useLeaderboardStageSync, 
-  type LeaderboardRow 
-} from "@/lib/leaderboard";
+import { THEMES, type ThemeDef } from "@/lib/scoreboard-themes";
 
 export const Route = createFileRoute("/scoreboard")({
   head: () => ({
