@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { AVAILABLE_TEAMS, initialState } from "@/lib/store";
 import type { MatchSlot, Tournament, TournamentMatch, MatchEventType } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
-import { getMatchTitle, getCurrentPhase, eventLabel } from "@/lib/match-helpers";
+import { getMatchTitle, getCurrentPhase, eventLabel, getTeamDetailsByName } from "@/lib/match-helpers";
 import { LeaderboardBoard } from "@/components/scoreboard/LeaderboardBoard";
 import { BracketBoard } from "@/components/scoreboard/BracketBoard";
 import { GroupBoard } from "@/components/scoreboard/GroupBoard";
@@ -103,19 +103,6 @@ const PATTERNS: Record<string, { id: string; name: string; className: string }> 
 };
 
 // ─── UTILITIES ─────────────────────────────────────────────────────────────
-
-function getTeamDetailsByName(name: string, dynamicTeams: any[]) {
-  if (!name || name === "TBD") return { initials: "TB", logo: undefined };
-
-  const dynamicTeam = dynamicTeams.find((t: any) => t.name === name);
-  if (dynamicTeam) return { initials: dynamicTeam.name.substring(0, 2).toUpperCase(), logo: dynamicTeam.logoUrl || dynamicTeam.logo };
-
-  const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.name === name);
-  return fallbackTeam
-    ? { initials: fallbackTeam.initials, logo: (fallbackTeam as any).logoUrl || (fallbackTeam as any).logo }
-    : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
-}
-
 function useTick(intervalMs: number) {
   const [, setTick] = useState(0);
   useEffect(() => {

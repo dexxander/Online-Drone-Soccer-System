@@ -1,10 +1,11 @@
-import { ArrowLeftRight, Palette, Radio, Sparkles, Timer, Trophy } from "lucide-react";
+import { useState, useEffect } from "react";
+import { ArrowLeftRight, Palette, Timer, Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatClock } from "@/hooks/useMockWebSocket";
-import type { MatchSlot, MatchEventType } from "@/lib/types";
+import { formatClock, useMatchClock } from "@/hooks/useMockWebSocket";
+import type { MatchSlot, Tournament, TournamentMatch, MatchEventType } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
 import type { ThemeDef } from "@/lib/scoreboard-themes";
-import { getCurrentPhase, eventLabel } from "@/lib/match-helpers";
+import { getMatchTitle, getCurrentPhase, eventLabel, getTeamDetailsByName } from "@/lib/match-helpers";
 import { EventLogItem } from "@/components/scoreboard/EventLogItem";
 
 export function MatchBoard({

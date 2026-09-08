@@ -1,4 +1,5 @@
 import type { MatchEventType } from "@/lib/types";
+import { AVAILABLE_TEAMS } from "@/lib/store";
 
 export function getMatchTitle(round: number, maxRound: number, phase?: string) {
   if (phase === "group") return "Group Stage";
@@ -24,4 +25,16 @@ export function eventLabel(type: MatchEventType): string {
     case "penalty_issued": return "PENALTY";
     default: return String(type);
   }
+}
+
+export function getTeamDetailsByName(name: string, dynamicTeams: any[]) {
+  if (!name || name === "TBD") return { initials: "TB", logo: undefined };
+
+  const dynamicTeam = dynamicTeams.find((t: any) => t.name === name);
+  if (dynamicTeam) return { initials: dynamicTeam.name.substring(0, 2).toUpperCase(), logo: dynamicTeam.logoUrl || dynamicTeam.logo };
+
+  const fallbackTeam = AVAILABLE_TEAMS.find((t) => t.name === name);
+  return fallbackTeam
+    ? { initials: fallbackTeam.initials, logo: (fallbackTeam as any).logoUrl || (fallbackTeam as any).logo }
+    : { initials: name.substring(0, 2).toUpperCase(), logo: undefined };
 }
