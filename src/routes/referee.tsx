@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { getMatchTitle, getCurrentPhase, eventLabel } from "@/lib/match-helpers";
 import {
   Play,
   Pause,
@@ -68,19 +69,6 @@ const penaltyButtons: { label: string; type: PenaltyType; style: string }[] = [
   { label: "YELLOW CARD", type: "Major", style: "bg-warning-soft text-warning border border-warning/40 hover:bg-warning/20 font-bold" },
   { label: "RED CARD", type: "Technical", style: "bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold shadow-sm" },
 ];
-
-function getMatchTitle(round: number, maxRound: number) {
-  if (maxRound === 1) return "Exhibition Match";
-  if (round === maxRound) return "Grand Final";
-  if (round === maxRound - 1) return "Semi-Finals";
-  if (round === maxRound - 2) return "Quarter-Finals";
-  return `Round ${round}`;
-}
-
-function getCurrentPhase(events: any[]) {
-  const phaseEvent = events.find((e: any) => e.message.startsWith("PHASE_CHANGE:"));
-  return phaseEvent ? phaseEvent.message.replace("PHASE_CHANGE:", "") : "Testing";
-}
 
 function RefereePage() {
   const { state, emit, socket } = useMockWebSocket();
@@ -1428,16 +1416,4 @@ function RefereeGroupStage({
       </div>
     </section>
   );
-}
-
-function eventLabel(type: MatchEventType): string {
-  switch (type) {
-    case "match_started": return "STARTED";
-    case "match_paused": return "PAUSED";
-    case "match_resumed": return "RESUMED";
-    case "match_ended": return "MATCH ENDED";
-    case "score_changed": return "GOAL";
-    case "penalty_issued": return "PENALTY";
-    default: return String(type);
-  }
 }
