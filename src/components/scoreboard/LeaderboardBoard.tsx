@@ -1,6 +1,6 @@
 import { cn } from "@/lib/utils";
 import type { Tournament, TournamentMatch } from "@/lib/types";
-import type { ThemeDef } from "@/routes/scoreboard";
+import type { ThemeDef } from "@/lib/scoreboard-themes";
 import { buildLeaderboardRows, sortLeaderboardRows, usePenaltiesByMatch, type LeaderboardRow } from "@/lib/leaderboard";
 
 export function LeaderboardBoard({ tournament, teams, theme, activeStage }: { tournament: Tournament; teams: any[]; theme: ThemeDef; activeStage: "group" | "knockout" }) {

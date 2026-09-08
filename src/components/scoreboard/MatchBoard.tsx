@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { formatClock } from "@/hooks/useMockWebSocket";
 import type { MatchSlot, MatchEventType } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
-import type { ThemeDef } from "@/routes/scoreboard";
+import type { ThemeDef } from "@/lib/scoreboard-themes";
 import { getCurrentPhase, eventLabel } from "@/lib/match-helpers";
 import { EventLogItem } from "@/components/scoreboard/EventLogItem";
 

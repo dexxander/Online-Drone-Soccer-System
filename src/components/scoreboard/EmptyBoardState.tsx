@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import type { ThemeDef } from "@/routes/scoreboard";
+import type { ThemeDef } from "@/lib/scoreboard-themes";
 
 export function EmptyBoardState({ theme }: { theme: ThemeDef }) {
   return (

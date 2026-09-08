@@ -1,7 +1,7 @@
 import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tournament, TournamentMatch, MatchSlot } from "@/lib/types";
-import type { ThemeDef } from "@/routes/scoreboard";
+import type { ThemeDef } from "@/lib/scoreboard-themes";
 import { getMatchTitle } from "@/lib/match-helpers";
 
 export function BracketBoard({ tournament, teams, slots, theme }: { tournament: Tournament; teams: any[]; slots: MatchSlot[]; theme: ThemeDef }) {

@@ -1,7 +1,7 @@
 import { Trophy } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tournament, TournamentMatch, MatchSlot } from "@/lib/types";
-import type { ThemeDef } from "@/routes/scoreboard";
+import type { ThemeDef } from "@/lib/scoreboard-themes";
 
 export function GroupBoard({ tournament, teams, slots, theme }: { tournament: Tournament; teams: any[]; slots: MatchSlot[]; theme: ThemeDef }) {
   const getTeamName = (id: string | null) => (id ? teams.find((t: any) => t.id === id)?.name ?? "—" : "TBD");

@@ -1,4 +1,4 @@
-import type { ThemeDef } from "@/routes/scoreboard";
+import type { ThemeDef } from "@/lib/scoreboard-themes";
 
 export function EventLogItem({ type, penaltyLevel, message, time, side, theme }: { type: 'goal' | 'penalty' | 'system' | 'phase' | 'phase_end', penaltyLevel?: 'warning' | 'yellow' | 'red' | null, message: string, time: string, side: 'left' | 'right' | 'center', theme: ThemeDef }) {
   let colorClass = `bg-black/5 dark:bg-white/5 ${theme.border}`;
