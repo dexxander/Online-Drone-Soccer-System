@@ -1,12 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { Plus, Trophy, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, X, ShieldAlert, ImagePlus, Play } from "lucide-react";
+import { Plus, Trash2, ArrowLeft, Dices, Settings2, Shuffle, Check, Play } from "lucide-react";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { EmptyState, Panel, StatCard } from "@/components/ui-kit";
+import { EmptyState, Panel } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
-import type { GroupScoringSystem, MatchmakingType, Team, TeamCategory, Tournament, TournamentMatch } from "@/lib/types";
+import type { Tournament } from "@/lib/types";
 import { exportBracketPdf, exportGroupStagePdf, exportTournamentPdf } from "@/lib/tournament-pdf";
-import { getAssignedTeamIdsExcept, getTournamentTeamIds } from "@/lib/tournament-helpers";
 import { CreateTournamentForm } from "@/components/admin-tournaments/CreateTournamentForm";
 import { ReMatchmakingModal } from "@/components/admin-tournaments/ReMatchmakingModal";
 import { GroupStage } from "@/components/admin-tournaments/GroupStage";
@@ -215,3 +214,4 @@ function AdminTournamentsPage() {
     </DashboardLayout>
   );
 }
+  
