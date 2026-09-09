@@ -111,15 +111,15 @@ function Landing() {
 
       {/* ── Hero ── */}
       <section className="relative overflow-hidden border-b border-border">
-        <video
-          className="absolute inset-0 size-full object-cover"
-          src="/videos/hero-preview.mp4"
-          autoPlay
-          muted
-          loop
-          playsInline
-          poster="/videos/hero-poster.jpg"
-        />
+        <div className="absolute inset-0 overflow-hidden">
+          <iframe
+            className="absolute left-1/2 top-1/2 h-[56.25vw] min-h-full w-[177.78vh] min-w-full -translate-x-1/2 -translate-y-1/2"
+            src="https://www.youtube.com/embed/aqz-KE-bpKQ?autoplay=1&mute=1&loop=1&playlist=aqz-KE-bpKQ&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1"
+            title="Arena preview"
+            frameBorder="0"
+            allow="autoplay; encrypted-media"
+          />
+        </div>
         <div className="absolute inset-0 bg-gradient-to-r from-[oklch(0.15_0.05_266/0.92)] via-[oklch(0.15_0.05_266/0.75)] to-[oklch(0.15_0.05_266/0.4)]" />
 
         <div className="relative mx-auto grid w-full max-w-6xl gap-10 px-6 py-24 lg:py-32">
