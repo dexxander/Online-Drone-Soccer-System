@@ -155,4 +155,13 @@
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+
+  @media (min-width: 64rem) {
+    .feature-rows > .feature-row:nth-child(even) .feature-row-inner {
+      flex-direction: row-reverse;
+    }
+  }
+  .feature-rows > .feature-row:nth-child(even) {
+    background-color: var(--color-muted);
+  }
 }

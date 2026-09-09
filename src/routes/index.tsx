@@ -1,12 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Users, ShieldCheck, Gauge, Radio, ArrowRight } from "lucide-react";
+import { Users, Radio, ArrowRight, ExternalLink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationMenu } from "@/components/NotificationMenu";
 import { LogoMark } from "@/components/LogoMark";
 import { auth } from "@/lib/store";
-import { cn } from "@/lib/utils";
+import { FeatureRow } from "@/components/landing/FeatureRow";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -40,26 +40,6 @@ const flow = [
   },
   {
     n: "02",
-    icon: ShieldCheck,
-    title: "Approve",
-    body: "Admins review every team and player, approving or rejecting from one queue.",
-    longBody: "Tournament admins review every submitted team and player in one queue, approving or rejecting registrations before they're eligible to compete.",
-    href: "/admin" as const,
-    cta: "Admin sign-in",
-    public: false,
-  },
-  {
-    n: "03",
-    icon: Gauge,
-    title: "Officiate",
-    body: "Referees run the clock, score and penalties from pitchside controls.",
-    longBody: "Referees run the match clock, score, and penalties from a pitchside control panel — built for fast, accurate calls in the middle of live play.",
-    href: "/referee" as const,
-    cta: "Referee sign-in",
-    public: false,
-  },
-  {
-    n: "04",
     icon: Radio,
     title: "Broadcast",
     body: "Every call lands on the arena scoreboard instantly, synced across screens.",
@@ -67,6 +47,27 @@ const flow = [
     href: "/scoreboard" as const,
     cta: "Watch live scoreboard",
     public: true,
+  },
+];
+
+const pastCompetitions = [
+  {
+    title: "Placeholder: Competition name / headline",
+    source: "Publication name",
+    date: "Month Year",
+    url: "https://example.com",
+  },
+  {
+    title: "Placeholder: Competition name / headline",
+    source: "Publication name",
+    date: "Month Year",
+    url: "https://example.com",
+  },
+  {
+    title: "Placeholder: Competition name / headline",
+    source: "Publication name",
+    date: "Month Year",
+    url: "https://example.com",
   },
 ];
 
@@ -187,60 +188,54 @@ function Landing() {
         </div>
       </section>
 
-      {/* ── How it works ── */}
-      <section className="border-b border-border bg-background py-24">
+      <div className="feature-rows">
+        {flow.map((step) => (
+          <FeatureRow
+            key={step.n}
+            icon={step.icon}
+            title={step.title}
+            body={step.longBody ?? step.body}
+            href={step.href}
+            cta={step.cta}
+            showCta={step.public}
+          />
+        ))}
+      </div>
+
+      {/* ── Past Competitions ── */}
+      <section className="border-b border-border bg-muted/20 py-24">
         <div className="mx-auto w-full max-w-6xl px-6">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
-            From registration to broadcast
+            Past competitions
           </h2>
           <p className="mt-3 max-w-xl text-muted-foreground">
-            One system carries a match through every stage — no spreadsheets, no separate scoreboard app.
+            Coverage from tournaments run through this system.
           </p>
 
-          <div className="mt-16 flex flex-col gap-20">
-            {flow.map((step, i) => (
-              <div
-                key={step.n}
-                className={cn(
-                  "flex flex-col items-center gap-10 lg:flex-row lg:gap-16",
-                  i % 2 === 1 && "lg:flex-row-reverse"
-                )}
+          <div className="mt-10 flex snap-x snap-mandatory gap-6 overflow-x-auto pb-4 hide-scrollbar">
+            {pastCompetitions.map((item, i) => (
+              <a
+                key={i}
+                href={item.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex w-[300px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-card transition-colors hover:border-primary/40"
               >
-                <div className="flex-1">
-                  <div className="flex items-center gap-3">
-                    <step.icon className="size-6 text-primary" />
-                    <span className="font-mono text-sm text-muted-foreground">{step.n}</span>
-                  </div>
-                  <h3 className="mt-4 text-2xl font-bold text-foreground">{step.title}</h3>
-                  <p className="mt-3 max-w-md text-muted-foreground">
-                    {step.longBody ?? step.body}
-                  </p>
-
-                  <div className="mt-6">
-                    {step.public ? (
-                      <Link
-                        to={step.href}
-                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lift transition-colors hover:bg-primary/90"
-                      >
-                        {step.cta} <ArrowRight className="size-4" />
-                      </Link>
-                    ) : (
-                      <Link
-                        to={step.href}
-                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
-                      >
-                        {step.cta} <ArrowRight className="size-3.5" />
-                      </Link>
-                    )}
-                  </div>
+                <div className="flex aspect-video items-center justify-center bg-muted/40 text-sm text-muted-foreground">
+                  Thumbnail placeholder
                 </div>
-
-                <div className="flex-1">
-                  <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
-                    Media placeholder — {step.title}
-                  </div>
+                <div className="flex flex-1 flex-col p-5">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    {item.source} · {item.date}
+                  </span>
+                  <h3 className="mt-2 flex-1 text-sm font-bold text-foreground group-hover:text-primary">
+                    {item.title}
+                  </h3>
+                  <span className="mt-4 inline-flex items-center gap-1 text-xs font-semibold text-primary">
+                    Read article <ExternalLink className="size-3" />
+                  </span>
                 </div>
-              </div>
+              </a>
             ))}
           </div>
         </div>
