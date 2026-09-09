@@ -50,7 +50,7 @@ export function AccountMenu() {
     return (
       <Link
         to="/login"
-        className="rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground"
+        className="rounded-lg border border-border bg-background px-4 py-2 text-[13px] font-semibold text-foreground shadow-sm transition-colors hover:bg-muted"
       >
         Sign in
       </Link>

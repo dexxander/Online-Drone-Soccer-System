@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Users, Radio, ArrowRight, Gauge, Trophy, type LucideIcon } from "lucide-react";
+import { Users, Radio, ArrowRight, Gauge, Trophy, Phone, Mail, type LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { AccountMenu } from "@/components/AccountMenu";
@@ -53,6 +53,22 @@ const flow = [
 
 const newsItems: { url: string; thumbnail?: string }[] = [
   { url: "https://sabah.sinchew.com.my/news/20260818/sabah/7769674", thumbnail: "/news/article1.jpg" },
+];
+
+const sponsors: { name: string; logo?: string }[] = [
+  { name: "Sponsor placeholder" },
+  { name: "Sponsor placeholder" },
+  { name: "Sponsor placeholder" },
+];
+
+const contactInfo = {
+  phone: "+60 12-345 6789",
+  email: "contact@example.com",
+};
+
+const socialLinks: { label: string; url: string }[] = [
+  { label: "Facebook", url: "https://facebook.com" },
+  { label: "Instagram", url: "https://instagram.com" },
 ];
 
 function Landing() {
@@ -151,19 +167,10 @@ function Landing() {
               <LiveTicker />
             </div>
           </div>
-          <div className="mt-16 grid grid-cols-2 gap-px overflow-hidden rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md sm:grid-cols-4">
+          <div className="mt-16 grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-white/15 bg-white/10 backdrop-blur-md sm:grid-cols-3">
             <Stat value={String(registeredClubs)} label="Registered clubs" icon={Users} />
             <Stat value={String(matchesOfficiated)} label="Matches officiated" icon={Gauge} />
             <Stat value={String(activeTournaments)} label="Active tournaments" icon={Trophy} />
-            <div className="flex flex-col justify-center gap-2 bg-white/5 px-6 py-6">
-              <span className="inline-flex items-center gap-2 font-mono text-2xl font-bold tabular-nums text-gold">
-                <span className="size-2 animate-pulse rounded-full bg-gold shadow-[0_0_8px_2px_var(--color-gold)]" />
-                Live
-              </span>
-              <span className="text-xs uppercase tracking-wider text-white/60">
-                Synced across every screen
-              </span>
-            </div>
           </div>
         </div>
       </section>
@@ -201,10 +208,61 @@ function Landing() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-border py-8">
-        <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
-          AW Drone Soccer Leagues System
-        </p>
+      <footer className="border-t border-border">
+        <div className="mx-auto grid w-full max-w-6xl gap-10 divide-y divide-border px-6 py-12 sm:grid-cols-2 sm:gap-8 sm:divide-x sm:divide-y-0">
+          <div className="sm:pr-8">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Collaborators &amp; Sponsors
+            </h3>
+            <div className="mt-5 flex flex-wrap gap-4">
+              {sponsors.map((sponsor, i) => (
+                <div
+                  key={i}
+                  className="flex h-16 w-32 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-center text-[11px] text-muted-foreground"
+                >
+                  {sponsor.logo ? (
+                    <img src={sponsor.logo} alt={sponsor.name} className="max-h-full max-w-full object-contain p-2" />
+                  ) : (
+                    sponsor.name
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-10 sm:pl-8 sm:pt-0">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Contact Us
+            </h3>
+            <div className="mt-5 flex flex-col gap-3">
+              <a href={`tel:${contactInfo.phone}`} className="inline-flex items-center gap-2 text-sm text-foreground hover:text-primary">
+                <Phone className="size-4 text-muted-foreground" /> {contactInfo.phone}
+              </a>
+              <a href={`mailto:${contactInfo.email}`} className="inline-flex items-center gap-2 text-sm text-foreground hover:text-primary">
+                <Mail className="size-4 text-muted-foreground" /> {contactInfo.email}
+              </a>
+            </div>
+            <div className="mt-5 flex flex-wrap gap-2">
+              {socialLinks.map((social) => (
+                <a
+                  key={social.label}
+                  href={social.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                >
+                  {social.label}
+                </a>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-border py-6">
+          <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
+            AW Drone Soccer Leagues System
+          </p>
+        </div>
       </footer>
     </div>
   );
