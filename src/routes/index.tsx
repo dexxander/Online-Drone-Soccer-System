@@ -30,21 +30,23 @@ const flow = [
   {
     n: "01",
     icon: Users,
+    image: "gallery/register-team.jpeg",
     title: "Register",
     body: "Coaches submit team details and a full roster through a guided portal.",
-    longBody: "Coaches create a team profile and submit a full player roster through a guided registration portal — no paperwork, no email threads.",
+    longBody: "Team registration begins with coaches creating a team profile and submitting a complete player roster through a guided online portal. The process walks coaches through every required field step by step, so nothing is missed before submission. There is no paperwork to print, no scanned forms to email, and no back-and-forth waiting on replies. Once submitted, a team's registration moves directly into the review queue, ready for approval.",
     href: "/register-team" as const,
-    cta: "Register your team",
+    cta: "Register your team now →",
     public: true,
   },
   {
     n: "02",
     icon: Radio,
+    image: "gallery/scoreboard.png",
     title: "Broadcast",
     body: "Every call lands on the arena scoreboard instantly, synced across screens.",
-    longBody: "Every score, penalty, and phase change lands on the arena scoreboard instantly, synced across every screen in the venue.",
+    longBody: "The moment a referee logs a score, penalty, or phase change from pitchside, it appears on the arena scoreboard in real time. Every screen in the venue stays perfectly synchronized, so spectators, coaches, and players are always looking at the same information at the same moment. There is no delay between what happens on the court and what the audience sees, and no separate system to keep updated by hand.",
     href: "/scoreboard" as const,
-    cta: "Watch live scoreboard",
+    cta: "Watch live scoreboard →",
     public: true,
   },
 ];
@@ -125,6 +127,7 @@ function Landing() {
           <FeatureRow
             key={step.n}
             icon={step.icon}
+            image={step.image}
             title={step.title}
             body={step.longBody ?? step.body}
             href={step.href}

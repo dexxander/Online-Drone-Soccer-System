@@ -35,6 +35,12 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
           </Link>
           <nav className="flex items-center gap-2">
             <Link
+              to="/"
+              className="hidden rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground sm:block"
+            >
+                Home
+            </Link>
+            <Link
               to="/tournaments"
               className="hidden rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground sm:block"
             >
@@ -67,19 +73,19 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
               Collaborators &amp; Sponsors
             </h3>
-            <div className="mt-5 flex flex-wrap gap-4">
-              {sponsors.map((sponsor, i) => (
+            <div className="mt-5 flex flex-wrap items-center gap-6">
+            {sponsors.map((sponsor, i) =>
+                sponsor.logo ? (
+                <img key={i} src={sponsor.logo} alt={sponsor.name} className="h-16 w-auto object-contain" />
+                ) : (
                 <div
-                  key={i}
-                  className="flex h-16 w-32 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-center text-[11px] text-muted-foreground"
+                    key={i}
+                    className="flex h-16 w-32 items-center justify-center rounded-lg border border-dashed border-border bg-muted/20 text-center text-[11px] text-muted-foreground"
                 >
-                  {sponsor.logo ? (
-                    <img src={sponsor.logo} alt={sponsor.name} className="max-h-full max-w-full object-contain p-2" />
-                  ) : (
-                    sponsor.name
-                  )}
+                    {sponsor.name}
                 </div>
-              ))}
+                )
+            )}
             </div>
           </div>
 
@@ -112,9 +118,9 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         <div className="border-t border-border py-6">
-          <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
-            © 2026 AW Drone Soccer Leagues System. All rights reserved.
-          </p>
+            <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
+                © {new Date().getFullYear()} AW Drone Soccer Leagues System. All rights reserved.
+            </p>
         </div>
       </footer>
     </div>

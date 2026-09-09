@@ -3,6 +3,7 @@ import type { LucideIcon } from "lucide-react";
 
 export function FeatureRow({
   icon: Icon,
+  image,
   title,
   body,
   href,
@@ -10,6 +11,7 @@ export function FeatureRow({
   showCta,
 }: {
   icon: LucideIcon;
+  image?: string;
   title: string;
   body: string;
   href: string;
@@ -21,7 +23,11 @@ export function FeatureRow({
       <div className="feature-row-inner mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-6 py-20 lg:flex-row lg:gap-16">
         <div className="w-full overflow-hidden rounded-2xl border border-border lg:w-1/2">
           <div className="flex aspect-[4/3] items-center justify-center bg-muted/40 text-sm text-muted-foreground">
-            <Icon className="size-8 opacity-30" />
+            {image ? (
+              <img src={image} alt={title} className="size-full object-cover" />
+            ) : (
+              <Icon className="size-8 opacity-30" />
+            )}
           </div>
         </div>
         <div className="w-full lg:w-1/2">
