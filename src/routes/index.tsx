@@ -174,6 +174,40 @@ function Landing() {
         </div>
       </section>
 
+      {/* ── How it works ── */}
+      <section className="border-b border-border bg-muted/20 py-20">
+        <div className="mx-auto w-full max-w-6xl px-6">
+          <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            From registration to broadcast
+          </h2>
+          <p className="mt-3 max-w-xl text-muted-foreground">
+            One system carries a match through every stage — no spreadsheets, no separate scoreboard app.
+          </p>
+
+          <div className="relative mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="pointer-events-none absolute left-0 right-0 top-8 hidden h-px bg-border lg:block" />
+            {flow.map((step) => (
+              <Link
+                key={step.n}
+                to={step.href}
+                className="group relative flex flex-col gap-4 rounded-xl border border-border bg-background p-6 shadow-card transition-colors hover:border-primary/40"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <step.icon className="size-5" />
+                  </span>
+                  <span className="font-mono text-sm text-muted-foreground">{step.n}</span>
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground group-hover:text-primary">{step.title}</h3>
+                  <p className="mt-1.5 text-sm text-muted-foreground">{step.body}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── Footer ── */}
       <footer className="border-t border-border py-8">
         <p className="mx-auto w-full max-w-6xl px-6 text-xs text-muted-foreground">
