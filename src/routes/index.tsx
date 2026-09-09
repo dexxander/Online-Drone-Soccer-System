@@ -6,6 +6,7 @@ import { AccountMenu } from "@/components/AccountMenu";
 import { NotificationMenu } from "@/components/NotificationMenu";
 import { LogoMark } from "@/components/LogoMark";
 import { auth } from "@/lib/store";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -32,28 +33,40 @@ const flow = [
     icon: Users,
     title: "Register",
     body: "Coaches submit team details and a full roster through a guided portal.",
+    longBody: "Coaches create a team profile and submit a full player roster through a guided registration portal — no paperwork, no email threads.",
     href: "/register-team" as const,
+    cta: "Register your team",
+    public: true,
   },
   {
     n: "02",
     icon: ShieldCheck,
     title: "Approve",
     body: "Admins review every team and player, approving or rejecting from one queue.",
+    longBody: "Tournament admins review every submitted team and player in one queue, approving or rejecting registrations before they're eligible to compete.",
     href: "/admin" as const,
+    cta: "Admin sign-in",
+    public: false,
   },
   {
     n: "03",
     icon: Gauge,
     title: "Officiate",
     body: "Referees run the clock, score and penalties from pitchside controls.",
+    longBody: "Referees run the match clock, score, and penalties from a pitchside control panel — built for fast, accurate calls in the middle of live play.",
     href: "/referee" as const,
+    cta: "Referee sign-in",
+    public: false,
   },
   {
     n: "04",
     icon: Radio,
     title: "Broadcast",
     body: "Every call lands on the arena scoreboard instantly, synced across screens.",
+    longBody: "Every score, penalty, and phase change lands on the arena scoreboard instantly, synced across every screen in the venue.",
     href: "/scoreboard" as const,
+    cta: "Watch live scoreboard",
+    public: true,
   },
 ];
 
@@ -175,7 +188,7 @@ function Landing() {
       </section>
 
       {/* ── How it works ── */}
-      <section className="border-b border-border bg-muted/20 py-20">
+      <section className="border-b border-border bg-background py-24">
         <div className="mx-auto w-full max-w-6xl px-6">
           <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
             From registration to broadcast
@@ -184,25 +197,50 @@ function Landing() {
             One system carries a match through every stage — no spreadsheets, no separate scoreboard app.
           </p>
 
-          <div className="relative mt-12 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-            <div className="pointer-events-none absolute left-0 right-0 top-8 hidden h-px bg-border lg:block" />
-            {flow.map((step) => (
-              <Link
+          <div className="mt-16 flex flex-col gap-20">
+            {flow.map((step, i) => (
+              <div
                 key={step.n}
-                to={step.href}
-                className="group relative flex flex-col gap-4 rounded-xl border border-border bg-background p-6 shadow-card transition-colors hover:border-primary/40"
+                className={cn(
+                  "flex flex-col items-center gap-10 lg:flex-row lg:gap-16",
+                  i % 2 === 1 && "lg:flex-row-reverse"
+                )}
               >
-                <div className="flex items-center gap-3">
-                  <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <step.icon className="size-5" />
-                  </span>
-                  <span className="font-mono text-sm text-muted-foreground">{step.n}</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <step.icon className="size-6 text-primary" />
+                    <span className="font-mono text-sm text-muted-foreground">{step.n}</span>
+                  </div>
+                  <h3 className="mt-4 text-2xl font-bold text-foreground">{step.title}</h3>
+                  <p className="mt-3 max-w-md text-muted-foreground">
+                    {step.longBody ?? step.body}
+                  </p>
+
+                  <div className="mt-6">
+                    {step.public ? (
+                      <Link
+                        to={step.href}
+                        className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-lift transition-colors hover:bg-primary/90"
+                      >
+                        {step.cta} <ArrowRight className="size-4" />
+                      </Link>
+                    ) : (
+                      <Link
+                        to={step.href}
+                        className="inline-flex items-center gap-1.5 text-sm font-semibold text-muted-foreground hover:text-foreground"
+                      >
+                        {step.cta} <ArrowRight className="size-3.5" />
+                      </Link>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <h3 className="font-bold text-foreground group-hover:text-primary">{step.title}</h3>
-                  <p className="mt-1.5 text-sm text-muted-foreground">{step.body}</p>
+
+                <div className="flex-1">
+                  <div className="flex aspect-video w-full items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 text-sm text-muted-foreground">
+                    Media placeholder — {step.title}
+                  </div>
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
         </div>
