@@ -1,14 +1,12 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Plus, Trash2, CheckCircle2, Pencil, X, Check } from "lucide-react";
-import { AccountMenu } from "@/components/AccountMenu";
-import { NotificationMenu } from "@/components/NotificationMenu";
-import { LogoMark } from "@/components/LogoMark";
 import { EmptyState, Panel, StatusBadge } from "@/components/ui-kit";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { auth, homeForRole } from "@/lib/store";
 import type { Player, PlayerPosition, Team, TeamCategory } from "@/lib/types";
 import { Field } from "./login";
+import { PublicLayout } from "@/components/PublicLayout";
 
 export const Route = createFileRoute("/register-team")({
   beforeLoad: () => {
@@ -121,44 +119,7 @@ function RegisterTeamPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface">
-      {/* ── Public Top Navigation Header (Matching standard layout) ── */}
-      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center gap-3">
-            <LogoMark className="size-9 shadow-lift" />
-            <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
-              <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Leagues System
-              </span>
-            </span>
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Link
-              to="/tournaments"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Tournaments
-            </Link>
-            <Link
-              to="/matches"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Matches
-            </Link>
-            <Link
-              to="/about"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              About
-            </Link>
-            <NotificationMenu />
-            <AccountMenu />
-          </nav>
-        </div>
-      </header>
-
+    <PublicLayout>
       <main className="mx-auto w-full max-w-6xl px-6 py-10">
         <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
           Coach portal
@@ -363,7 +324,7 @@ function RegisterTeamPage() {
         </button>
       </form>
       </main>
-    </div>
+    </PublicLayout>
   );
 }
 

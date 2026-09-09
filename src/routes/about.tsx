@@ -1,10 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Target, Users, Camera, Github, Linkedin, Mail } from "lucide-react";
-import { AccountMenu } from "@/components/AccountMenu";
-import { NotificationMenu } from "@/components/NotificationMenu";
-import { LogoMark } from "@/components/LogoMark";
 import { auth } from "@/lib/store";
 import DroneArena from "@/components/DroneArena";
+import { PublicLayout } from "@/components/PublicLayout";
 
 export const Route = createFileRoute("/about")({
   head: () => ({
@@ -82,44 +80,7 @@ function initials(name: string) {
 
 function AboutPage() {
   return (
-    <div className="min-h-screen bg-surface">
-      {/* ── Nav ── */}
-      <header className="sticky top-0 z-20 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center gap-3">
-            <LogoMark className="size-9 shadow-lift" />
-            <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground"> AW DRONE SOCCER</span>
-              <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Leagues System
-              </span>
-            </span>
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Link
-              to="/tournaments"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Tournaments
-            </Link>
-            <Link
-              to="/matches"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Matches
-            </Link>
-            <Link
-              to="/about"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-bold text-foreground sm:block"
-            >
-              About
-            </Link>
-            <NotificationMenu />
-            <AccountMenu />
-          </nav>
-        </div>
-      </header>
-
+    <PublicLayout> 
       {/* ── Purpose ── */}
       <section className="border-b border-border">
         <div className="mx-auto grid w-full max-w-6xl items-center gap-10 px-6 py-16 lg:grid-cols-2 lg:gap-14">
@@ -250,6 +211,6 @@ function AboutPage() {
           AW Drone Soccer Leagues System
         </p>
       </footer>
-    </div>
+    </PublicLayout>
   );
 }

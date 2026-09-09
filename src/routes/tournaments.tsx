@@ -14,11 +14,9 @@ import {
   ArrowRight,
 } from "lucide-react";
 import { useMockWebSocket } from "@/hooks/useMockWebSocket";
-import { AccountMenu } from "@/components/AccountMenu";
-import { NotificationMenu } from "@/components/NotificationMenu";
-import { LogoMark } from "@/components/LogoMark";
 import { auth } from "@/lib/store";
 import type { MatchStatus, Tournament, TournamentMatch } from "@/lib/types";
+import { PublicLayout } from "@/components/PublicLayout";
 
 export const Route = createFileRoute("/tournaments")({
   head: () => ({
@@ -117,44 +115,7 @@ function TournamentsUserPage() {
   const isCoach = currentUser?.role === "coach";
 
   return (
-    <div className="min-h-screen bg-surface text-foreground">
-      {/* ── Public Top Navigation Header (Identical to Landing Page Nav) ── */}
-      <header className="sticky top-0 z-40 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-6">
-          <Link to="/" className="flex items-center gap-3">
-            <LogoMark className="size-9 shadow-lift" />
-            <span className="leading-tight">
-              <span className="block text-[13px] font-bold text-foreground">AW DRONE SOCCER</span>
-              <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-muted-foreground">
-                Leagues System
-              </span>
-            </span>
-          </Link>
-          <nav className="flex items-center gap-2">
-            <Link
-              to="/tournaments"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-bold text-foreground sm:block"
-            >
-              Tournaments
-            </Link>
-            <Link
-              to="/matches"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              Matches
-            </Link>
-            <Link
-              to="/about"
-              className="hidden rounded-lg px-3 py-2 text-[13px] font-semibold text-muted-foreground hover:text-foreground sm:block"
-            >
-              About
-            </Link>
-            <NotificationMenu />
-            <AccountMenu />
-          </nav>
-        </div>
-      </header>
-
+    <PublicLayout>
       {/* ── Live Score Ticker Banner (if match is live) ── */}
       {isMatchLive && (
         <div className="border-b border-primary/30 bg-primary/10 px-6 py-2.5 shadow-inner">
@@ -472,19 +433,6 @@ function TournamentsUserPage() {
           </aside>
         </div>
       </main>
-
-      {/* ── Public Footer ── */}
-      <footer className="mt-12 border-t border-border bg-background py-8">
-        <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-4 px-6 md:flex-row text-xs text-muted-foreground">
-          <p>© 2026 Online Drone Soccer System. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <Link to="/about" className="hover:text-foreground">About Platform</Link>
-            <Link to="/tournaments" className="hover:text-foreground">Tournaments Hub</Link>
-            <Link to="/matches" className="hover:text-foreground">Matches & Brackets</Link>
-            <Link to="/scoreboard" className="hover:text-foreground">Arena Scoreboard</Link>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </PublicLayout>
   );
 }
