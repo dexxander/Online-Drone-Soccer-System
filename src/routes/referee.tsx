@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { getMatchTitle, getCurrentPhase, eventLabel } from "@/lib/match-helpers";
 import { NavCard } from "@/components/referee/NavCard";
 import { TeamPanel } from "@/components/referee/TeamPanel";
@@ -8,8 +8,6 @@ import {
   Play,
   Pause,
   Square,
-  Minus,
-  Plus,
   Swords,
   Trophy,
   Monitor,
@@ -25,10 +23,6 @@ import {
   Trash2,
   AlertCircle,
   ListOrdered,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  ArrowLeftRight,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { RefereeLayout } from "@/components/RefereeLayout";
@@ -36,18 +30,9 @@ import { EmptyState, Panel } from "@/components/ui-kit";
 import { Switch } from "@/components/ui/switch";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { cn } from "@/lib/utils";
-import type { Match, MatchEventType, MatchSlot, MatchSlotId, PenaltyType, TournamentMatch, Tournament } from "@/lib/types";
+import type { Match, MatchSlot, MatchSlotId, PenaltyType, TournamentMatch, Tournament } from "@/lib/types";
 import { calculateEffectivePenalties } from "@/lib/penalties";
-import {
-  buildLeaderboardRows,
-  sortLeaderboardRows,
-  usePenaltiesByMatch,
-  useLeaderboardStageSync,
-  type LeaderboardStage,
-  type LeaderboardRow,
-  type SortKey,
-  type SortDir,
-} from "@/lib/leaderboard";
+import { useLeaderboardStageSync } from "@/lib/leaderboard";
 
 import {
   auth,
