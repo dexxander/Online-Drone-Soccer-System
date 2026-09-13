@@ -112,7 +112,7 @@ export function MatchBoard({
     return (
       <div className="flex flex-col gap-4">
         <div className={cn(
-          "relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-xl border flex-1 transition-all duration-700 backdrop-blur-md", 
+          "relative z-0 flex flex-col items-center justify-center overflow-hidden rounded-lg border flex-1 transition-all duration-700 backdrop-blur-md", 
           panelPadding, theme.cardBg, colorTheme.bg, 
           isWinner ? `ring-2 border-transparent ${colorTheme.ring}` : 
           isTeamDraw ? `ring-2 border-transparent ring-amber-400/50` : colorTheme.border
@@ -158,7 +158,7 @@ export function MatchBoard({
   };
 
   const EventLogPanel = (
-    <div className={cn("flex flex-col overflow-hidden rounded-xl border transition-all duration-700 backdrop-blur-md", theme.cardBg, theme.border)}>
+    <div className={cn("flex flex-col overflow-hidden rounded-lg border transition-all duration-700 backdrop-blur-md", theme.cardBg, theme.border)}>
       <div className={cn("border-b px-4 py-3 bg-black/10 dark:bg-white/5", theme.border)}>
         <h3 className={cn("text-xs font-bold uppercase tracking-widest drop-shadow-sm", theme.textMuted)}>Event Log</h3>
       </div>
@@ -256,7 +256,7 @@ export function MatchBoard({
         <p className={cn("mt-1 text-sm font-semibold uppercase tracking-widest", theme.textMuted)}>{tournamentName}</p>
       </div>
 
-      <div className={cn("flex flex-col items-center justify-center rounded-xl border p-6 shadow-sm transition-all duration-700 backdrop-blur-md", theme.cardBg, theme.border)}>
+      <div className={cn("flex flex-col items-center justify-center rounded-lg border p-6 shadow-sm transition-all duration-700 backdrop-blur-md", theme.cardBg, theme.border)}>
         <p className={cn("font-mono font-bold tabular-nums", theme.clock, clockTextClass)}>
           {formatClock(remainingMs)}
         </p>
@@ -272,9 +272,9 @@ export function MatchBoard({
       {!isFull && EventLogPanel}
 
       {showTimeUpNotice && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-xl bg-slate-950/70 p-6 text-center backdrop-blur-md animate-in fade-in duration-500">
+        <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-hidden rounded-lg bg-slate-950/70 p-6 text-center backdrop-blur-md animate-in fade-in duration-500">
           <div className={cn(
-            "relative w-full max-w-xl overflow-hidden rounded-2xl border-2 bg-slate-950/95 px-8 py-10 text-white shadow-2xl sm:px-12 animate-in zoom-in-95 duration-500",
+            "relative w-full max-w-xl overflow-hidden rounded-lg border-2 bg-slate-950/95 px-8 py-10 text-white shadow-2xl sm:px-12 animate-in zoom-in-95 duration-500",
             isHalfTimeNotice ? "border-amber-400/60 shadow-[0_0_40px_rgba(251,191,36,0.2)]" : "border-red-400/60 shadow-[0_0_40px_rgba(248,113,113,0.2)]",
           )}>
             <div className={cn("absolute inset-x-0 top-0 h-2", isHalfTimeNotice ? "bg-amber-400" : "bg-red-500")} />
@@ -295,10 +295,10 @@ export function MatchBoard({
 
       {/* Broadcast-Style Winner/Draw Graphic */}
       {showWinnerOverlay && matchResultTitle && (
-        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center overflow-hidden rounded-xl bg-black/50 backdrop-blur-md animate-in fade-in duration-700">
-          <div className={`relative flex flex-col items-center justify-center rounded-2xl border bg-gradient-to-b from-slate-950/90 to-black/90 px-12 py-10 animate-in zoom-in-90 slide-in-from-bottom-8 duration-700 ease-out backdrop-blur-xl ${isDraw ? 'border-amber-500/40 shadow-[0_0_80px_-15px_rgba(245,158,11,0.5)]' : 'border-emerald-500/40 shadow-[0_0_80px_-15px_rgba(16,185,129,0.5)]'}`}>
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center overflow-hidden rounded-lg bg-black/50 backdrop-blur-md animate-in fade-in duration-700">
+          <div className={`relative flex flex-col items-center justify-center rounded-lg border bg-gradient-to-b from-slate-950/90 to-black/90 px-12 py-10 animate-in zoom-in-90 slide-in-from-bottom-8 duration-700 ease-out backdrop-blur-xl ${isDraw ? 'border-amber-500/40 shadow-[0_0_80px_-15px_rgba(245,158,11,0.5)]' : 'border-emerald-500/40 shadow-[0_0_80px_-15px_rgba(16,185,129,0.5)]'}`}>
             
-            <div className={`absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] via-transparent to-transparent opacity-100 rounded-2xl ${isDraw ? 'from-amber-900/40' : 'from-emerald-900/40'}`} />
+            <div className={`absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] via-transparent to-transparent opacity-100 rounded-lg ${isDraw ? 'from-amber-900/40' : 'from-emerald-900/40'}`} />
 
             <div className={`relative z-10 mb-5 flex size-20 items-center justify-center rounded-full border backdrop-blur-md ${isDraw ? 'border-amber-400/40 bg-amber-500/20 shadow-[0_0_30px_rgba(245,158,11,0.3)]' : 'border-emerald-400/40 bg-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.3)]'}`}>
               {isDraw ? (

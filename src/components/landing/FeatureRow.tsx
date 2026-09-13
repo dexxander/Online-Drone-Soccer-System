@@ -21,7 +21,7 @@ export function FeatureRow({
   return (
     <section className="feature-row border-b border-border">
       <div className="feature-row-inner mx-auto flex w-full max-w-6xl flex-col items-center gap-10 px-6 py-20 lg:flex-row lg:gap-16">
-        <div className="w-full overflow-hidden rounded-2xl border border-border lg:w-1/2">
+        <div className="w-full overflow-hidden rounded-none border border-border lg:w-1/2">
           <div className="flex aspect-[4/3] items-center justify-center bg-muted/40 text-sm text-muted-foreground">
             {image ? (
               <img src={image} alt={title} className="size-full object-cover" />
