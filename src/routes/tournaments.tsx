@@ -128,8 +128,8 @@ function TournamentsUserPage() {
                 {liveMatch.tournamentName || "League Match"}:
               </span>
               <span className="font-semibold text-foreground">
-                {liveMatch.teamAName} <span className="text-primary font-bold">{liveMatch.scoreA}</span> -{" "}
-                <span className="text-primary font-bold">{liveMatch.scoreB}</span> {liveMatch.teamBName}
+                {liveMatch.teamAName} <span className="text-gold font-bold">{liveMatch.scoreA}</span> -{" "}
+                <span className="text-gold font-bold">{liveMatch.scoreB}</span> {liveMatch.teamBName}
               </span>
             </div>
 
@@ -144,40 +144,42 @@ function TournamentsUserPage() {
       )}
 
       {/* ── Main Tournament Portal Content ── */}
-      <main className="mx-auto max-w-6xl px-6 py-8">
-        {/* Page Title & Search Bar */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-6 mb-8">
+      <div className="border-b border-border bg-[oklch(0.18_0.05_266)]">
+        <div className="mx-auto flex max-w-6xl flex-col gap-4 px-6 py-12 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">
               Tournament Hub
             </p>
-            <h1 className="mt-1 text-3xl font-bold tracking-tight text-foreground">
-              Tournaments & Upcoming Matches
+            <h1 className="mt-1 text-3xl font-bold tracking-tight text-white sm:text-4xl">
+              Tournaments &amp; Upcoming Matches
             </h1>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Track upcoming tournaments, match start dates & times, and league announcements.
+            <p className="mt-2 text-sm text-white/70">
+              Track upcoming tournaments, match start dates &amp; times, and league announcements.
             </p>
           </div>
 
           <div className="relative w-full sm:w-72">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/50" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search matches, teams, news..."
-              className="w-full rounded-xl border border-border bg-background py-2 pl-9 pr-3 text-xs font-medium text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary shadow-sm"
+              className="w-full rounded-lg border border-white/20 bg-white/10 py-2.5 pl-9 pr-3 text-sm font-medium text-white placeholder:text-white/50 backdrop-blur-sm focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/40"
             />
           </div>
         </div>
-
+      </div>
+      <main className="mx-auto max-w-6xl px-6 py-8">
         {/* 3-Column Tournament Hub Grid */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-12">
           {/* ── LEFT COLUMN: Categories & Platform Info (3 Cols) ── */}
           <aside className="space-y-6 lg:col-span-3">
-            <div className="rounded-2xl border border-border bg-background p-5 shadow-card space-y-4">
+            <div className="rounded-lg border border-border border-t-2 border-t-primary bg-background p-5 shadow-card space-y-4">
               <div className="flex items-center gap-2 border-b border-border pb-3">
-                <Layers className="size-4 text-primary" />
+                <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Layers className="size-4" />
+                </span>
                 <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                   News Categories
                 </h2>
@@ -205,10 +207,13 @@ function TournamentsUserPage() {
             </div>
 
             {/* Platform Highlights Box */}
-            <div className="rounded-2xl border border-border bg-gradient-to-br from-primary/10 via-background to-muted/50 p-5 shadow-card space-y-3">
-              <div className="flex items-center gap-2 text-primary font-bold text-xs">
-                <Sparkles className="size-4" /> Real-Time League Sync
-              </div>
+            <div className="rounded-lg border border-border bg-gradient-to-br from-primary/10 via-background to-muted/50 p-5 shadow-card space-y-3">
+              <span className="flex size-8 items-center justify-center rounded-full bg-primary/15 text-primary">
+                <Sparkles className="size-4" />
+              </span>
+              <span>
+                Want to browse previous matches?
+              </span>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 All tournament brackets, upcoming match start dates, referee calls, and live arena scoreboards are synced instantaneously across all devices.
               </p>
@@ -227,9 +232,9 @@ function TournamentsUserPage() {
           <section className="space-y-6 lg:col-span-5">
             {/* Featured Hero News Banner */}
             {pinnedAnnouncement && (
-              <div className="relative overflow-hidden rounded-2xl border border-border bg-background p-6 shadow-card hover:border-primary/50 transition-all">
+              <div className="relative overflow-hidden rounded-lg border border-border border-l-4 border-l-gold bg-background p-6 shadow-card hover:border-primary/50 transition-all">
                 <div className="flex items-center justify-between gap-2 text-xs font-bold text-primary mb-2">
-                  <span className="inline-flex items-center gap-1 rounded-md border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-1 rounded-md border border-gold/40 bg-gold/15 px-2 py-0.5 text-[10px] uppercase tracking-wider text-gold-foreground">
                     <Pin className="size-3" /> Featured Announcement
                   </span>
                   <span className="text-muted-foreground font-normal">
@@ -261,7 +266,12 @@ function TournamentsUserPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <Newspaper className="size-4 text-primary" /> Latest League Updates
+                  <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Newspaper className="size-4" />
+                  </span>
+                  <span>
+                    Latest League Updates
+                  </span>
                 </h2>
                 <span className="text-xs text-muted-foreground">
                   Showing {filteredAnnouncements.length} Articles
@@ -269,15 +279,16 @@ function TournamentsUserPage() {
               </div>
 
               {filteredAnnouncements.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted-foreground">
-                  No announcements found matching your filter.
+                <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-muted/10 p-10 text-center">
+                  <Newspaper className="size-6 text-muted-foreground/50" />
+                  <p className="text-sm text-muted-foreground">No announcements found matching your filter.</p>
                 </div>
               ) : (
                 <div className="space-y-3">
                   {filteredAnnouncements.map((item) => (
                     <article
                       key={item.id}
-                      className="rounded-xl border border-border bg-background p-4 shadow-xs hover:border-primary/40 transition-colors"
+                      className="rounded-lg border border-border bg-background p-4 shadow-xs hover:border-primary/40 transition-colors"
                     >
                       <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
                         <span className="inline-flex items-center gap-1 rounded bg-muted px-2 py-0.5 font-semibold text-foreground">
@@ -306,10 +317,15 @@ function TournamentsUserPage() {
           {/* ── RIGHT COLUMN: Upcoming Matches & Upcoming Tournaments (4 Cols) ── */}
           <aside className="space-y-8 lg:col-span-4">
             {/* UPCOMING MATCHES BOX */}
-            <div className="rounded-2xl border border-border bg-background p-5 shadow-card space-y-4">
+            <div className="rounded-lg border border-border border-t-2 border-t-primary bg-background p-5 shadow-card space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
-                  <Clock className="size-4 text-primary" /> Upcoming Matches
+                  <span className="flex size-8 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Clock className="size-4" /> 
+                  </span>
+                  <span>
+                    Upcoming Matches
+                  </span>
                 </h2>
                 <Link to="/matches" className="text-[11px] font-bold text-primary hover:underline">
                   View All ({upcomingMatches.length})
@@ -330,7 +346,7 @@ function TournamentsUserPage() {
                     return (
                       <div
                         key={match.id}
-                        className="rounded-xl border border-border bg-muted/20 p-3 shadow-xs hover:border-primary/40 transition-all space-y-2"
+                        className="rounded-lg border border-border bg-muted/20 p-3 shadow-xs hover:border-primary/40 transition-all space-y-2"
                       >
                         {/* Round Header & Scheduled Date/Time */}
                         <div className="flex items-center justify-between text-[10px] font-bold text-muted-foreground border-b border-border/40 pb-1.5">
@@ -378,10 +394,15 @@ function TournamentsUserPage() {
             </div>
 
             {/* UPCOMING & ACTIVE TOURNAMENTS BOX */}
-            <div className="rounded-2xl border border-border bg-background p-5 shadow-card space-y-4">
+            <div className="rounded-lg border border-border border-t-2 border-t-gold bg-background p-5 shadow-card space-y-4">
               <div className="flex items-center justify-between border-b border-border pb-3">
                 <h2 className="text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-2">
-                  <Trophy className="size-4 text-primary" /> Upcoming Tournaments
+                  <span className="flex size-8 items-center justify-center rounded-full bg-gold/15 text-gold">
+                    <Trophy className="size-4" />
+                  </span>
+                  <span>
+                    Upcoming Tournaments
+                  </span>
                 </h2>
                 <span className="text-[11px] font-bold text-muted-foreground">
                   {tournaments.length} Active
@@ -397,7 +418,7 @@ function TournamentsUserPage() {
                   {tournaments.map((t) => (
                     <div
                       key={t.id}
-                      className="rounded-xl border border-border bg-muted/20 p-3 shadow-xs space-y-2 hover:border-primary/40 transition-colors"
+                      className="rounded-lg border border-border bg-muted/20 p-3 shadow-xs space-y-2 hover:border-primary/40 transition-colors"
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-bold text-foreground hover:text-primary">

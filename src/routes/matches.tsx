@@ -62,9 +62,13 @@ function MatchesPage() {
   const tournaments = state.tournaments;
   const liveMatch = state.match;
 
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(tournaments[0]?.id ?? null);
+  const activeTournament = tournaments.find((t) => t.id === selectedTournamentId) ?? tournaments[0] ?? null;
+
   const rows = useMemo(
     () =>
       tournaments
+        .filter((t) => !activeTournament || t.id === activeTournament.id)
         .flatMap((t) =>
           t.matches
             .filter((m) => !m.isBye && (m.teamAId || m.teamBId))
@@ -76,7 +80,7 @@ function MatchesPage() {
             a.match.round - b.match.round ||
             a.match.slot - b.match.slot,
         ),
-    [tournaments],
+    [tournaments, activeTournament],
   );
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,23 +114,27 @@ function MatchesPage() {
 
   return (
     <PublicLayout>
-      <main className="mx-auto w-full max-w-6xl px-6 py-10">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-          AW DRONE SOCCER LEAGUES SYSTEM
-        </p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground">Matches</h1>
-        <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-          Every scheduled match, the live scoreboard and the tournament brackets — all synced from
-          the same shared state.
-        </p>
+      <div className="border-b border-border bg-[oklch(0.18_0.05_266)]">
+        <div className="mx-auto max-w-6xl px-6 py-12">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">
+            AW Drone Soccer Leagues System
+          </p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">Matches</h1>
+          <p className="mt-2 max-w-lg text-sm text-white/70">
+            Every scheduled match, the live scoreboard, and the tournament brackets, all synced from
+            the same shared state.
+          </p>
+        </div>
+      </div>
 
-        <div className="mt-8 grid gap-6 lg:grid-cols-[260px_1fr] lg:items-start">
+      <main className="mx-auto w-full max-w-6xl bg-muted/20 px-6 py-10">
+        <div className="grid gap-6 lg:grid-cols-[260px_1fr] lg:items-start">
           {/* ── List of matches ── */}
           <aside className="overflow-hidden rounded-xl border border-border bg-background shadow-card">
             <div className="border-b border-border px-4 py-3">
               <h2 className="text-xs font-bold uppercase tracking-wide text-foreground">List of matches</h2>
             </div>
-            <ul className="max-h-[600px] divide-y divide-border overflow-y-auto">
+            <ul className="styled-scrollbar max-h-[600px] divide-y divide-border overflow-y-auto">
               <li>
                 <button
                   onClick={() => setSelectedId(null)}
@@ -183,7 +191,10 @@ function MatchesPage() {
             <section className="rounded-xl border border-border bg-background p-6 shadow-card">
               <div className="flex items-center justify-between">
                 <h2 className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-foreground">
-                  <Radio className="size-3.5 text-primary" /> Live score board
+                  <span className="flex size-7 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Radio className="size-3.5" />
+                  </span>
+                  Live score board
                 </h2>
                 <span
                   className={cn(
@@ -205,19 +216,19 @@ function MatchesPage() {
               <div className="mt-6 grid grid-cols-[1fr_auto_1fr] items-center gap-4">
                 <div className="text-center">
                   <p className="truncate text-sm font-bold text-foreground">{board.teamAName}</p>
-                  <p className="mt-2 font-mono text-5xl font-bold tabular-nums text-foreground">
+                  <p className={cn("mt-2 font-mono text-5xl font-bold tabular-nums", isLive ? "text-gold" : "text-foreground")}>
                     {board.scoreA}
                   </p>
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">vs</span>
                   {board.clock && (
-                    <span className="font-mono text-lg font-bold tabular-nums text-warning">{board.clock}</span>
+                    <span className="font-mono text-lg font-bold tabular-nums text-gold">{board.clock}</span>
                   )}
                 </div>
                 <div className="text-center">
                   <p className="truncate text-sm font-bold text-foreground">{board.teamBName}</p>
-                  <p className="mt-2 font-mono text-5xl font-bold tabular-nums text-foreground">
+                  <p className={cn("mt-2 font-mono text-5xl font-bold tabular-nums", isLive ? "text-gold" : "text-foreground")}>
                     {board.scoreB}
                   </p>
                 </div>
@@ -225,31 +236,59 @@ function MatchesPage() {
             </section>
 
             {/* ── Brackets ── */}
-            <section className="overflow-hidden rounded-xl border border-border bg-background shadow-card">
+            <section className="overflow-hidden rounded-lg border border-border bg-background shadow-card">
               <div className="border-b border-border px-6 py-4">
                 <h2 className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-foreground">
-                  <Trophy className="size-3.5 text-primary" /> Brackets
+                  <span className="flex size-7 items-center justify-center rounded-full bg-gold/15 text-gold">
+                    <Trophy className="size-3.5" />
+                  </span>
+                  Brackets
                 </h2>
               </div>
-              <div className="p-6">
-                {tournaments.length === 0 ? (
+
+              {tournaments.length === 0 ? (
+                <div className="p-6">
                   <EmptyState
                     title="No tournaments yet"
                     description="Brackets will appear here once an admin creates a tournament."
                   />
-                ) : (
-                  <div className="flex flex-col gap-10">
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-1 overflow-x-auto border-b border-border bg-muted/20 px-3 py-2">
                     {tournaments.map((t) => (
-                      <div key={t.id}>
-                        <p className="mb-3 text-sm font-bold text-foreground">
-                          {t.name} <span className="font-normal capitalize text-muted-foreground">· {t.status}</span>
-                        </p>
-                        <ReadOnlyBracket tournament={t} teams={teams} />
-                      </div>
+                      <button
+                        key={t.id}
+                        onClick={() => { setSelectedTournamentId(t.id); setSelectedId(null); }}
+                        className={cn(
+                          "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                          t.id === activeTournament?.id
+                            ? "bg-primary text-primary-foreground shadow-sm"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                        )}
+                      >
+                        {t.name}
+                      </button>
                     ))}
                   </div>
-                )}
-              </div>
+                  <div className="p-6">
+                    {activeTournament && (
+                      <>
+                        <p className="mb-4 text-sm font-bold text-foreground">
+                          {activeTournament.name}{" "}
+                          <span className="font-normal capitalize text-muted-foreground">· {activeTournament.status}</span>
+                        </p>
+                        <ReadOnlyBracket
+                          tournament={activeTournament}
+                          teams={teams}
+                          selectedId={selectedId}
+                          onSelect={setSelectedId}
+                        />
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
             </section>
           </div>
         </div>
@@ -260,47 +299,70 @@ function MatchesPage() {
 
 /* ── Read-only bracket — same layout as the admin bracket view, minus the
    "Win" action buttons, since visitors on this page can't decide matches. ── */
-function ReadOnlyBracket({ tournament, teams }: { tournament: Tournament; teams: Team[] }) {
-  const rounds = Math.max(...tournament.matches.map((m) => m.round));
+function ReadOnlyBracket({
+  tournament,
+  teams,
+  selectedId,
+  onSelect,
+}: {
+  tournament: Tournament;
+  teams: Team[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+}) {
+  const knockoutMatches = tournament.matches.filter((m) => (m.phase ?? "knockout") === "knockout");
+
+  if (knockoutMatches.length === 0) {
+    return <p className="text-sm text-muted-foreground">No knockout matches yet for this tournament.</p>;
+  }
+
+  const rounds = Math.max(...knockoutMatches.map((m) => m.round));
 
   return (
-    <div className="flex items-center gap-14 overflow-x-auto pb-4">
-      {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
-        const matches = tournament.matches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
-        const label = roundLabel(round, rounds);
-        const isLast = round === rounds;
-        const pairs: TournamentMatch[][] = [];
-        for (let i = 0; i < matches.length; i += 2) {
-          pairs.push([matches[i], matches[i + 1]].filter(Boolean) as TournamentMatch[]);
-        }
-        const pairGap = 28 * Math.pow(2, round);
+    <div className="overflow-x-auto pb-4">
+      <div className="flex items-stretch gap-10 min-w-max">
+        {Array.from({ length: rounds }, (_, i) => i + 1).map((round) => {
+          const matches = knockoutMatches.filter((m) => m.round === round).sort((a, b) => a.slot - b.slot);
+          const isLast = round === rounds;
+          const label = roundLabel(round, rounds);
 
-        return (
-          <div key={round} className="flex min-w-[200px] flex-col" style={{ gap: pairGap }}>
-            <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {label}
-            </p>
-            {pairs.map((pair, pi) => (
-              <div key={pi} className="relative flex flex-col justify-center gap-4">
-                {pair.map((m) => (
+          return (
+            <div key={round} className="flex w-[220px] shrink-0 flex-col">
+              <p className="mb-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                {label}
+              </p>
+              <div className="flex flex-1 flex-col justify-around gap-4">
+                {matches.map((m) => (
                   <div key={m.id} className="relative">
-                    <ReadOnlyMatchBox match={m} teams={teams} />
-                    {!isLast && <span className="absolute top-1/2 -right-7 h-px w-7 -translate-y-1/2 bg-border" />}
+                    <ReadOnlyMatchBox
+                      match={m}
+                      teams={teams}
+                      active={m.id === selectedId}
+                      onClick={() => onSelect(m.id)}
+                    />
+                    {!isLast && <span className="absolute top-1/2 -right-6 h-px w-6 -translate-y-1/2 bg-border" />}
                   </div>
                 ))}
-                {!isLast && pair.length === 2 && (
-                  <span className="absolute -right-7 w-px bg-border" style={{ top: "25%", bottom: "25%" }} />
-                )}
               </div>
-            ))}
-          </div>
-        );
-      })}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function ReadOnlyMatchBox({ match, teams }: { match: TournamentMatch; teams: Team[] }) {
+function ReadOnlyMatchBox({
+  match,
+  teams,
+  active,
+  onClick,
+}: {
+  match: TournamentMatch;
+  teams: Team[];
+  active?: boolean;
+  onClick?: () => void;
+}) {
   const row = (id: string | null) => {
     const isWinner = id && id === match.winnerId;
     return (
@@ -316,13 +378,16 @@ function ReadOnlyMatchBox({ match, teams }: { match: TournamentMatch; teams: Tea
   };
 
   return (
-    <div className="flex items-center gap-2">
-      <Trophy className="size-3.5 shrink-0 text-muted-foreground" />
-      <div className="flex-1 divide-y divide-border rounded-lg border border-border bg-background shadow-card">
-        {row(match.teamAId)}
-        {!match.isBye && row(match.teamBId)}
-        {match.isBye && <div className="px-3 py-2 text-xs text-muted-foreground">Bye</div>}
-      </div>
-    </div>
+    <button
+      onClick={onClick}
+      className={cn(
+        "w-full divide-y divide-border rounded-lg border bg-background text-left shadow-card transition-colors",
+        active ? "border-primary ring-1 ring-primary/30" : "border-border hover:border-primary/40",
+      )}
+    >
+      {row(match.teamAId)}
+      {!match.isBye && row(match.teamBId)}
+      {match.isBye && <div className="px-3 py-2 text-xs text-muted-foreground">Bye</div>}
+    </button>
   );
 }
