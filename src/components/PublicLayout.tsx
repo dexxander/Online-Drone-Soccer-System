@@ -21,6 +21,45 @@ const socialLinks: { label: string; url: string }[] = [
   { label: "Instagram", url: "https://instagram.com" },
 ];
 
+/** Hover-based nav dropdown — opens on mouse-over, no click needed. The
+ * panel sits in a zero-gap `top-full` hit area (inner `pt-2` for the visual
+ * gap) so moving the pointer from trigger to panel doesn't lose hover state. */
+function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="group relative">
+      <button type="button" className={`${navLinkClass} flex items-center gap-1`}>
+        {label}
+        <ChevronDown className="size-3 transition-transform duration-150 group-hover:rotate-180" />
+      </button>
+      <div className="invisible absolute left-0 top-full z-30 w-44 pt-2 opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
+        <div className="overflow-hidden rounded-lg border border-border bg-background py-1.5 shadow-card">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type NavRoute =
+  | "/tournaments"
+  | "/matches"
+  | "/teams"
+  | "/rankings"
+  | "/about/rules"
+  | "/about/founder"
+  | "/about/credits";
+
+function NavItem({ to, children }: { to: NavRoute; children: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+    >
+      {children}
+    </Link>
+  );
+}
+
 export function PublicLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-surface">
@@ -41,54 +80,22 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
               <Link to="/" className={navLinkClass}>
                 Home
               </Link>
-              <Link to="/tournaments" className={navLinkClass}>
-                Tournaments
-              </Link>
-              <Link to="/matches" className={navLinkClass}>
-                Matches
-              </Link>
-              <Link to="/teams" className={navLinkClass}>
-                Teams
-              </Link>
 
-              {/* Hover-based About menu — opens on mouse-over, no click needed.
-                  The panel is wrapped in a zero-gap `top-full` hit area (with
-                  inner `pt-2` for the visual gap) so moving the pointer from
-                  the trigger into the panel doesn't lose hover state. */}
-              <div className="group relative">
-                <button type="button" className={`${navLinkClass} flex items-center gap-1`}>
-                  About
-                  <ChevronDown className="size-3 transition-transform duration-150 group-hover:rotate-180" />
-                </button>
-                <div className="invisible absolute left-0 top-full z-30 w-44 pt-2 opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
-                  <div className="overflow-hidden rounded-lg border border-border bg-background py-1.5 shadow-card">
-                    <Link
-                      to="/about"
-                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      Overview
-                    </Link>
-                    <Link
-                      to="/about/rules"
-                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      Rules
-                    </Link>
-                    <Link
-                      to="/about/founder"
-                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      Founders
-                    </Link>
-                    <Link
-                      to="/about/credits"
-                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                    >
-                      Credits
-                    </Link>
-                  </div>
-                </div>
-              </div>
+              <NavGroup label="Events">
+                <NavItem to="/tournaments">Tournaments</NavItem>
+                <NavItem to="/matches">Matches</NavItem>
+              </NavGroup>
+
+              <NavGroup label="Teams">
+                <NavItem to="/teams">All Teams</NavItem>
+                <NavItem to="/rankings">Rankings</NavItem>
+              </NavGroup>
+
+              <NavGroup label="About">
+                <NavItem to="/about/rules">Rules</NavItem>
+                <NavItem to="/about/founder">Founders</NavItem>
+                <NavItem to="/about/credits">Credits</NavItem>
+              </NavGroup>
 
               <Link to="/support" className={navLinkClass}>
                 Support

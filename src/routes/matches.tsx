@@ -1,12 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
-import { Trophy, Radio } from "lucide-react";
+import { Trophy, Radio, Search } from "lucide-react";
 import { formatClock, useMatchClock, useMockWebSocket } from "@/hooks/useMockWebSocket";
 import { EmptyState, Panel } from "@/components/ui-kit";
 import { auth } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import type { MatchStatus, Team, Tournament, TournamentMatch } from "@/lib/types";
 import { PublicLayout } from "@/components/PublicLayout";
+
 
 export const Route = createFileRoute("/matches")({
   head: () => ({
@@ -62,8 +63,14 @@ function MatchesPage() {
   const tournaments = state.tournaments;
   const liveMatch = state.match;
 
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(tournaments[0]?.id ?? null);
-  const activeTournament = tournaments.find((t) => t.id === selectedTournamentId) ?? tournaments[0] ?? null;
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
+  const activeTournament = tournaments.find((t) => t.id === selectedTournamentId) ?? null;
+
+  const [tournamentQuery, setTournamentQuery] = useState("");
+  const filteredTournaments = useMemo(
+    () => tournaments.filter((t) => t.name.toLowerCase().includes(tournamentQuery.trim().toLowerCase())),
+    [tournaments, tournamentQuery],
+  );
 
   const rows = useMemo(
     () =>
@@ -112,6 +119,66 @@ function MatchesPage() {
 
   const isLive = board.status === "live" || board.status === "paused";
 
+  if (!activeTournament) {
+    return (
+      <PublicLayout>
+        <div className="border-b border-border bg-[oklch(0.18_0.05_266)]">
+          <div className="mx-auto max-w-6xl px-6 py-12">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">
+              AW Drone Soccer Leagues System
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">Matches</h1>
+            <p className="mt-2 max-w-lg text-sm text-white/70">
+              Search for a tournament to see its matches, live scoreboard and bracket.
+            </p>
+          </div>
+        </div>
+
+        <main className="mx-auto w-full max-w-2xl px-6 py-10">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              autoFocus
+              value={tournamentQuery}
+              onChange={(e) => setTournamentQuery(e.target.value)}
+              placeholder="Search tournaments…"
+              className="w-full rounded-lg border border-border bg-background py-2.5 pl-9 pr-3 text-sm text-foreground shadow-card outline-none focus:border-primary"
+            />
+          </div>
+
+          <div className="mt-4 overflow-hidden rounded-xl border border-border bg-background shadow-card">
+            {tournaments.length === 0 ? (
+              <div className="p-6">
+                <EmptyState
+                  title="No tournaments yet"
+                  description="Matches will appear here once an admin creates a tournament."
+                />
+              </div>
+            ) : filteredTournaments.length === 0 ? (
+              <p className="px-4 py-6 text-center text-xs text-muted-foreground">
+                No tournaments match "{tournamentQuery}".
+              </p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {filteredTournaments.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      onClick={() => setSelectedTournamentId(t.id)}
+                      className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors hover:bg-muted"
+                    >
+                      <span className="text-sm font-semibold text-foreground">{t.name}</span>
+                      <span className="text-xs capitalize text-muted-foreground">{t.status}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </main>
+      </PublicLayout>
+    );
+  }
+
   return (
     <PublicLayout>
       <div className="border-b border-border bg-[oklch(0.18_0.05_266)]">
@@ -121,9 +188,14 @@ function MatchesPage() {
           </p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-white sm:text-4xl">Matches</h1>
           <p className="mt-2 max-w-lg text-sm text-white/70">
-            Every scheduled match, the live scoreboard, and the tournament brackets, all synced from
-            the same shared state.
+            Every scheduled match, the live scoreboard, and the tournament bracket for this tournament.
           </p>
+          <button
+            onClick={() => { setSelectedTournamentId(null); setSelectedId(null); }}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-1.5 text-xs font-semibold text-white/90 transition-colors hover:bg-white/20"
+          >
+            <Search className="size-3.5" /> {activeTournament.name} — change tournament
+          </button>
         </div>
       </div>
 
@@ -254,40 +326,18 @@ function MatchesPage() {
                   />
                 </div>
               ) : (
-                <>
-                  <div className="flex gap-1 overflow-x-auto border-b border-border bg-muted/20 px-3 py-2">
-                    {tournaments.map((t) => (
-                      <button
-                        key={t.id}
-                        onClick={() => { setSelectedTournamentId(t.id); setSelectedId(null); }}
-                        className={cn(
-                          "shrink-0 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
-                          t.id === activeTournament?.id
-                            ? "bg-primary text-primary-foreground shadow-sm"
-                            : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                        )}
-                      >
-                        {t.name}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="p-6">
-                    {activeTournament && (
-                      <>
-                        <p className="mb-4 text-sm font-bold text-foreground">
-                          {activeTournament.name}{" "}
-                          <span className="font-normal capitalize text-muted-foreground">· {activeTournament.status}</span>
-                        </p>
-                        <ReadOnlyBracket
-                          tournament={activeTournament}
-                          teams={teams}
-                          selectedId={selectedId}
-                          onSelect={setSelectedId}
-                        />
-                      </>
-                    )}
-                  </div>
-                </>
+                <div className="p-6">
+                  <p className="mb-4 text-sm font-bold text-foreground">
+                    {activeTournament.name}{" "}
+                    <span className="font-normal capitalize text-muted-foreground">· {activeTournament.status}</span>
+                  </p>
+                  <ReadOnlyBracket
+                    tournament={activeTournament}
+                    teams={teams}
+                    selectedId={selectedId}
+                    onSelect={setSelectedId}
+                  />
+                </div>
               )}
             </section>
           </div>
