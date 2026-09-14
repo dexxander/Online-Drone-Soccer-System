@@ -25,8 +25,14 @@ import { Route as RefereeRouteImport } from './routes/referee'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RegisterTeamRouteImport } from './routes/register-team'
 import { Route as ScoreboardRouteImport } from './routes/scoreboard'
+import { Route as SupportRouteImport } from './routes/support'
+import { Route as TeamsRouteImport } from './routes/teams'
 import { Route as TicketsRouteImport } from './routes/tickets'
 import { Route as TournamentsRouteImport } from './routes/tournaments'
+import { Route as AboutCreditsRouteImport } from './routes/about.credits'
+import { Route as AboutFounderRouteImport } from './routes/about.founder'
+import { Route as AboutRulesRouteImport } from './routes/about.rules'
+import { Route as TeamsTeamIdRouteImport } from './routes/teams.$teamId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -108,6 +114,16 @@ const ScoreboardRoute = ScoreboardRouteImport.update({
   path: '/scoreboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SupportRoute = SupportRouteImport.update({
+  id: '/support',
+  path: '/support',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TeamsRoute = TeamsRouteImport.update({
+  id: '/teams',
+  path: '/teams',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const TicketsRoute = TicketsRouteImport.update({
   id: '/tickets',
   path: '/tickets',
@@ -118,10 +134,30 @@ const TournamentsRoute = TournamentsRouteImport.update({
   path: '/tournaments',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutCreditsRoute = AboutCreditsRouteImport.update({
+  id: '/credits',
+  path: '/credits',
+  getParentRoute: () => AboutRoute,
+} as any)
+const AboutFounderRoute = AboutFounderRouteImport.update({
+  id: '/founder',
+  path: '/founder',
+  getParentRoute: () => AboutRoute,
+} as any)
+const AboutRulesRoute = AboutRulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => AboutRoute,
+} as any)
+const TeamsTeamIdRoute = TeamsTeamIdRouteImport.update({
+  id: '/$teamId',
+  path: '/$teamId',
+  getParentRoute: () => TeamsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/about': typeof AboutRouteWithChildren
   '/admin': typeof AdminRoute
   '/admin-announcements': typeof AdminAnnouncementsRoute
   '/admin-audit-log': typeof AdminAuditLogRoute
@@ -136,12 +172,18 @@ export interface FileRoutesByFullPath {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/support': typeof SupportRoute
+  '/teams': typeof TeamsRouteWithChildren
   '/tickets': typeof TicketsRoute
   '/tournaments': typeof TournamentsRoute
+  '/about/credits': typeof AboutCreditsRoute
+  '/about/founder': typeof AboutFounderRoute
+  '/about/rules': typeof AboutRulesRoute
+  '/teams/$teamId': typeof TeamsTeamIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/about': typeof AboutRouteWithChildren
   '/admin': typeof AdminRoute
   '/admin-announcements': typeof AdminAnnouncementsRoute
   '/admin-audit-log': typeof AdminAuditLogRoute
@@ -156,13 +198,19 @@ export interface FileRoutesByTo {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/support': typeof SupportRoute
+  '/teams': typeof TeamsRouteWithChildren
   '/tickets': typeof TicketsRoute
   '/tournaments': typeof TournamentsRoute
+  '/about/credits': typeof AboutCreditsRoute
+  '/about/founder': typeof AboutFounderRoute
+  '/about/rules': typeof AboutRulesRoute
+  '/teams/$teamId': typeof TeamsTeamIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/about': typeof AboutRoute
+  '/about': typeof AboutRouteWithChildren
   '/admin': typeof AdminRoute
   '/admin-announcements': typeof AdminAnnouncementsRoute
   '/admin-audit-log': typeof AdminAuditLogRoute
@@ -177,8 +225,14 @@ export interface FileRoutesById {
   '/register': typeof RegisterRoute
   '/register-team': typeof RegisterTeamRoute
   '/scoreboard': typeof ScoreboardRoute
+  '/support': typeof SupportRoute
+  '/teams': typeof TeamsRouteWithChildren
   '/tickets': typeof TicketsRoute
   '/tournaments': typeof TournamentsRoute
+  '/about/credits': typeof AboutCreditsRoute
+  '/about/founder': typeof AboutFounderRoute
+  '/about/rules': typeof AboutRulesRoute
+  '/teams/$teamId': typeof TeamsTeamIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -199,8 +253,14 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/support'
+    | '/teams'
     | '/tickets'
     | '/tournaments'
+    | '/about/credits'
+    | '/about/founder'
+    | '/about/rules'
+    | '/teams/$teamId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -219,8 +279,14 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/support'
+    | '/teams'
     | '/tickets'
     | '/tournaments'
+    | '/about/credits'
+    | '/about/founder'
+    | '/about/rules'
+    | '/teams/$teamId'
   id:
     | '__root__'
     | '/'
@@ -239,13 +305,19 @@ export interface FileRouteTypes {
     | '/register'
     | '/register-team'
     | '/scoreboard'
+    | '/support'
+    | '/teams'
     | '/tickets'
     | '/tournaments'
+    | '/about/credits'
+    | '/about/founder'
+    | '/about/rules'
+    | '/teams/$teamId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AboutRoute: typeof AboutRoute
+  AboutRoute: typeof AboutRouteWithChildren
   AdminRoute: typeof AdminRoute
   AdminAnnouncementsRoute: typeof AdminAnnouncementsRoute
   AdminAuditLogRoute: typeof AdminAuditLogRoute
@@ -260,6 +332,8 @@ export interface RootRouteChildren {
   RegisterRoute: typeof RegisterRoute
   RegisterTeamRoute: typeof RegisterTeamRoute
   ScoreboardRoute: typeof ScoreboardRoute
+  SupportRoute: typeof SupportRoute
+  TeamsRoute: typeof TeamsRouteWithChildren
   TicketsRoute: typeof TicketsRoute
   TournamentsRoute: typeof TournamentsRoute
 }
@@ -378,6 +452,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ScoreboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/support': {
+      id: '/support'
+      path: '/support'
+      fullPath: '/support'
+      preLoaderRoute: typeof SupportRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/teams': {
+      id: '/teams'
+      path: '/teams'
+      fullPath: '/teams'
+      preLoaderRoute: typeof TeamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/tickets': {
       id: '/tickets'
       path: '/tickets'
@@ -392,12 +480,64 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof TournamentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about/credits': {
+      id: '/about/credits'
+      path: '/credits'
+      fullPath: '/about/credits'
+      preLoaderRoute: typeof AboutCreditsRouteImport
+      parentRoute: typeof AboutRoute
+    }
+    '/about/founder': {
+      id: '/about/founder'
+      path: '/founder'
+      fullPath: '/about/founder'
+      preLoaderRoute: typeof AboutFounderRouteImport
+      parentRoute: typeof AboutRoute
+    }
+    '/about/rules': {
+      id: '/about/rules'
+      path: '/rules'
+      fullPath: '/about/rules'
+      preLoaderRoute: typeof AboutRulesRouteImport
+      parentRoute: typeof AboutRoute
+    }
+    '/teams/$teamId': {
+      id: '/teams/$teamId'
+      path: '/$teamId'
+      fullPath: '/teams/$teamId'
+      preLoaderRoute: typeof TeamsTeamIdRouteImport
+      parentRoute: typeof TeamsRoute
+    }
   }
 }
 
+interface AboutRouteChildren {
+  AboutCreditsRoute: typeof AboutCreditsRoute
+  AboutFounderRoute: typeof AboutFounderRoute
+  AboutRulesRoute: typeof AboutRulesRoute
+}
+
+const AboutRouteChildren: AboutRouteChildren = {
+  AboutCreditsRoute: AboutCreditsRoute,
+  AboutFounderRoute: AboutFounderRoute,
+  AboutRulesRoute: AboutRulesRoute,
+}
+
+const AboutRouteWithChildren = AboutRoute._addFileChildren(AboutRouteChildren)
+
+interface TeamsRouteChildren {
+  TeamsTeamIdRoute: typeof TeamsTeamIdRoute
+}
+
+const TeamsRouteChildren: TeamsRouteChildren = {
+  TeamsTeamIdRoute: TeamsTeamIdRoute,
+}
+
+const TeamsRouteWithChildren = TeamsRoute._addFileChildren(TeamsRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AboutRoute: AboutRoute,
+  AboutRoute: AboutRouteWithChildren,
   AdminRoute: AdminRoute,
   AdminAnnouncementsRoute: AdminAnnouncementsRoute,
   AdminAuditLogRoute: AdminAuditLogRoute,
@@ -412,6 +552,8 @@ const rootRouteChildren: RootRouteChildren = {
   RegisterRoute: RegisterRoute,
   RegisterTeamRoute: RegisterTeamRoute,
   ScoreboardRoute: ScoreboardRoute,
+  SupportRoute: SupportRoute,
+  TeamsRoute: TeamsRouteWithChildren,
   TicketsRoute: TicketsRoute,
   TournamentsRoute: TournamentsRoute,
 }

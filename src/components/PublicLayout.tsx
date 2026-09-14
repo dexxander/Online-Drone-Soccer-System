@@ -1,8 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { Phone, Mail } from "lucide-react";
+import { Phone, Mail, ChevronDown } from "lucide-react";
 import { LogoMark } from "@/components/LogoMark";
 import { NotificationMenu } from "@/components/NotificationMenu";
 import { AccountMenu } from "@/components/AccountMenu";
+
+const navLinkClass =
+  "rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground";
 
 const sponsors: { name: string; logo?: string }[] = [
   { name: "Sponsor placeholder", logo: "/sponsors/kkhs.png" },
@@ -34,30 +37,64 @@ export function PublicLayout({ children }: { children: React.ReactNode }) {
             </span>
           </Link>
           <nav className="flex items-center gap-2">
-            <Link
-              to="/"
-              className="hidden rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground sm:block"
-            >
+            <div className="hidden items-center gap-2 sm:flex">
+              <Link to="/" className={navLinkClass}>
                 Home
-            </Link>
-            <Link
-              to="/tournaments"
-              className="hidden rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground sm:block"
-            >
-              Tournaments
-            </Link>
-            <Link
-              to="/matches"
-              className="hidden rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground sm:block"
-            >
-              Matches
-            </Link>
-            <Link
-              to="/about"
-              className="hidden rounded-lg px-3 py-2 font-mono text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground sm:block"
-            >
-              About
-            </Link>
+              </Link>
+              <Link to="/tournaments" className={navLinkClass}>
+                Tournaments
+              </Link>
+              <Link to="/matches" className={navLinkClass}>
+                Matches
+              </Link>
+              <Link to="/teams" className={navLinkClass}>
+                Teams
+              </Link>
+
+              {/* Hover-based About menu — opens on mouse-over, no click needed.
+                  The panel is wrapped in a zero-gap `top-full` hit area (with
+                  inner `pt-2` for the visual gap) so moving the pointer from
+                  the trigger into the panel doesn't lose hover state. */}
+              <div className="group relative">
+                <button type="button" className={`${navLinkClass} flex items-center gap-1`}>
+                  About
+                  <ChevronDown className="size-3 transition-transform duration-150 group-hover:rotate-180" />
+                </button>
+                <div className="invisible absolute left-0 top-full z-30 w-44 pt-2 opacity-0 transition-opacity duration-150 group-hover:visible group-hover:opacity-100">
+                  <div className="overflow-hidden rounded-lg border border-border bg-background py-1.5 shadow-card">
+                    <Link
+                      to="/about"
+                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Overview
+                    </Link>
+                    <Link
+                      to="/about/rules"
+                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Rules
+                    </Link>
+                    <Link
+                      to="/about/founder"
+                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Founders
+                    </Link>
+                    <Link
+                      to="/about/credits"
+                      className="block px-3.5 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                    >
+                      Credits
+                    </Link>
+                  </div>
+                </div>
+              </div>
+
+              <Link to="/support" className={navLinkClass}>
+                Support
+              </Link>
+            </div>
+
             <NotificationMenu />
             <AccountMenu />
           </nav>
