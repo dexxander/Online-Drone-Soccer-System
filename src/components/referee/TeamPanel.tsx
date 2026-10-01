@@ -88,14 +88,14 @@ export function TeamPanel({ teamName, sideLabel, initials, logo, accentColor, sc
       
       {isWinner && (
         <div className="flex justify-center">
-          <div className="flex items-center gap-2 rounded-full bg-emerald-500/15 px-5 py-1.5 text-xs font-bold tracking-widest text-emerald-600 border border-emerald-500/30 shadow-sm">
+          <div className="flex items-center gap-2 rounded-full bg-success-soft px-5 py-1.5 text-xs font-bold tracking-widest text-success border border-success/30 shadow-sm">
             <Trophy className="size-4" /> MATCH WINNER
           </div>
         </div>
       )}
       {isDraw && (
         <div className="flex justify-center">
-          <div className="flex items-center gap-2 rounded-full bg-amber-500/15 px-5 py-1.5 text-xs font-bold tracking-widest text-amber-600 border border-amber-500/30 shadow-sm">
+          <div className="flex items-center gap-2 rounded-full bg-warning-soft px-5 py-1.5 text-xs font-bold tracking-widest text-warning border border-warning/30 shadow-sm">
             <ArrowLeftRight className="size-4" /> MATCH DRAWN
           </div>
         </div>

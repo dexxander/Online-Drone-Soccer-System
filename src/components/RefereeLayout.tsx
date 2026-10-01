@@ -32,58 +32,54 @@ export function RefereeLayout({ children, match, slotId, customTitle, hideMatchD
 
   return (
     <div className="flex h-screen min-h-screen flex-col bg-surface">
-      {/* ── Top App Bar ── */}
-      <header className="z-40 flex h-20 w-full shrink-0 items-center justify-between border-b border-border bg-background px-6 lg:px-12">
-        {/* Left: Logo + Title + Match Badge */}
-        <div className="flex items-center gap-4">
-          <Link
-            to="/"
-            className="mr-2 flex size-10 items-center justify-center"
-          >
-            <LogoMark className="size-10" />
-          </Link>
-          <h1 className="hidden text-2xl font-bold tracking-tight text-foreground lg:block">
-            {tournamentName}
-          </h1>
-          <h1 className="text-xl font-bold tracking-tight text-foreground lg:hidden">
-            NDSC
-          </h1>
-          {!hideMatchDetails && (
-            <>
-              <span className="hidden rounded-full border border-border bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground sm:inline-flex">
-                {matchTitle} &gt; Match {matchDisplayNumber}
-              </span>
-              {slotId && (
-                <span className="hidden rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-primary sm:inline-flex">
-                  Court {slotId}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Right: User + Role */}
-        <div className="flex items-center gap-4">
-          {user?.name && (
-            <div className="hidden items-center gap-2 rounded-lg border border-border bg-muted px-3 py-1.5 md:flex">
-              <span className="size-2 rounded-full bg-primary" />
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-foreground">
-                {user.name}
-              </span>
-            </div>
-          )}
-          <div className="hidden items-center gap-1.5 rounded-lg bg-destructive/10 px-3 py-1.5 text-destructive sm:flex">
-            <ShieldCheck className="size-4" strokeWidth={2} />
-            <span className="text-[11px] font-bold uppercase tracking-wider">
-              Referee
+      <header className="z-40 w-full shrink-0 border-b border-white/10 bg-[oklch(0.15_0.05_266)] text-white">
+        <div className="mx-auto flex h-16 w-full max-w-[1440px] items-center justify-between px-6">
+          <Link to="/" className="flex items-center gap-3">
+            <LogoMark className="size-9 shadow-lift" />
+            <span className="leading-tight">
+              <span className="block text-[13px] font-bold">AW DRONE SOCCER</span>
+              <span className="block font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Referee Console</span>
             </span>
+          </Link>
+          <div className="flex items-center gap-3">
+            {user?.name && (
+              <div className="hidden items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 md:flex">
+                <span className="size-2 rounded-full bg-success" />
+                <span className="text-[11px] font-semibold uppercase tracking-wider">{user.name}</span>
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 rounded-full bg-gold px-3 py-1.5 text-gold-foreground">
+              <ShieldCheck className="size-4" strokeWidth={2} />
+              <span className="text-[11px] font-bold uppercase tracking-wider">Referee</span>
+            </div>
           </div>
         </div>
       </header>
 
       {/* ── Dashboard Canvas ── */}
-      <main className="flex-1 overflow-y-auto bg-surface p-4 lg:p-6">
-        <div className="mx-auto w-full max-w-[1440px]">{children}</div>
+      <main className="flex-1 overflow-y-auto bg-surface">
+        <div className="shrink-0 border-b border-border bg-[oklch(0.18_0.05_266)]">
+          <div className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-3 px-6 py-6">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gold">Match Operations</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-white sm:text-3xl">{tournamentName}</h1>
+            </div>
+            {!hideMatchDetails && (
+              <div className="flex items-center gap-2">
+                <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-white/80">
+                  {matchTitle} &gt; Match {matchDisplayNumber}
+                </span>
+                {slotId && (
+                  <span className="rounded-full bg-gold px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-gold-foreground">
+                    Court {slotId}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="mx-auto w-full max-w-[1440px] p-4 lg:p-6">{children}</div>
       </main>
     </div>
   );

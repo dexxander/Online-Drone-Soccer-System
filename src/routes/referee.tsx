@@ -302,7 +302,7 @@ function RefereePage() {
         <div className="flex-1 space-y-6">
 
           {/* ── Global Scoreboard Controls ── */}
-          <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-background p-4 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-4 panel-card p-4">
             <div className="flex items-center gap-2 text-muted-foreground">
               <Monitor className="size-5" />
               <span className="text-xs font-bold uppercase tracking-widest text-foreground">Scoreboard Output</span>
@@ -658,7 +658,7 @@ function RefereePage() {
               </div>
 
               {/* Match Clock Tile */}
-              <div className="flex flex-col items-center rounded-xl border border-border bg-background p-6 shadow-card lg:p-8">
+              <div className="panel-card flex flex-col items-center p-6 lg:p-8">
                 <div className="mb-6 flex w-full max-w-lg gap-1 rounded-lg bg-muted p-1">
                   {phases.map((phase) => (
                     <button
@@ -674,10 +674,10 @@ function RefereePage() {
                   ))}
                 </div>
 
-                <div className="mb-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                <div className="eyebrow mb-3">
                   {currentPhase} Countdown
                 </div>
-                <div className="mb-8 font-mono text-7xl font-bold tabular-nums leading-none tracking-tight text-destructive lg:text-8xl">
+                <div className="led-display mb-8 w-full max-w-lg px-6 py-5 text-center font-mono text-7xl font-bold tabular-nums leading-none tracking-tight lg:text-8xl">
                   {formatClock(remainingMs)}
                 </div>
 

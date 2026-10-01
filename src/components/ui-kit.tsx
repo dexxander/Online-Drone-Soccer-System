@@ -36,9 +36,9 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-xl border border-border bg-background shadow-card">
-      <header className="flex items-center justify-between border-b border-border px-5 py-4">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-foreground">{title}</h2>
+    <section className="panel-card overflow-hidden">
+      <header className="flex items-center justify-between border-b border-border bg-surface px-5 py-4">
+        <h2 className="eyebrow border-l-4 border-gold pl-3">{title}</h2>
         {action}
       </header>
       {children}
