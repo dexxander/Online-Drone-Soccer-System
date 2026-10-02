@@ -1,13 +1,11 @@
 import { defineConfig, type PluginOption, type UserConfig } from "vite";
 import viteReact from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
-import tsConfigPaths from "vite-tsconfig-paths";
 import { tanstackStart } from "@tanstack/react-start/plugin/vite";
 
 export default defineConfig(async ({ command }): Promise<UserConfig> => {
   const plugins: PluginOption[] = [
     tailwindcss(),
-    tsConfigPaths({ projects: ["./tsconfig.json"] }),
     tanstackStart({
       importProtection: {
         behavior: "error",
@@ -34,6 +32,7 @@ export default defineConfig(async ({ command }): Promise<UserConfig> => {
     css: { transformer: "lightningcss" },
     resolve: {
       alias: { "@": `${process.cwd()}/src` },
+      tsconfigPaths: true,
       dedupe: [
         "react",
         "react-dom",

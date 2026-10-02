@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import * as THREE from "three";
 
 /* ────────────────────────────────────────────────────────────────────────
@@ -334,14 +334,14 @@ export default function DroneArena({
     }
 
     // --- Build The Drone System ---
-    const droneSystem: Record<
-      string,
-      ReturnType<typeof createDrone> &
-        (typeof DRONES)[keyof typeof DRONES] & { velocity: THREE.Vector3; isDragging: boolean; radius: number }
-    > = {} as any;
+    type DroneKey = keyof typeof DRONES;
+    type DroneState = ReturnType<typeof createDrone> &
+      (typeof DRONES)[DroneKey] & { velocity: THREE.Vector3; isDragging: boolean; radius: number };
+    const droneSystem = {} as Record<DroneKey, DroneState>;
     const hitboxes: THREE.Mesh[] = [];
 
-    Object.entries(DRONES).forEach(([key, data]) => {
+    (Object.keys(DRONES) as DroneKey[]).forEach((key) => {
+      const data = DRONES[key];
       const droneData = createDrone(data.config, key);
       droneData.group.position.set(...(data.startPos as [number, number, number]));
       masterGroup.add(droneData.group);
@@ -352,7 +352,7 @@ export default function DroneArena({
         velocity: new THREE.Vector3(...(data.startVel as [number, number, number])),
         isDragging: false,
         radius: data.config.cageSize,
-      } as any;
+      };
 
       hitboxes.push(droneData.hitbox);
     });
@@ -376,8 +376,10 @@ export default function DroneArena({
 
       if (intersects.length > 0) {
         const hitInfo = intersects[0];
+        if (!hitInfo) return;
         draggedDroneKey = (hitInfo.object.userData as { droneKey: string }).droneKey;
-        const drone = droneSystem[draggedDroneKey];
+        const drone = droneSystem[draggedDroneKey as DroneKey];
+        if (!drone) return;
 
         drone.isDragging = true;
         drone.velocity.set(0, 0, 0);
@@ -399,7 +401,8 @@ export default function DroneArena({
       if (draggedDroneKey) {
         raycaster.setFromCamera(pointer, camera);
         if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
-          const drone = droneSystem[draggedDroneKey];
+          const drone = droneSystem[draggedDroneKey as DroneKey];
+          if (!drone) return;
           previousDragPosition.copy(drone.group.position);
 
           drone.group.position.copy(planeIntersect.add(dragOffset));
@@ -418,7 +421,8 @@ export default function DroneArena({
 
     const onPointerUp = () => {
       if (draggedDroneKey) {
-        const drone = droneSystem[draggedDroneKey];
+        const drone = droneSystem[draggedDroneKey as DroneKey];
+        if (!drone) return;
         drone.isDragging = false;
 
         const throwVelocity = new THREE.Vector3().subVectors(drone.group.position, previousDragPosition).multiplyScalar(45);
@@ -444,7 +448,7 @@ export default function DroneArena({
       const delta = Math.min(clock.getDelta(), 0.1);
       time += delta;
 
-      const droneKeys = Object.keys(droneSystem);
+      const droneKeys = Object.keys(droneSystem) as DroneKey[];
 
       goalsData.forEach((goal) => {
         if (goal.cooldown > 0) goal.cooldown -= delta;
@@ -556,8 +560,11 @@ export default function DroneArena({
 
       for (let i = 0; i < droneKeys.length; i++) {
         for (let j = i + 1; j < droneKeys.length; j++) {
-          const d1 = droneSystem[droneKeys[i]];
-          const d2 = droneSystem[droneKeys[j]];
+          const key1 = droneKeys[i];
+          const key2 = droneKeys[j];
+          if (!key1 || !key2) continue;
+          const d1 = droneSystem[key1];
+          const d2 = droneSystem[key2];
 
           const distSq = d1.group.position.distanceToSquared(d2.group.position);
           const radSum = d1.radius + d2.radius;

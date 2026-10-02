@@ -1170,7 +1170,7 @@ export class SupabaseStore implements DataStore {
           scoreA: 0, 
           scoreB: 0,
           winnerId: null, 
-          result: null    
+          result: undefined,
         } : tm)
       };
     });
