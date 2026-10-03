@@ -468,10 +468,10 @@ export class SupabaseStore implements DataStore {
     if (patch.match !== undefined) this.persistMatchPenalties(changedSlot.slotId, changedSlot.match.penalties);
   }
 
-  private applyMatchSlots(rows: any[], eventRows: any[] = [], penaltyRows: any[] = []) {
+  private applyMatchSlots(rows: any[], eventRows: any[] = [], penaltyRows: any[] = [], force = false) {
     if (!rows.length) return;
     const matches = this.state.matches.map((slot) => {
-      if (this.isSlotLocked(slot.slotId)) {
+      if (!force && this.isSlotLocked(slot.slotId)) {
         return slot; 
       }
 
@@ -517,7 +517,7 @@ export class SupabaseStore implements DataStore {
     this.state = { ...this.state, matches, match: matches[0].match, events: matches[0].events };
   }
 
-  async refreshMatchSlots() {
+  async refreshMatchSlots(force = false) {
     const { data, error } = await supabase.from('match_slots').select('*');
     if (error) {
       console.error('Supabase match slot refresh failed:', error);
@@ -531,7 +531,7 @@ export class SupabaseStore implements DataStore {
       console.error('Supabase live event refresh failed:', eventError || penaltyError);
       return;
     }
-    this.applyMatchSlots(toCamel(data || []), toCamel(eventData || []), toCamel(penaltyData || []));
+    this.applyMatchSlots(toCamel(data || []), toCamel(eventData || []), toCamel(penaltyData || []), force);
     this.notify();
   }
 
@@ -1140,12 +1140,26 @@ export class SupabaseStore implements DataStore {
     const matches = this.state.matches.map((s) => (s.slotId === slotId ? { ...s, match, events } : s)) as [MatchSlot, MatchSlot];
     this.commit({ ...this.state, matches, tournaments, match: matches[0].match, events: matches[0].events });
 
-    const dbField = side === "A" ? "score_a" : "score_b";
-    
     this.persist('score update', async () => {
-        await supabase.from('match_slots').update({ [dbField]: value }).eq('slot_id', slotId);
-        await supabase.from('tournament_matches').update({ [dbField]: value }).eq('id', match.id);
-        return { error: null };
+        const { error } = await supabase.rpc('adjust_match_score', {
+          p_slot_id: slotId,
+          p_side: side,
+          p_delta: delta,
+        });
+        if (!error) {
+          await this.refreshMatchSlots(true);
+          const refreshedSlot = this.getSlot(slotId);
+          const persistedEventIds = new Set(refreshedSlot.events.map((event) => event.id));
+          const mergedEvents = [
+            ...refreshedSlot.events,
+            ...events.filter((event) => !persistedEventIds.has(event.id)),
+          ];
+          const matches = this.state.matches.map((currentSlot) =>
+            currentSlot.slotId === slotId ? { ...currentSlot, events: mergedEvents } : currentSlot,
+          ) as [MatchSlot, MatchSlot];
+          this.commit({ ...this.state, matches, match: matches[0].match, events: matches[0].events });
+        }
+        return { error };
     });
     this.persistMatchEvents(slotId, events);
   }
